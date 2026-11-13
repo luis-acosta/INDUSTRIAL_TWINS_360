@@ -139,6 +139,11 @@ const advance = async (ms: number): Promise<void> => {
 };
 
 beforeEach(() => {
+  // El visor lee la escena inicial del fragmento de la dirección (S09), que es
+  // estado global: sin limpiarlo, una prueba que lo fija abre la escena
+  // equivocada en todas las siguientes.
+  globalThis.history.replaceState(null, '', '/');
+
   vi.useFakeTimers();
   // La narración no suena en jsdom; `play()` no existe y su ausencia haría
   // fallar la parada en lugar de seguir por permanencia.
@@ -1100,5 +1105,99 @@ describe('transición entre escenas', () => {
 
     expect(sceneTitle()).toBe('Nave principal');
     expect(document.querySelector('.transition-overlay')).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Enlaces a una escena y una vista (S09)
+ * ------------------------------------------------------------------ */
+
+describe('enlaces compartibles', () => {
+  const twoScenes = (): LoadedTour => {
+    const base = makeProject();
+    const manifest = toManifest(
+      {
+        ...base,
+        scenes: [
+          makeScene(10, PROJECT, { title: 'Nave principal' }),
+          makeScene(11, PROJECT, { title: 'Sala de bombas' }),
+        ],
+      },
+      { publishedAt: ISO_NOW, appVersion: '0.30.0', offlineCapable: true },
+    );
+    return { manifest, baseUrl: 'https://ejemplo.invalid/recorrido/' };
+  };
+
+  /** Coloca un fragmento en la dirección antes de montar el visor. */
+  const withHash = (hash: string): void => {
+    globalThis.history.replaceState(null, '', `/${hash}`);
+  };
+
+  it('TEST-VPB-048 sin enlace se abre la escena de entrada', () => {
+    withHash('');
+    mount(twoScenes());
+    expect(sceneTitle()).toBe('Nave principal');
+  });
+
+  it('TEST-VPB-049 un enlace abre directamente la escena que indica', () => {
+    // Sin salto visible desde la escena de entrada: la dirección decide el
+    // estado inicial, no un efecto posterior.
+    withHash(`#escena=${testUuid(11)}`);
+    mount(twoScenes());
+    expect(sceneTitle()).toBe('Sala de bombas');
+  });
+
+  it('TEST-VPB-050 un enlace a una escena que ya no está lo dice y abre la de entrada', async () => {
+    // Quien lo recibió merece saberlo, y no creer que le mandaron mal la
+    // dirección.
+    withHash('#escena=00000000-0000-4000-8000-000000009999');
+    mount(twoScenes());
+
+    expect(screen.getByText(/ya no está en este recorrido/)).toBeInTheDocument();
+    expect(sceneTitle()).toBe('Nave principal');
+
+    await click('Entendido');
+    expect(screen.queryByText(/ya no está en este recorrido/)).not.toBeInTheDocument();
+  });
+
+  it('TEST-VPB-051 la dirección refleja la escena en la que se está', async () => {
+    withHash('');
+    mount(twoScenes());
+
+    await click('Sala de bombas');
+    expect(globalThis.location.hash).toContain(testUuid(11));
+  });
+
+  it('TEST-VPB-052 se puede compartir la vista actual', async () => {
+    withHash('');
+    mount(twoScenes());
+
+    await click('Compartir esta vista');
+
+    const field = screen.getByLabelText('Enlace a esta vista');
+    expect((field as HTMLInputElement).value).toContain(`escena=${testUuid(10)}`);
+  });
+
+  it('TEST-VPB-053 si el navegador no deja copiar, se dice y el enlace queda a la vista', async () => {
+    // Un botón «Copiar» que no copia y no lo dice deja a la persona pegando lo
+    // que tenía antes.
+    const original = globalThis.navigator.clipboard;
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('sin permiso')) },
+      configurable: true,
+    });
+
+    withHash('');
+    mount(twoScenes());
+    await click('Compartir esta vista');
+    await click('Copiar enlace');
+
+    expect(screen.getByText('El navegador no dejó copiar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enlace a esta vista')).toBeInTheDocument();
+
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: original,
+      configurable: true,
+    });
   });
 });

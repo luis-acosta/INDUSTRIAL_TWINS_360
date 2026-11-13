@@ -42,7 +42,7 @@ import {
   useToast,
 } from '@it360/ui';
 import { APP_VERSION } from '../version';
-import { buildPackageBytes } from '../platform/project-files';
+import { buildPackageBytes, collectPackage } from '../platform/project-files';
 import type { ProjectStore } from '../state/project-store';
 
 export interface BackupPanelProps {
@@ -92,6 +92,26 @@ export function BackupPanel({
     setProblem(null);
 
     try {
+      /*
+       * Primero se comprueba qué medios se pueden reunir. Un respaldo al que
+       * le falta una panorámica se crea igual y parece correcto; el fallo lo
+       * descubre quien intenta restaurarlo, que es justo el momento en que ya
+       * no hay a qué recurrir.
+       */
+      const collected = collectPackage(project, mediaUrls, mediaFiles);
+      if (collected.missing.length > 0) {
+        setProblem(
+          `No se pudieron reunir ${collected.missing.length} archivo(s) multimedia: ` +
+            collected.missing
+              .slice(0, 3)
+              .map((m) => m.originalName)
+              .join(', ') +
+            (collected.missing.length > 3 ? '…' : '') +
+            '. Vuelva a importarlos antes de respaldar: el respaldo quedaría incompleto.',
+        );
+        return;
+      }
+
       const packaged = await buildPackageBytes(project, mediaUrls, mediaFiles);
       if (!packaged.ok) {
         setProblem(packaged.error.message);

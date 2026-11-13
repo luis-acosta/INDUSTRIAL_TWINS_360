@@ -753,3 +753,11 @@
     display: none;
   }
 }
+
+/* Aviso al pie del diálogo de compartir (S09). */
+.share__hint {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  line-height: var(--it-leading-normal);
+}

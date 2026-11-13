@@ -13,6 +13,7 @@ import {
   err,
   ok,
   domainError,
+  type Media,
   type Project,
   type Result,
 } from '@it360/domain';
@@ -206,8 +207,19 @@ export async function buildPackageBytes(
   const workspace = createWorkspace();
   if (workspace === null) return NO_CONTAINER();
 
-  const files = collectPackageFiles(project, mediaUrls, existing);
+  const { files } = collectPackage(project, mediaUrls, existing);
   return workspace.buildPackage(project, files);
+}
+
+export interface CollectedFiles {
+  readonly files: ReadonlyMap<string, Uint8Array>;
+  /**
+   * Medios declarados por el proyecto cuyos bytes no se pudieron reunir.
+   *
+   * Es la parte que importa: un paquete al que le falta una panorámica se abre
+   * igual y el fallo lo descubre quien lo recibe, no quien lo exportó.
+   */
+  readonly missing: readonly Media[];
 }
 
 /**
@@ -217,20 +229,36 @@ export async function buildPackageBytes(
  * formato `.ivp` espera. Los medios cuya URL no es una URL de datos —los que
  * vienen de un paquete ya abierto— se toman de `existing`: sus bytes ya están
  * en memoria y no hay que reconstruirlos.
+ *
+ * Lo que no se puede reunir se devuelve en `missing` en lugar de omitirse en
+ * silencio. Antes se saltaba sin más, de modo que un proyecto se podía
+ * exportar sin una de sus panorámicas y nadie se enteraba hasta que el
+ * destinatario abría una escena vacía.
  */
-export function collectPackageFiles(
+export function collectPackage(
   project: Project,
   mediaUrls: ReadonlyMap<string, string>,
   existing: ReadonlyMap<string, Uint8Array> = new Map(),
-): ReadonlyMap<string, Uint8Array> {
+): CollectedFiles {
   const files = new Map<string, Uint8Array>(existing);
+  const missing: Media[] = [];
 
   for (const media of project.media) {
     if (files.has(media.relativePath)) continue;
+
     const url = mediaUrls.get(media.id);
-    if (url === undefined) continue;
-    const bytes = dataUrlToBytes(url);
-    if (bytes !== null) files.set(media.relativePath, bytes);
+    const bytes = url === undefined ? null : dataUrlToBytes(url);
+
+    if (bytes === null) missing.push(media);
+    else files.set(media.relativePath, bytes);
   }
-  return files;
+
+  return { files, missing };
 }
+
+/** Sólo los archivos, para quien ya ha comprobado los ausentes. */
+export const collectPackageFiles = (
+  project: Project,
+  mediaUrls: ReadonlyMap<string, string>,
+  existing: ReadonlyMap<string, Uint8Array> = new Map(),
+): ReadonlyMap<string, Uint8Array> => collectPackage(project, mediaUrls, existing).files;

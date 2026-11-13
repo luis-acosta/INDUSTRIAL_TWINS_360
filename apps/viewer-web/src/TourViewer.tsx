@@ -39,6 +39,7 @@ import {
   IconDocument,
   IconPanorama,
   IconNote,
+  IconLink,
   IconPlan,
   IconTour,
   PropertyList,
@@ -71,6 +72,8 @@ import { useSceneTransition } from './useSceneTransition';
 import { useTourPlayback } from './useTourPlayback';
 import { TransitionOverlay } from './TransitionOverlay';
 import { targetForHotspot, tourGate, type SessionResult } from './playback';
+import { buildShareUrl, parseDeepLink, resolveDeepLink } from './deep-link';
+import { ShareDialog } from './ShareDialog';
 
 export interface TourViewerProps {
   readonly tour: LoadedTour;
@@ -80,11 +83,29 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   const manifest = tour.manifest;
   const mediaUrls = useMemo(() => mediaUrlIndex(tour), [tour]);
 
+  /**
+   * Enlace recibido, leído una sola vez (S09).
+   *
+   * Se resuelve al construir el estado inicial y no en un efecto: aplicarlo
+   * después haría que el visitante viese primero la escena de entrada y luego
+   * un salto a la del enlace.
+   */
+  const initialLink = useMemo(() => {
+    const link = parseDeepLink(globalThis.location?.hash ?? '');
+    return resolveDeepLink(link, new Set(manifest.scenes.map((s) => s.id)));
+    // Sólo al montar: después manda la navegación del visitante.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [sceneId, setSceneId] = useState<string | null>(
-    manifest.entrySceneId ?? manifest.scenes[0]?.id ?? null,
+    initialLink.kind === 'resolved'
+      ? initialLink.sceneId
+      : (manifest.entrySceneId ?? manifest.scenes[0]?.id ?? null),
   );
   const [view, setView] = useState<CameraView | null>(null);
-  const [pendingView, setPendingView] = useState<CameraView | null>(null);
+  const [pendingView, setPendingView] = useState<CameraView | null>(
+    initialLink.kind === 'resolved' ? initialLink.view : null,
+  );
   const [openAssetId, setOpenAssetId] = useState<string | null>(null);
   const [info, setInfo] = useState<{ title: string; body: string } | null>(null);
   const [showPlan, setShowPlan] = useState(false);
@@ -122,12 +143,46 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     [manifest, tour.baseUrl],
   );
 
+  /**
+   * La dirección refleja la escena en la que se está (S09).
+   *
+   * Se usa `replaceState` y no `pushState`: cada parada de un recorrido
+   * automático añadiría una entrada al historial y el botón de atrás del
+   * navegador dejaría de servir para salir del recorrido, que es para lo que
+   * el visitante lo usa. La orientación no se escribe de forma continua por lo
+   * mismo —y porque reescribir la dirección en cada fotograma del arrastre
+   * agota la cuota del historial en algunos navegadores—: el enlace con vista
+   * se obtiene al compartir.
+   */
+  useEffect(() => {
+    if (sceneId === null || globalThis.history === undefined) return;
+
+    const next = buildShareUrl(globalThis.location.href, sceneId);
+    if (next !== globalThis.location.href) {
+      globalThis.history.replaceState(null, '', next);
+    }
+  }, [sceneId]);
+
   /* ---------------------------------------------------------------- *
    * Navegación entre escenas
    * ---------------------------------------------------------------- */
 
   const transition = useSceneTransition();
   const stageRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Escena y vista pedidas por la dirección (S09).
+   *
+   * Se lee una sola vez, al abrir: después manda la navegación del visitante.
+   * Volver a aplicarla en cada cambio de dirección devolvería al visitante a
+   * la escena del enlace cada vez que el visor actualiza la barra.
+   */
+  const [shareOpen, setShareOpen] = useState(false);
+  const [linkNotice, setLinkNotice] = useState<string | null>(
+    initialLink.kind === 'missing'
+      ? 'El enlace apuntaba a una escena que ya no está en este recorrido. Se abrió la escena de entrada.'
+      : null,
+  );
 
   const goToScene = useCallback(
     (targetId: string, config?: Extract<ActionConfig, { type: 'goToScene' }>) => {
@@ -481,6 +536,18 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
         <span className="tour__scene">{scene?.title}</span>
         <span className="tour__spacer" />
         <SceneCondition manifest={manifest} telemetry={telemetry} />
+        {scene !== null && (
+          <Tooltip content="Compartir esta vista">
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              aria-label="Compartir esta vista"
+              onClick={() => setShareOpen(true)}
+              icon={<IconLink size={15} />}
+            />
+          </Tooltip>
+        )}
         {manifest.tours.length > 0 && playback.tour === null && (
           <TourMenu tours={manifest.tours} onStart={startTour} />
         )}
@@ -609,6 +676,32 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           <p style={{ marginBottom: 0, lineHeight: 1.6, color: 'var(--it-color-text-tertiary)' }}>
             El resultado se guarda sólo durante esta visita: el paquete publicado no escribe nada.
           </p>
+        </Dialog>
+      )}
+
+      {scene !== null && (
+        <ShareDialog
+          open={shareOpen}
+          sceneId={scene.id}
+          sceneTitle={scene.title}
+          view={view}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {linkNotice !== null && (
+        <Dialog
+          open
+          onClose={() => setLinkNotice(null)}
+          title="El enlace no está completo"
+          size="sm"
+          footer={
+            <Button variant="primary" onClick={() => setLinkNotice(null)}>
+              Entendido
+            </Button>
+          }
+        >
+          <p style={{ margin: 0, lineHeight: 1.6 }}>{linkNotice}</p>
         </Dialog>
       )}
 

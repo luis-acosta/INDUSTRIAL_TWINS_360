@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import type { Media, Project } from '@it360/domain';
 import { makeMedia, makeProject } from '@it360/domain/testing';
 import {
+  collectPackage,
   collectPackageFiles,
   createWorkspace,
   pickAndOpenProject,
@@ -135,5 +136,63 @@ describe('collectPackageFiles', () => {
 
     expect(files.size).toBe(1);
     expect(new TextDecoder().decode(files.get('media/choque.jpg'))).toBe('primero');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Medios que no se pueden reunir (Y02)
+ * ------------------------------------------------------------------ */
+
+describe('collectPackage', () => {
+  it('TEST-PKG-010 informa de los medios cuyos bytes no se pueden reunir', () => {
+    // Es el fallo que esto persigue: antes se omitían en silencio, de modo que
+    // un proyecto se exportaba sin una de sus panorámicas y el fallo lo
+    // descubría quien lo recibía.
+    const media = makeMedia(40, { originalName: 'nave.jpg', relativePath: 'media/nave.jpg' });
+    const project = { ...makeProject(), media: [media] };
+
+    const result = collectPackage(project, new Map());
+
+    expect(result.files.size).toBe(0);
+    expect(result.missing).toHaveLength(1);
+    expect(result.missing[0]?.originalName).toBe('nave.jpg');
+  });
+
+  it('TEST-PKG-011 una URL que no es de datos cuenta como ausente', () => {
+    // Una URL de objeto no lleva los bytes consigo: no se puede empaquetar.
+    const media = makeMedia(40, { originalName: 'nave.jpg', relativePath: 'media/nave.jpg' });
+    const project = { ...makeProject(), media: [media] };
+
+    const result = collectPackage(project, new Map([[media.id, 'blob:http://localhost/x']]));
+
+    expect(result.missing).toHaveLength(1);
+  });
+
+  it('TEST-PKG-012 los medios ya presentes no se dan por ausentes', () => {
+    const media = makeMedia(40, { relativePath: 'media/nave.jpg' });
+    const project = { ...makeProject(), media: [media] };
+    const existing = new Map([['media/nave.jpg', new Uint8Array([1, 2, 3])]]);
+
+    const result = collectPackage(project, new Map(), existing);
+
+    expect(result.missing).toEqual([]);
+    expect(result.files.get('media/nave.jpg')).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('TEST-PKG-013 un proyecto completo no reporta ausencias', () => {
+    const media = makeMedia(40, { relativePath: 'media/nave.jpg' });
+    const project = { ...makeProject(), media: [media] };
+    const urls = new Map([[media.id, 'data:image/jpeg;base64,/9j/4AAQ']]);
+
+    const result = collectPackage(project, urls);
+
+    expect(result.missing).toEqual([]);
+    expect(result.files.size).toBe(1);
+  });
+
+  it('TEST-PKG-014 un proyecto sin medios no reporta nada', () => {
+    const result = collectPackage(makeProject(), new Map());
+    expect(result.missing).toEqual([]);
+    expect(result.files.size).toBe(0);
   });
 });

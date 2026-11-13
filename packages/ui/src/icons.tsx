@@ -78,6 +78,14 @@ export const IconHotspot = (p: IconProps): JSX.Element => (
   </Icon>
 );
 
+/** Compartir un enlace (S09): dos eslabones. */
+export const IconLink = (p: IconProps): JSX.Element => (
+  <Icon {...p}>
+    <path d="M10 13.6a3.6 3.6 0 0 0 5.2.4l2.6-2.6a3.6 3.6 0 1 0-5.1-5.1l-1.4 1.4" />
+    <path d="M14 10.4a3.6 3.6 0 0 0-5.2-.4l-2.6 2.6a3.6 3.6 0 1 0 5.1 5.1l1.4-1.4" />
+  </Icon>
+);
+
 /** Etiqueta de organización (Y08): el rombo con su perforación. */
 export const IconTag = (p: IconProps): JSX.Element => (
   <Icon {...p}>
