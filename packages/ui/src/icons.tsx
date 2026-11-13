@@ -78,6 +78,23 @@ export const IconHotspot = (p: IconProps): JSX.Element => (
   </Icon>
 );
 
+/** Etiqueta de organización (Y08): el rombo con su perforación. */
+export const IconTag = (p: IconProps): JSX.Element => (
+  <Icon {...p}>
+    <path d="M11.3 3.5H19a1.5 1.5 0 0 1 1.5 1.5v7.7a1.5 1.5 0 0 1-.44 1.06l-6.3 6.3a1.5 1.5 0 0 1-2.12 0l-7.7-7.7a1.5 1.5 0 0 1 0-2.12l6.3-6.3a1.5 1.5 0 0 1 1.06-.44Z" />
+    <circle cx="16" cy="8" r="1.6" />
+  </Icon>
+);
+
+/** Fundir dos cosas en una: dos ramas que confluyen. */
+export const IconMerge = (p: IconProps): JSX.Element => (
+  <Icon {...p}>
+    <path d="M6 4v3.2a4 4 0 0 0 1.7 3.27l2.6 1.86A4 4 0 0 1 12 15.6V20" />
+    <path d="M18 4v3.2a4 4 0 0 1-1.7 3.27l-2.6 1.86A4 4 0 0 0 12 15.6" />
+    <path d="m9 17 3 3 3-3" />
+  </Icon>
+);
+
 export const IconPolygon = (p: IconProps): JSX.Element => (
   <Icon {...p}>
     <path d="m12 3.5 7.5 5.2-2.9 8.8H7.4L4.5 8.7 12 3.5Z" />

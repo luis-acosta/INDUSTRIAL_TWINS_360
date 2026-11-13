@@ -17,6 +17,10 @@ import {
   newUuid,
   radToDeg,
   worstCondition,
+  allTags,
+  isEmptyQuery,
+  matchesSearch,
+  parseSearchQuery,
   type CameraView,
   type ConditionLevel,
   type Hotspot,
@@ -54,6 +58,7 @@ import {
   IconRedo,
   IconSave,
   IconSearch,
+  IconTag,
   IconSettings,
   IconTelemetry,
   IconTour,
@@ -108,6 +113,8 @@ import { PublishModule } from './modules/PublishModule';
 import { SkinEditor } from './modules/SkinEditor';
 import { ToursModule } from './modules/ToursModule';
 import { HotspotGeometryPanel } from './modules/HotspotGeometry';
+import { TagField } from './modules/TagField';
+import { TagManager } from './modules/TagManager';
 import { HotspotAxes } from './modules/HotspotAxes';
 import { SettingsModule } from './modules/SettingsModule';
 import { ThemeToggle } from './modules/ThemeToggle';
@@ -692,6 +699,7 @@ function ScenesModule({
   onAutoConnect,
 }: ScenesModuleProps): JSX.Element {
   const [query, setQuery] = useState('');
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(store.project.scenes.map((s) => s.id)),
   );
@@ -699,7 +707,14 @@ function ScenesModule({
   const [placing, setPlacing] = useState(false);
   const { push } = useToast();
 
-  const normalized = query.trim().toLowerCase();
+  /**
+   * Consulta del buscador, con etiquetas (Y08).
+   *
+   * «bomba #critico» busca lo que se llame «bomba» y además esté etiquetado
+   * como crítico. La tilde no hace falta: quien escribe deprisa la omite, y
+   * obligarle a acertarla convertiría la búsqueda en un acertijo.
+   */
+  const searchQuery = useMemo(() => parseSearchQuery(query), [query]);
 
   /**
    * Árbol de escenas con sus marcadores (Y08).
@@ -709,13 +724,16 @@ function ScenesModule({
    * vez de vaciar el árbol.
    */
   const treeNodes = useMemo<readonly TreeNode[]>(() => {
-    const matches = (text: string): boolean =>
-      normalized.length === 0 || text.toLowerCase().includes(normalized);
+    const sceneMatches = (scene: (typeof store.project.scenes)[number]): boolean =>
+      matchesSearch(searchQuery, { tags: scene.tags, fields: [scene.title] });
 
     return store.project.scenes
       .map<TreeNode | null>((s) => {
         const hotspotNodes = s.hotspots
-          .filter((h) => matches(h.name) || matches(s.title))
+          .filter(
+            (h) =>
+              matchesSearch(searchQuery, { tags: h.tags, fields: [h.name] }) || sceneMatches(s),
+          )
           .map<TreeNode>((h) => ({
             id: h.id,
             label: h.name,
@@ -728,7 +746,7 @@ function ScenesModule({
                 : undefined,
           }));
 
-        if (!matches(s.title) && hotspotNodes.length === 0) return null;
+        if (!sceneMatches(s) && hotspotNodes.length === 0) return null;
 
         return {
           id: s.id,
@@ -741,7 +759,7 @@ function ScenesModule({
         } satisfies TreeNode;
       })
       .filter((n): n is TreeNode => n !== null);
-  }, [store.project.scenes, normalized]);
+  }, [store.project.scenes, searchQuery]);
 
   const viewerScene = useMemo<ViewerScene | null>(() => {
     if (scene === null) return null;
@@ -943,12 +961,22 @@ function ScenesModule({
         <div className="sidebar__search">
           <TextInput
             size="sm"
-            placeholder="Buscar escena o marcador"
+            placeholder="Buscar, o #etiqueta"
             prefix={<IconSearch size={13} />}
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
             aria-label="Buscar en el recorrido"
           />
+          <Tooltip content="Organizar etiquetas del proyecto">
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              aria-label="Organizar etiquetas"
+              onClick={() => setTagsOpen(true)}
+              icon={<IconTag size={13} />}
+            />
+          </Tooltip>
         </div>
 
         <div className="sidebar__body">
@@ -974,7 +1002,9 @@ function ScenesModule({
                 onSelectHotspot(id);
               }
             }}
-            emptyMessage={normalized.length > 0 ? 'Ningún resultado' : 'Añada una escena para empezar'}
+            emptyMessage={
+              isEmptyQuery(searchQuery) ? 'Añada una escena para empezar' : 'Ningún resultado'
+            }
           />
         </div>
 
@@ -983,6 +1013,14 @@ function ScenesModule({
             Añadir escena
           </Button>
         </div>
+        <TagManager
+          open={tagsOpen}
+          project={store.project}
+          onClose={() => setTagsOpen(false)}
+          onApply={(project, label) =>
+            store.updateProject(label, { scenes: [...project.scenes] })
+          }
+        />
       </aside>
 
       <div className="app__main">
@@ -1382,6 +1420,13 @@ function Inspector({
                 })
               }
             />
+
+            <SectionLabel>Etiquetas</SectionLabel>
+            <TagField
+              tags={scene.tags}
+              available={allTags(store.project)}
+              onChange={(tags, label) => store.updateScene(scene.id, label, { tags: [...tags] })}
+            />
           </div>
         </TabPanel>
 
@@ -1724,6 +1769,13 @@ function HotspotInspector({
                 </Select>
               )}
             </Field>
+
+            <SectionLabel>Etiquetas</SectionLabel>
+            <TagField
+              tags={hotspot.tags}
+              available={allTags(store.project)}
+              onChange={(tags, label) => update(label, { tags: [...tags] })}
+            />
           </div>
         </TabPanel>
 

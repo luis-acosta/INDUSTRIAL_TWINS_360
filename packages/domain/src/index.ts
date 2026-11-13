@@ -15,6 +15,7 @@ export * from './action';
 export * from './hotspot';
 export * from './hotspot-geometry';
 export * from './scene';
+export * from './tags';
 export * from './asset';
 export * from './asset-draft';
 export * from './catalog-csv';
