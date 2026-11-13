@@ -21,6 +21,7 @@ import {
 } from './hotspot';
 import { DEFAULT_CAMERA_CONTROL, type Plan, type PlanMarker, type Scene } from './scene';
 import { CURRENT_SCHEMA_VERSION, projectSchema, type Project } from './project';
+import { createInfoWindow } from './info-window';
 import { DEFAULT_SCRIPTING_POLICY } from './scripting';
 import { PUBLISH_PROFILES, type Media } from './media';
 import type { Asset, AssetClass, AssetLocation, TechnicalDocument } from './asset';
@@ -561,6 +562,13 @@ export function makeFullProject(): Project {
 
   const plan = makePlan(80, planImage.id);
 
+  /* Una ventana con dos pestañas y bloques de varios tipos: así el viaje de
+     ida y vuelta por la base de datos cubre el árbol completo, que es donde
+     una pestaña perdida pasaría inadvertida. */
+  const infoWindow = createInfoWindow('Ficha de la bomba', testUuid(101), testUuid(100), {
+    modal: false,
+  });
+
   return makeProject({
     media: [panoramaA, panoramaB, planImage, datasheet],
     assetClasses: [plantClass, assetClass],
@@ -578,6 +586,26 @@ export function makeFullProject(): Project {
     conditionRules: [makeConditionRule(93, mapping.id, { label: 'Presión alta', threshold: 12 })],
     notes: [makeNote(94, projectId, { sceneId: sceneA.id, assetId: pump.id, categoryId: 'maintenance' })],
     noteCategories: [{ id: 'maintenance', label: 'Mantenimiento', colorToken: 'warning', description: '' }],
+    infoWindows: [
+      {
+        ...infoWindow,
+        tabs: [
+          {
+            id: testUuid(101),
+            title: 'General',
+            blocks: [
+              { type: 'text', text: 'Bomba **P-101A** de la {{escena}}.' },
+              { type: 'image', mediaId: planImage.id, caption: 'Ubicación' },
+            ],
+          },
+          {
+            id: testUuid(102),
+            title: 'Documentos',
+            blocks: [{ type: 'document', documentId: testUuid(91), page: 1 }],
+          },
+        ],
+      },
+    ],
     skins: [makeSkin(95)],
     tours: [makeTour(96, projectId)],
     quizzes: [makeQuiz(97, projectId)],

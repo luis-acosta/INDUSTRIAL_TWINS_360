@@ -443,6 +443,31 @@ BEGIN
 END;
 `;
 
+/**
+ * Ventanas de información (E01).
+ *
+ * Llegan en una migración propia y no en el esquema inicial porque ya hay
+ * proyectos guardados con la versión 1: el motor aplica esta tabla sobre ellos
+ * sin tocar su contenido, y un proyecto sin ventanas sigue abriéndose igual.
+ *
+ * Las pestañas y sus bloques van en JSON y no en tablas aparte. Son un árbol
+ * que siempre se lee y se escribe completo con su ventana, como ya se hace con
+ * la interfaz (`skin.root_json`) y los pasos del recorrido: normalizarlo
+ * añadiría dos tablas y ninguna consulta que las aproveche.
+ */
+const INFO_WINDOW_SCHEMA = `
+CREATE TABLE info_window (
+  id          TEXT PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  title       TEXT    NOT NULL DEFAULT '',
+  tabs_json   TEXT    NOT NULL DEFAULT '[]',
+  width_px    INTEGER NOT NULL DEFAULT 720,
+  height_px   INTEGER NOT NULL DEFAULT 520,
+  modal       INTEGER NOT NULL DEFAULT 0,
+  on_close_json TEXT  NOT NULL DEFAULT '[]'
+);
+`;
+
 export const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
@@ -451,6 +476,15 @@ export const MIGRATIONS: readonly Migration[] = [
       'Proyecto, medios, escenas, marcadores, catálogo de activos con jerarquía y clases, documentos técnicos, planos, notas con hilos, telemetría de solo lectura con caché y reglas de condición, interfaces, recorridos, evaluaciones, usuarios, permisos y auditoría de sólo-añadir.',
     up: (db) => {
       db.exec(INITIAL_SCHEMA);
+    },
+  },
+  {
+    version: 2,
+    name: 'ventanas-de-informacion',
+    description:
+      'Ventanas de información con pestañas y bloques de contenido (E01, F08), a las que ya apuntaba la acción openInfoWindow.',
+    up: (db) => {
+      db.exec(INFO_WINDOW_SCHEMA);
     },
   },
 ];

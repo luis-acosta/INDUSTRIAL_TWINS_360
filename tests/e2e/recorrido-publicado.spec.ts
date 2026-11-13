@@ -91,6 +91,76 @@ test.describe('recorrido publicado', () => {
     await expect(barra.getByText('Plataforma superior')).toBeVisible();
   });
 
+  test('una ventana de información se abre con su contenido compuesto', async ({ page }) => {
+    // TEST-E2E-017: el texto con formato, el pie de la imagen y las pestañas
+    // sólo se pueden comprobar con el paquete real y un navegador real.
+    await page.goto('/');
+
+    await page.getByRole('button', { name: /Ficha del equipo/ }).click();
+    const dialogo = page.getByRole('dialog');
+
+    // El título llegó con la variable sustituida.
+    await expect(dialogo.getByRole('heading', { name: 'Ficha de Sala de bombas' })).toBeVisible();
+
+    // El formato se pintó como elementos, no como texto con asteriscos.
+    await expect(dialogo.locator('strong', { hasText: 'P-101A' })).toBeVisible();
+    await expect(dialogo.getByRole('listitem')).toHaveCount(2);
+    await expect(dialogo.getByRole('link', { name: 'norma de arranque' })).toHaveAttribute(
+      'rel',
+      /noopener/,
+    );
+
+    // La imagen del plano se resolvió a un archivo del paquete.
+    const imagen = dialogo.getByRole('img', { name: 'Ubicación en el plano' });
+    await expect(imagen).toBeVisible();
+    expect(await imagen.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(
+      0,
+    );
+  });
+
+  test('las pestañas de la ventana cambian el contenido', async ({ page }) => {
+    // TEST-E2E-018: F08. Y de paso el contenido web no declarado, que debe
+    // explicarse en lugar de dejar un recuadro en blanco.
+    await page.goto('/');
+    await page.getByRole('button', { name: /Ficha del equipo/ }).click();
+
+    const dialogo = page.getByRole('dialog');
+    await dialogo.getByRole('tab', { name: 'Enlaces' }).click();
+
+    // Un bloque de contenido web es, de por sí, una declaración del autor: su
+    // origen entra en la política al publicar y el visor lo enmarca, con los
+    // permisos mínimos —sin `allow-same-origin`, el marco no puede leer nada
+    // del recorrido—. Lo que no entra en la política es lo que la propia
+    // publicación rechaza, y ese es el segundo bloque.
+    const marco = dialogo.locator('iframe');
+    await expect(marco).toHaveCount(1);
+    await expect(marco).toHaveAttribute('src', 'https://mapa.ejemplo.com/embed');
+    const sandbox = (await marco.getAttribute('sandbox')) ?? '';
+    expect(sandbox).toContain('allow-scripts');
+    expect(sandbox).not.toContain('allow-same-origin');
+
+    // El que no se declaró se explica en lugar de dejar un recuadro en blanco.
+    await expect(dialogo.getByText('Este contenido no se puede mostrar aquí')).toBeVisible();
+    await expect(dialogo.getByRole('link', { name: 'Abrirla aparte' })).toBeVisible();
+  });
+
+  test('un enlace de la ventana lleva a su escena', async ({ page }) => {
+    // TEST-E2E-019: cierra la ventana y navega, que son dos pasos y el segundo
+    // depende del primero.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+    await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+    await page.getByRole('button', { name: /Ficha del equipo/ }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Ir a Plataforma superior' })
+      .click();
+
+    await expect(barra.getByText('Plataforma superior')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
   test('el plano sitúa la escena y dibuja el radar de mirada', async ({ page }) => {
     // TEST-E2E-014: el radar sólo se puede comprobar aquí. En jsdom la imagen
     // del plano no tiene tamaño, así que el visor no dibuja el cono y la

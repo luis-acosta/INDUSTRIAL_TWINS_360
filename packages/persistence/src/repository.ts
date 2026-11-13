@@ -37,6 +37,7 @@ import {
   projectSettingsSchema,
   quizSchema,
   sceneSchema,
+  infoWindowSchema,
   skinSchema,
   technicalDocumentSchema,
   telemetryMappingSchema,
@@ -446,6 +447,23 @@ export function loadProject(db: SqlDatabase): Result<LoadResult> {
     )
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
+  /* --- Ventanas de información --- */
+  const infoWindows = db
+    .all('SELECT * FROM info_window ORDER BY name')
+    .map((row) =>
+      parse('info_window', text(row, 'id'), infoWindowSchema, {
+        id: text(row, 'id'),
+        name: text(row, 'name'),
+        title: text(row, 'title'),
+        tabs: asJson(row['tabs_json'] ?? null, []),
+        widthPx: num(row, 'width_px', 720),
+        heightPx: num(row, 'height_px', 520),
+        modal: bool(row, 'modal'),
+        onCloseActions: asJson(row['on_close_json'] ?? null, []),
+      }),
+    )
+    .filter((w): w is NonNullable<typeof w> => w !== null);
+
   /* --- Interfaces, recorridos y evaluaciones --- */
   const skins = db
     .all('SELECT * FROM skin ORDER BY name')
@@ -581,6 +599,7 @@ export function loadProject(db: SqlDatabase): Result<LoadResult> {
     telemetryConnections,
     telemetryMappings,
     conditionRules,
+    infoWindows,
     skins,
     tours,
     quizzes,
@@ -637,6 +656,7 @@ const CLEAR_ORDER = [
   'scene',
   'asset',
   'asset_class',
+  'info_window',
   'skin',
   'tour',
   'quiz',
@@ -879,6 +899,16 @@ export function saveProject(
            VALUES (?,?,?,?,?,?,?,?,?,?)`,
           [r.id, r.mappingId, r.label, r.comparison, r.threshold, r.threshold2, r.level,
             r.hysteresis, r.order, toInt(r.enabled)],
+        );
+      }
+
+      for (const w of project.infoWindows) {
+        insert(
+          `INSERT INTO info_window (id, name, title, tabs_json, width_px, height_px, modal,
+             on_close_json)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [w.id, w.name, w.title, toJson(w.tabs), w.widthPx, w.heightPx, toInt(w.modal),
+            toJson(w.onCloseActions)],
         );
       }
 

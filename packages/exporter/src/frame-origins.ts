@@ -114,6 +114,23 @@ export function collectFrameOrigins(project: Project): FrameOriginReport {
     }
   }
 
+  /* Los bloques de contenido web de las ventanas de información (E01, E09).
+   *
+   * Es tan declarativo como una acción de Webframe y se olvidaba con
+   * facilidad: sin esto, el origen no entra en la política y el visor bloquea
+   * el marco con toda la razón, de modo que el bloque nunca funcionaría y el
+   * autor no tendría forma de saber por qué. */
+  for (const window of project.infoWindows) {
+    for (const tab of window.tabs) {
+      for (const block of tab.blocks) {
+        if (block.type === 'webframe') consider(block.url);
+      }
+    }
+    for (const action of window.onCloseActions) {
+      if (action.config.type === 'openWebframe') consider(action.config.url);
+    }
+  }
+
   return {
     origins: [...origins].sort(),
     // Se ordenan para que el informe sea estable entre publicaciones y un

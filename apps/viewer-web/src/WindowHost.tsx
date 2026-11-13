@@ -17,7 +17,8 @@
  * - **El arrastre no atraviesa la ventana** hasta la panorámica: mover el dedo
  *   sobre una foto giraría la escena de fondo, que es desconcertante.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { InfoWindowBody } from './InfoWindowBody';
 import {
   albumPosition,
   canStepAlbum,
@@ -34,6 +35,10 @@ export interface WindowHostProps {
   readonly onAlbumIndex: (index: number) => void;
   /** Orígenes que la política del paquete admite enmarcar. */
   readonly frameOrigins: readonly string[];
+  /** Lleva a una escena desde un bloque de enlace. */
+  readonly onSceneLink?: (sceneId: string) => void;
+  /** Valor en vivo de una variable de proceso, si el visor lo tiene. */
+  readonly telemetryValue?: (mappingId: string) => string | null;
 }
 
 export function WindowHost({
@@ -41,9 +46,19 @@ export function WindowHost({
   onClose,
   onAlbumIndex,
   frameOrigins,
+  onSceneLink,
+  telemetryValue,
 }: WindowHostProps): JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<Element | null>(null);
+  /* La pestaña abierta vive aquí y no en el modelo de la ventana: es estado de
+     la vista, y guardarlo en el modelo haría que abrir la misma ventana dos
+     veces recordase la pestaña de la vez anterior. */
+  const [tabId, setTabId] = useState<string | null>(null);
+
+  const infoTabs = win?.kind === 'info' ? win.tabs : null;
+  const activeTabId =
+    infoTabs === null ? '' : (infoTabs.find((tab) => tab.id === tabId)?.id ?? infoTabs[0]?.id ?? '');
 
   /* --- Foco --- */
 
@@ -139,8 +154,22 @@ export function WindowHost({
           </button>
         </header>
 
-        <div className="tour-window__body">
-          <WindowBody window={win} frameOrigins={frameOrigins} />
+        <div
+          className="tour-window__body"
+          style={
+            win.kind === 'info'
+              ? { width: `min(${win.widthPx}px, 92vw)`, minHeight: `min(${win.heightPx}px, 70vh)` }
+              : undefined
+          }
+        >
+          <WindowBody
+            window={win}
+            frameOrigins={frameOrigins}
+            activeTabId={activeTabId}
+            onTab={setTabId}
+            onSceneLink={onSceneLink ?? (() => undefined)}
+            {...(telemetryValue !== undefined ? { telemetryValue } : {})}
+          />
         </div>
 
         {win.kind === 'media' && win.items.length > 1 && (
@@ -172,23 +201,30 @@ export function WindowHost({
 interface WindowBodyProps {
   readonly window: TourWindow;
   readonly frameOrigins: readonly string[];
+  readonly activeTabId: string;
+  readonly onTab: (tabId: string) => void;
+  readonly onSceneLink: (sceneId: string) => void;
+  readonly telemetryValue?: (mappingId: string) => string | null;
 }
 
-function WindowBody({ window: win, frameOrigins }: WindowBodyProps): JSX.Element {
+function WindowBody({
+  window: win,
+  frameOrigins,
+  activeTabId,
+  onTab,
+  onSceneLink,
+  telemetryValue,
+}: WindowBodyProps): JSX.Element {
   if (win.kind === 'info') {
     return (
-      <>
-        {win.mediaUrl !== null && (
-          <img className="tour-window__media" src={win.mediaUrl} alt="" />
-        )}
-        {/*
-          El cuerpo se pinta como texto y no como HTML. Interpretar HTML de un
-          campo del proyecto sería una vía de inyección en una página que se
-          sirve a cualquiera con el enlace, y el contrato prohíbe exactamente
-          eso. Los saltos de línea se respetan con CSS.
-        */}
-        <p className="tour-window__text">{win.body}</p>
-      </>
+      <InfoWindowBody
+        tabs={win.tabs}
+        activeTabId={activeTabId}
+        onTab={onTab}
+        frameOrigins={frameOrigins}
+        onSceneLink={onSceneLink}
+        {...(telemetryValue !== undefined ? { telemetryValue } : {})}
+      />
     );
   }
 

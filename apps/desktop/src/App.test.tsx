@@ -24,7 +24,7 @@ import type {
 } from './telemetry/telemetry-client';
 import type { TelemetryMapping, TelemetrySample } from '@it360/domain';
 import { ToastProvider } from '@it360/ui';
-import { App } from './App';
+import { App, MODULES } from './App';
 import { buildDemoProject, type DemoAssets } from './demo/demo-project';
 
 /**
@@ -179,33 +179,40 @@ describe('App — armazón', () => {
     const user = userEvent.setup();
     await renderApp();
 
-    // Escribir «5» en un campo de texto no debe cambiar de módulo.
+    // El dígito se lee del registro de módulos: añadir uno en medio no debe
+    // romper esta prueba, que es sobre el atajo y no sobre la numeración.
+    const digit = MODULES.find((module) => module.id === 'telemetry')?.shortcut ?? '';
+    expect(digit).not.toBe('');
+
+    // Escribir el dígito en un campo de texto no debe cambiar de módulo.
     const title = screen.getByLabelText('Título');
     await user.click(title);
-    await user.keyboard('5');
+    await user.keyboard(digit);
     expect(screen.getByRole('button', { name: /Escenas y marcadores/ })).toHaveAttribute(
       'aria-current',
       'page',
     );
 
-    await user.keyboard('{Alt>}5{/Alt}');
+    await user.keyboard(`{Alt>}${digit}{/Alt}`);
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Telemetría', level: 1 })).toBeInTheDocument();
     });
   });
 
   // TEST-APP-009b
-  it('el módulo de planos se alcanza con Alt+2', async () => {
+  it('cada módulo del registro se alcanza con su atajo', async () => {
     const user = userEvent.setup();
     await renderApp();
 
-    await user.keyboard('{Alt>}2{/Alt}');
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Planos y zonas' })).toHaveAttribute(
-        'aria-current',
-        'page',
-      );
-    });
+    for (const module of MODULES) {
+      await user.keyboard(`{Alt>}${module.shortcut}{/Alt}`);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: module.label })).toHaveAttribute(
+          'aria-current',
+          'page',
+        );
+      });
+    }
   });
 
 

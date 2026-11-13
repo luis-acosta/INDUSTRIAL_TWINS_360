@@ -109,6 +109,7 @@ import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModu
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
 import { PlansModule } from './modules/PlansModule';
+import { InfoWindowsModule } from './modules/InfoWindowsModule';
 import { SkinEditor } from './modules/SkinEditor';
 import { ToursModule } from './modules/ToursModule';
 import { HotspotGeometryPanel } from './modules/HotspotGeometry';
@@ -124,6 +125,7 @@ export type ModuleId =
   | 'scenes'
   | 'plans'
   | 'assets'
+  | 'windows'
   | 'notes'
   | 'telemetry'
   | 'skin'
@@ -138,15 +140,19 @@ interface ModuleDescriptor {
   readonly shortcut: string;
 }
 
-const MODULES: readonly ModuleDescriptor[] = [
+/* Se exporta para que las pruebas lean el atajo de cada módulo en lugar de
+   repetir el dígito: así añadir un módulo en medio no rompe una prueba que no
+   tiene nada que ver con él. */
+export const MODULES: readonly ModuleDescriptor[] = [
   { id: 'scenes', label: 'Escenas y marcadores', icon: <IconPanorama size={18} />, shortcut: '1' },
   { id: 'plans', label: 'Planos y zonas', icon: <IconPlan size={18} />, shortcut: '2' },
   { id: 'assets', label: 'Catálogo de activos', icon: <IconEquipment size={18} />, shortcut: '3' },
-  { id: 'notes', label: 'Notas y tareas', icon: <IconNote size={18} />, shortcut: '4' },
-  { id: 'telemetry', label: 'Telemetría', icon: <IconTelemetry size={18} />, shortcut: '5' },
-  { id: 'skin', label: 'Interfaz del recorrido', icon: <IconLayers size={18} />, shortcut: '6' },
-  { id: 'tours', label: 'Recorridos y formación', icon: <IconTour size={18} />, shortcut: '7' },
-  { id: 'publish', label: 'Publicación', icon: <IconPublish size={18} />, shortcut: '8' },
+  { id: 'windows', label: 'Ventanas de información', icon: <IconDocument size={18} />, shortcut: '4' },
+  { id: 'notes', label: 'Notas y tareas', icon: <IconNote size={18} />, shortcut: '5' },
+  { id: 'telemetry', label: 'Telemetría', icon: <IconTelemetry size={18} />, shortcut: '6' },
+  { id: 'skin', label: 'Interfaz del recorrido', icon: <IconLayers size={18} />, shortcut: '7' },
+  { id: 'tours', label: 'Recorridos y formación', icon: <IconTour size={18} />, shortcut: '8' },
+  { id: 'publish', label: 'Publicación', icon: <IconPublish size={18} />, shortcut: '9' },
 ];
 
 export interface AppProps {
@@ -503,6 +509,7 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
                   onSelectScene={setSceneId}
                 />
               )}
+              {moduleId === 'windows' && <InfoWindowsModule store={store} />}
               {moduleId === 'telemetry' && <TelemetryModule store={store} client={client} />}
               {moduleId === 'tours' && <ToursModule store={store} />}
               {moduleId === 'skin' && <SkinEditor store={store} />}

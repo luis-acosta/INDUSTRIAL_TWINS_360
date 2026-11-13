@@ -12,6 +12,7 @@ export * from './identity';
 export * from './coordinates';
 export * from './media';
 export * from './media-import';
+export * from './info-window';
 export * from './action';
 export * from './hotspot';
 export * from './hotspot-geometry';

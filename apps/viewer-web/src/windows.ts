@@ -11,20 +11,30 @@
  * la política de seguridad del paquete. La parte que pinta está en
  * `WindowHost.tsx`, y es delgada a propósito.
  */
-import type { Manifest } from '@it360/domain';
+import {
+  parseRichText,
+  resolveVariables,
+  type Action,
+  type InfoWindow,
+  type Manifest,
+  type RichNode,
+} from '@it360/domain';
 
 /* ------------------------------------------------------------------ *
  * Qué ventana se abre
  * ------------------------------------------------------------------ */
 
 export type TourWindow =
-  /** Texto con multimedia opcional (E01). */
+  /** Ventana que el autor compuso, con sus pestañas y bloques (E01, F08). */
   | {
       readonly kind: 'info';
       readonly title: string;
-      readonly body: string;
-      readonly mediaUrl: string | null;
+      readonly tabs: readonly ResolvedTab[];
+      readonly widthPx: number;
+      readonly heightPx: number;
       readonly modal: boolean;
+      /** Acciones a ejecutar al cerrarla (J06). */
+      readonly onClose: readonly Action[];
     }
   /** Una imagen o un vídeo, con posibilidad de álbum (E02, E03). */
   | {
@@ -53,6 +63,55 @@ export type TourWindow =
       readonly heightPx: number;
       readonly allowFullscreen: boolean;
     };
+
+/** Pestaña con sus bloques ya resueltos contra el paquete. */
+export interface ResolvedTab {
+  readonly id: string;
+  readonly title: string;
+  readonly blocks: readonly ResolvedBlock[];
+}
+
+/**
+ * Bloque listo para pintar.
+ *
+ * Las referencias del proyecto ya están resueltas aquí —URL del medio, ficha
+ * del activo, texto con las variables sustituidas— para que la capa que pinta
+ * no tenga que buscar nada en el manifiesto. Un bloque cuya referencia falta
+ * se convierte en `missing` y no desaparece: el visitante tiene que poder
+ * distinguir «aquí falta algo» de «aquí no había nada», y el autor que prueba
+ * su recorrido necesita verlo.
+ */
+export type ResolvedBlock =
+  | { readonly kind: 'richText'; readonly nodes: readonly RichNode[] }
+  | {
+      readonly kind: 'media';
+      readonly media: MediaItem;
+      readonly caption: string;
+      readonly autoplay: boolean;
+    }
+  | {
+      readonly kind: 'document';
+      readonly title: string;
+      readonly url: string;
+      readonly page: number;
+      readonly embeddable: boolean;
+    }
+  | {
+      readonly kind: 'asset';
+      readonly tag: string;
+      readonly name: string;
+      readonly className: string;
+      readonly attributes: readonly { readonly label: string; readonly value: string }[];
+    }
+  | { readonly kind: 'telemetry'; readonly mappingId: string; readonly label: string }
+  | {
+      readonly kind: 'webframe';
+      readonly url: string;
+      readonly heightPx: number;
+      readonly allowFullscreen: boolean;
+    }
+  | { readonly kind: 'sceneLink'; readonly sceneId: string; readonly label: string }
+  | { readonly kind: 'missing'; readonly what: string };
 
 export interface MediaItem {
   readonly url: string;
@@ -185,6 +244,149 @@ export function mediaWindow(
     index: Math.min(index, items.length - 1),
     autoplay,
   };
+}
+
+/**
+ * Valores de las variables del recorrido (F09).
+ *
+ * Se pasan ya calculados en lugar de calcularse aquí: el tiempo transcurrido y
+ * la puntuación los lleva la reproducción del recorrido, y pedirle a este
+ * módulo que los averigüe lo ataría a ella.
+ */
+export interface VariableValues {
+  readonly [name: string]: string | number | null | undefined;
+}
+
+/** Ventana compuesta por el autor, con sus referencias ya resueltas (E01). */
+export function infoWindow(
+  context: WindowContext,
+  window: InfoWindow,
+  variables: VariableValues,
+): TourWindow {
+  const tabs: ResolvedTab[] = window.tabs.map((tab) => ({
+    id: tab.id,
+    title: resolveVariables(tab.title, variables),
+    blocks: tab.blocks.map((block) => resolveBlock(context, block, variables)),
+  }));
+
+  return {
+    kind: 'info',
+    title: resolveVariables(window.title === '' ? window.name : window.title, variables),
+    tabs,
+    widthPx: window.widthPx,
+    heightPx: window.heightPx,
+    modal: window.modal,
+    onClose: window.onCloseActions,
+  };
+}
+
+/** Resuelve un bloque contra el paquete. */
+function resolveBlock(
+  context: WindowContext,
+  block: InfoWindow['tabs'][number]['blocks'][number],
+  variables: VariableValues,
+): ResolvedBlock {
+  switch (block.type) {
+    case 'text':
+      return { kind: 'richText', nodes: parseRichText(resolveVariables(block.text, variables)) };
+
+    case 'image':
+    case 'video':
+    case 'audio': {
+      const url = context.mediaUrls.get(block.mediaId);
+      const media = context.manifest.media.find((candidate) => candidate.id === block.mediaId);
+      if (url === undefined || media === undefined) {
+        return { kind: 'missing', what: 'una imagen o vídeo que no está en el paquete' };
+      }
+      return {
+        kind: 'media',
+        media: { url, caption: media.originalName, kind: mediaKindOf(media.mime) },
+        caption: resolveVariables(block.caption, variables),
+        autoplay: block.type === 'video' ? block.autoplay : false,
+      };
+    }
+
+    case 'document': {
+      const resolved = documentWindow(context, block.documentId, block.page);
+      if (resolved === null || resolved.kind !== 'document') {
+        return { kind: 'missing', what: 'un documento que no está en el paquete' };
+      }
+      return {
+        kind: 'document',
+        title: resolved.title,
+        url: resolved.url,
+        page: resolved.page,
+        embeddable: resolved.embeddable,
+      };
+    }
+
+    case 'asset': {
+      const asset = context.manifest.assets.find((candidate) => candidate.id === block.assetId);
+      if (asset === undefined) {
+        return { kind: 'missing', what: 'un activo que no está en el paquete' };
+      }
+      const assetClass = context.manifest.assetClasses.find(
+        (candidate) => candidate.id === asset.classId,
+      );
+
+      return {
+        kind: 'asset',
+        tag: asset.tag,
+        name: asset.name,
+        className: assetClass?.name ?? '',
+        attributes: Object.entries(asset.attributes).map(([label, value]) => ({
+          label,
+          value: formatAttribute(value),
+        })),
+      };
+    }
+
+    case 'telemetry': {
+      const mapping = context.manifest.telemetryMappings.find(
+        (candidate) => candidate.id === block.mappingId,
+      );
+      if (mapping === undefined) {
+        return { kind: 'missing', what: 'una variable de proceso que no está en el paquete' };
+      }
+      return { kind: 'telemetry', mappingId: mapping.id, label: mapping.variable };
+    }
+
+    case 'webframe':
+      return {
+        kind: 'webframe',
+        url: block.url,
+        heightPx: block.heightPx,
+        allowFullscreen: block.allowFullscreen,
+      };
+
+    case 'sceneLink': {
+      const scene = context.manifest.scenes.find((candidate) => candidate.id === block.sceneId);
+      if (scene === undefined) {
+        return { kind: 'missing', what: 'una escena que no está en el paquete' };
+      }
+      return {
+        kind: 'sceneLink',
+        sceneId: scene.id,
+        label: block.label !== '' ? resolveVariables(block.label, variables) : scene.title,
+      };
+    }
+
+    default:
+      return { kind: 'missing', what: 'un bloque que esta versión del visor no sabe mostrar' };
+  }
+}
+
+/** Valor de un atributo del activo, tal como se lee. */
+function formatAttribute(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object' && 'value' in value) {
+    const inner = (value as { value: unknown; unit?: unknown }).value;
+    const unit = (value as { unit?: unknown }).unit;
+    return unit === undefined || unit === null || unit === ''
+      ? String(inner)
+      : `${String(inner)} ${String(unit)}`;
+  }
+  return String(value);
 }
 
 /** Ventana de un documento del paquete (E05). */

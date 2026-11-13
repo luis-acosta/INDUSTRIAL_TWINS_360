@@ -60,7 +60,9 @@ import { FieldNotePanel } from './FieldNotePanel';
 import { WindowHost } from './WindowHost';
 import {
   documentWindow,
+  infoWindow,
   mediaWindow,
+  type VariableValues,
   safeDownloadName,
   type TourWindow,
 } from './windows';
@@ -70,7 +72,7 @@ import { TourPlayerBar } from './TourPlayerBar';
 import { useSceneTransition } from './useSceneTransition';
 import { useTourPlayback } from './useTourPlayback';
 import { TransitionOverlay } from './TransitionOverlay';
-import { targetForHotspot, tourGate, type SessionResult } from './playback';
+import { formatElapsed, targetForHotspot, tourGate, type SessionResult } from './playback';
 import { buildShareUrl, parseDeepLink, resolveDeepLink } from './deep-link';
 import { ShareDialog } from './ShareDialog';
 import { PlanView } from './PlanView';
@@ -131,6 +133,9 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   const [scores, setScores] = useState<Readonly<Record<string, number>>>({});
   const scoresRef = useRef(scores);
   scoresRef.current = scores;
+  /** Momento en que empezó la visita, para la variable de tiempo (F09). */
+  const startedAtRef = useRef<number | null>(null);
+  if (startedAtRef.current === null) startedAtRef.current = Date.now();
 
   /** Evaluación en curso y resultados de la sesión (J08, O09). */
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
@@ -150,6 +155,54 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   const telemetry = useMemo(
     () => new PublishedTelemetry(manifest, tour.baseUrl),
     [manifest, tour.baseUrl],
+  );
+
+  /**
+   * Valores de proceso de la ventana abierta.
+   *
+   * Se piden sólo los de la ventana que está a la vista, y sólo mientras lo
+   * está: una ventana con tres variables no debe poner al servicio a servir
+   * todas las del recorrido.
+   */
+  const [windowSamples, setWindowSamples] = useState<readonly TelemetrySample[]>([]);
+
+  const windowMappingIds = useMemo(() => {
+    if (openWindow?.kind !== 'info') return [];
+    const ids = new Set<string>();
+    for (const tab of openWindow.tabs) {
+      for (const block of tab.blocks) {
+        if (block.kind === 'telemetry') ids.add(block.mappingId);
+      }
+    }
+    return [...ids];
+  }, [openWindow]);
+
+  useEffect(() => {
+    setWindowSamples([]);
+    if (windowMappingIds.length === 0 || manifest.offlineCapable) return undefined;
+
+    let cancelled = false;
+    const poll = async (): Promise<void> => {
+      const result = await telemetry.latest(windowMappingIds);
+      if (!cancelled && result.ok) setWindowSamples(result.value);
+    };
+    void poll();
+    const timer = globalThis.setInterval(() => void poll(), 10_000);
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(timer);
+    };
+  }, [windowMappingIds, telemetry, manifest.offlineCapable]);
+
+  /** Valor con su unidad, o `null` si todavía no hay dato. */
+  const telemetryText = useCallback(
+    (mappingId: string): string | null => {
+      const mapping = manifest.telemetryMappings.find((m) => m.id === mappingId);
+      const sample = windowSamples.find((s) => s.mappingId === mappingId);
+      if (mapping === undefined || sample === undefined || sample.value === null) return null;
+      return `${sample.value.toFixed(mapping.decimals)} ${mapping.unit}`.trim();
+    },
+    [manifest.telemetryMappings, windowSamples],
   );
 
   /**
@@ -303,6 +356,48 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   });
 
   /**
+   * Valores de las variables del texto de las ventanas (F09).
+   *
+   * Se calculan al abrir la ventana y no se refrescan mientras está abierta:
+   * un texto que cambia debajo de quien lo está leyendo es peor que un texto
+   * fijo, y lo que el autor escribe con variables son frases de contexto
+   * («está en la Sala de bombas»), no marcadores en vivo. Para un valor que
+   * cambia está el bloque de proceso, que sí se actualiza.
+   */
+  const variableValues = useCallback((): VariableValues => {
+    const elapsedS = startedAtRef.current === null
+      ? 0
+      : Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
+    const total = Object.values(scoresRef.current).reduce((sum, value) => sum + value, 0);
+
+    return {
+      escena: scene?.title ?? '',
+      proyecto: manifest.title,
+      recorrido: playback.tour?.name ?? '',
+      paso: playback.tour === null ? '' : playback.stopIndex + 1,
+      pasos: playback.tour === null ? '' : playback.stopCount,
+      puntuacion: total,
+      tiempo: formatElapsed(elapsedS),
+      fecha: new Date().toLocaleDateString('es-ES'),
+    };
+  }, [manifest, playback.tour, playback.stopIndex, playback.stopCount, scene]);
+
+  /**
+   * Cierra la ventana abierta y ejecuta lo que el autor encadenó al cierre
+   * (J06).
+   *
+   * El orden importa: primero se cierra y luego se ejecuta. Si la acción
+   * encadenada abre otra ventana, cerrar después la cerraría de inmediato.
+   */
+  const closeWindow = useCallback((): void => {
+    const closing = openWindow;
+    setOpenWindow(null);
+    if (closing?.kind === 'info' && closing.onClose.length > 0) {
+      runActions(closing.onClose, 'windowClose');
+    }
+  }, [openWindow, runActions]);
+
+  /**
    * Arranca un recorrido comprobando antes su condición (J08).
    *
    * Si falta la evaluación no se arranca a medias ni en silencio: se dice qué
@@ -332,18 +427,40 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
         goToScene(id, config);
       },
       lookAt: (target) => setPendingView(target),
-      openInfoWindow: (windowId) => {
-        // Las ventanas que el autor define en la interfaz todavía no las
-        // interpreta esta versión del visor. Se dice en una ventana, con el
-        // identificador, en lugar de abrir un recuadro vacío: así el autor que
-        // prueba su recorrido sabe qué le falta.
-        setOpenWindow({
-          kind: 'info',
-          title: 'Ventana de información',
-          body: `Esta versión del visor todavía no muestra las ventanas definidas en la interfaz (${windowId}).`,
-          mediaUrl: null,
-          modal: false,
-        });
+      openInfoWindow: (windowId, modal) => {
+        const authored = manifest.infoWindows.find((candidate) => candidate.id === windowId);
+        if (authored === undefined) {
+          // Una ventana que falta del paquete se dice, con su identificador:
+          // el autor que prueba su recorrido necesita saber qué no se publicó,
+          // y un recuadro vacío no se lo dice.
+          setOpenWindow({
+            kind: 'info',
+            title: 'Falta una ventana',
+            tabs: [
+              {
+                id: 'missing',
+                title: 'General',
+                blocks: [
+                  {
+                    kind: 'missing',
+                    what: `una ventana que no viajó en el paquete (${windowId})`,
+                  },
+                ],
+              },
+            ],
+            widthPx: 520,
+            heightPx: 220,
+            modal: false,
+            onClose: [],
+          });
+          return;
+        }
+
+        // La acción puede forzar modal aunque la ventana no lo sea: es el
+        // caso de una advertencia de seguridad que hay que leer antes de
+        // seguir, y el autor la configura en la acción, no en la ventana.
+        const built = infoWindow({ manifest, mediaUrls }, authored, variableValues());
+        setOpenWindow(modal && built.kind === 'info' ? { ...built, modal: true } : built);
       },
       openMedia: (mediaId, albumMediaIds, autoplay) => {
         // Dentro del recorrido y no en una pestaña nueva: un álbum necesita un
@@ -725,7 +842,12 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
 
       <WindowHost
         window={openWindow}
-        onClose={() => setOpenWindow(null)}
+        onClose={closeWindow}
+        onSceneLink={(sceneId) => {
+          closeWindow();
+          goToScene(sceneId);
+        }}
+        telemetryValue={(mappingId) => telemetryText(mappingId)}
         onAlbumIndex={(index) =>
           setOpenWindow((current) =>
             current === null || current.kind !== 'media' ? current : { ...current, index },

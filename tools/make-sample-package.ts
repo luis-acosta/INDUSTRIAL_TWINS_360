@@ -153,6 +153,11 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
   const files = new Map<string, Uint8Array>();
   const { sha256 } = await import('../packages/persistence/src/hash');
 
+  /* Se reserva antes para que el marcador pueda apuntar a la ventana. */
+  const infoWindowId = newUuid();
+  const infoTabId = newUuid();
+  const infoDocsTabId = newUuid();
+
   const scenes = [];
   const media = [];
 
@@ -277,8 +282,38 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
       updatedAt: now,
     };
 
+    /* Un marcador que abre una ventana compuesta por el autor.
+     *
+     * Va en el paquete porque la ventana sólo se puede comprobar de verdad
+     * aquí: el texto con formato, el pie de la imagen, el enlace a otra escena
+     * y el aviso del contenido web no declarado dependen todos de cómo el
+     * navegador pinta y de la política del propio paquete.
+     */
+    const infoHotspot = {
+      ...albumHotspot,
+      id: newUuid(),
+      name: 'Ficha del equipo',
+      anchor: { space: 'spherical' as const, yaw: 0.6, pitch: -0.1 },
+      style: { ...albumHotspot.style, labelTemplate: 'Ficha del equipo' },
+      actions: [
+        {
+          id: newUuid(),
+          event: 'click' as const,
+          config: { type: 'openInfoWindow' as const, windowId: infoWindowId, modal: false },
+          order: 0,
+          delayMs: 0,
+          focusDwellMs: 1200,
+          once: false,
+          requiresScore: null,
+          enabled: true,
+        },
+      ],
+      order: 2,
+    };
+
     first.hotspots = [
       albumHotspot,
+      infoHotspot as (typeof first.hotspots)[number],
       {
         id: newUuid(),
         sceneId: first.id,
@@ -384,12 +419,85 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
     headingRad: index === 0 ? 0 : Math.PI / 2,
   }));
 
+  /* Una ventana con dos pestañas: texto con variables y formato, una imagen
+     con pie, un enlace a la otra escena, y un contenido web cuyo origen no se
+     declara en ninguna acción de Webframe, de modo que la política del paquete
+     no lo admite y el visor tiene que explicarlo en lugar de dejar un hueco. */
+  const infoWindows = [
+    {
+      id: infoWindowId,
+      name: 'Ficha del equipo',
+      title: 'Ficha de {{escena}}',
+      tabs: [
+        {
+          id: infoTabId,
+          title: 'General',
+          blocks: [
+            {
+              type: 'text' as const,
+              text:
+                'Bomba **P-101A** de la {{escena}}.\n\n' +
+                '- Cerrar la válvula de descarga\n' +
+                '- Purgar la línea\n\n' +
+                'Consulte la [norma de arranque](https://ejemplo.com/norma).',
+            },
+            {
+              type: 'image' as const,
+              mediaId: planMediaId,
+              caption: 'Ubicación en el plano',
+            },
+            {
+              type: 'sceneLink' as const,
+              sceneId: scenes[1]?.id ?? scenes[0]?.id ?? '',
+              label: '',
+            },
+          ],
+        },
+        {
+          id: infoDocsTabId,
+          title: 'Enlaces',
+          blocks: [
+            /* Declarado: su origen entra en la política del paquete, así que
+               el visor lo enmarca. La página no existe —el contenedor no sale
+               a internet—, pero lo que se comprueba aquí es que el marco se
+               crea con los permisos mínimos. */
+            {
+              type: 'webframe' as const,
+              url: 'https://mapa.ejemplo.com/embed',
+              heightPx: 260,
+              allowFullscreen: false,
+            },
+            {
+              type: 'text' as const,
+              text: 'Y un bloque que el autor dejó sin configurar:',
+            },
+            /* Sin configurar: la publicación no mete esta dirección en la
+               política —a propósito—, así que el visor tiene que explicar por
+               qué no lo muestra en lugar de dejar un recuadro en blanco. Es el
+               caso real de un autor que añade el bloque y olvida la dirección. */
+            {
+              type: 'webframe' as const,
+              url: 'https://example.invalid/mapa',
+              heightPx: 200,
+              allowFullscreen: false,
+            },
+          ],
+        },
+      ],
+      widthPx: 760,
+      heightPx: 520,
+      modal: false,
+      onCloseActions: [],
+    },
+  ];
+
   const project: Project = {
     ...base,
     media,
     scenes,
     plans,
     planMarkers,
+    infoWindows,
     settings: { ...base.settings, entrySceneId: (first?.id ?? null) as Uuid | null },
   };
 

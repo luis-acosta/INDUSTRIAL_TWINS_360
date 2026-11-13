@@ -11,8 +11,15 @@ import {
   projectSchema,
   projectStats,
   toManifest,
+  type Project,
 } from './project';
+import { actionSchema, type Action } from './action';
 import { validateSceneConsistency } from './scene';
+import { createNode } from './skin-editing';
+
+/** Acción que abre una ventana, para armar los casos de publicación. */
+const openWindowAction = (id: string, windowId: string): Action =>
+  actionSchema.parse({ id, event: 'click', config: { type: 'openInfoWindow', windowId } });
 import {
   ISO_NOW,
   makeFullProject,
@@ -205,6 +212,82 @@ describe('publicación: proyecto -> manifiesto', () => {
     appVersion: '0.14.0',
     offlineCapable: true,
   };
+
+  /** Proyecto con dos ventanas: una la abre un marcador, la otra no. */
+  const projectWithWindows = (): Project => {
+    const base = makeFullProject();
+    const abierta = base.infoWindows[0];
+    if (abierta === undefined) throw new Error('el proyecto de prueba debe traer una ventana');
+
+    const huerfana = { ...abierta, id: testUuid(110) as typeof abierta.id, name: 'Borrador' };
+    const encadenada = { ...abierta, id: testUuid(111) as typeof abierta.id, name: 'Siguiente' };
+
+    const scene = base.scenes[0];
+    if (scene === undefined) throw new Error('el proyecto de prueba debe traer una escena');
+    const hotspot = scene.hotspots[0];
+    if (hotspot === undefined) throw new Error('la escena de prueba debe traer un marcador');
+
+    return {
+      ...base,
+      infoWindows: [
+        { ...abierta, onCloseActions: [openWindowAction(testUuid(120), encadenada.id)] },
+        huerfana,
+        encadenada,
+      ],
+      scenes: [
+        {
+          ...scene,
+          hotspots: [
+            { ...hotspot, actions: [...hotspot.actions, openWindowAction(testUuid(121), abierta.id)] },
+          ],
+        },
+        ...base.scenes.slice(1),
+      ],
+    };
+  };
+
+  it('TEST-PRJ-019b: sólo se publican las ventanas que alguien abre', () => {
+    // Una ventana a medias que no abre nadie puede ser un borrador interno: no
+    // tiene por qué viajar en un paquete que se sirve con un enlace.
+    const manifest = toManifest(projectWithWindows(), options);
+    const names = manifest.infoWindows.map((w) => w.name);
+
+    expect(names).toContain('Ficha de la bomba');
+    expect(names).not.toContain('Borrador');
+  });
+
+  it('TEST-PRJ-019c: una ventana que otra abre al cerrarse también se publica', () => {
+    // Encadenar ventanas (J06) y perder el segundo eslabón dejaría al
+    // visitante con un botón que no hace nada.
+    const manifest = toManifest(projectWithWindows(), options);
+    expect(manifest.infoWindows.map((w) => w.name)).toContain('Siguiente');
+  });
+
+  it('TEST-PRJ-019d: una ventana abierta desde la interfaz también se publica', () => {
+    // La interfaz es una fuente de acciones tan válida como un marcador, y es
+    // la que se olvida: el fallo sólo se vería en el paquete publicado.
+    const base = makeFullProject();
+    const window = base.infoWindows[0];
+    const skin = base.skins[0];
+    if (window === undefined || skin === undefined) throw new Error('faltan datos de prueba');
+
+    const node = createNode({ kind: 'button', name: 'Ficha', taken: new Set<string>() });
+
+    const manifest = toManifest(
+      {
+        ...base,
+        skins: [
+          {
+            ...skin,
+            root: [{ ...node, actions: [openWindowAction(testUuid(122), window.id)] }],
+          },
+        ],
+      },
+      options,
+    );
+
+    expect(manifest.infoWindows).toHaveLength(1);
+  });
 
   it('TEST-PRJ-019: el manifiesto generado es válido', () => {
     const manifest = toManifest(makeFullProject(), options);

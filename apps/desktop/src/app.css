@@ -2288,3 +2288,194 @@ body {
 .csv-dialog__file--compact input[type='file'] {
   max-width: 140px;
 }
+
+/* ------------------------------------------------------------------ *
+ * Ventanas de información (E01, F08, F09)
+ *
+ * Tres columnas porque el trabajo tiene tres niveles —ventana, pestaña,
+ * bloque— y esconder uno obliga a ir y venir para mover un párrafo.
+ * ------------------------------------------------------------------ */
+
+.iwin {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 320px;
+  gap: var(--it-space-3);
+  height: 100%;
+  min-height: 0;
+}
+
+.iwin__list,
+.iwin__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  overflow-y: auto;
+  padding-right: var(--it-space-2);
+}
+
+.iwin__list ul,
+.iwin__blocks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iwin__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+  text-align: left;
+  padding: var(--it-space-1_5) var(--it-space-2);
+  border: 0;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.iwin__item:hover {
+  background: var(--it-color-surface-raised);
+  color: var(--it-color-text-primary);
+}
+
+.iwin__item--active {
+  background: var(--it-color-accent-muted);
+  color: var(--it-color-accent-onSurface);
+}
+
+.iwin__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  min-width: 0;
+  min-height: 0;
+}
+
+.iwin__tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-1);
+  border-bottom: 1px solid var(--it-color-border-subtle);
+  overflow-x: auto;
+}
+
+.iwin__tab {
+  padding: var(--it-space-2) var(--it-space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.iwin__tab--active {
+  color: var(--it-color-accent-onSurface);
+  border-bottom-color: var(--it-color-accent-default);
+}
+
+.iwin__compose {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+/* La lista numerada deja ver el orden, que es lo que el autor manipula. */
+.iwin__blocks {
+  counter-reset: iwin-block;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.iwin__block {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--it-space-2);
+  text-align: left;
+  padding: var(--it-space-2);
+  border: 1px solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.iwin__block:hover {
+  border-color: var(--it-color-border-default);
+}
+
+.iwin__block--active {
+  border-color: var(--it-color-accent-default);
+  background: var(--it-color-accent-muted);
+}
+
+.iwin__block-summary {
+  color: var(--it-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iwin__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.iwin__empty,
+.iwin__opened {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+.iwin__problems {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+.iwin__variables {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+}
+
+.iwin__variables summary {
+  cursor: pointer;
+  padding: var(--it-space-1) 0;
+}
+
+.iwin__variables dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iwin__variables dl > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--it-space-2);
+}
+
+.iwin__variables dt {
+  font-family: var(--it-font-mono);
+  color: var(--it-color-accent-onSurface);
+}
+
+.iwin__variables dd {
+  margin: 0;
+}

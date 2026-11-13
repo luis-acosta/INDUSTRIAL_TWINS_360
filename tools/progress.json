@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.32.0",
-  "updatedAt": "2026-11-13T16:20:00Z",
+  "version": "0.33.0",
+  "updatedAt": "2026-11-13T18:40:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -152,6 +152,11 @@
       "at": "2026-11-13T16:20:00Z",
       "title": "Planos, zonas y radar cerrados (G01–G05)",
       "detail": "Alta de imágenes con validación (SVG ejecutable rechazado), colocación de puntos pulsando sobre el plano, zonas agrupadas y radar con el ángulo verdadero. Tres pruebas nuevas en navegador real; el minimapa del editor y el visor comparten ahora el mismo cálculo de rumbo."
+    },
+    {
+      "at": "2026-11-13T18:40:00Z",
+      "title": "Ventanas de información y servicios externos (E01, E09)",
+      "detail": "Etapa 04 cerrada. El contenido técnico ya llega al visitante: texto con formato seguro —sin ninguna vía a HTML—, multimedia, documentos, fichas de activo y valores de proceso, en pestañas. La migración 2 del esquema se aplica sobre proyectos de la versión 1 sin perder nada, probado."
     }
   ],
   "status": {
@@ -195,14 +200,14 @@
     "D13": "done",
     "D14": "done",
     "D15": "done",
-    "E01": "partial",
+    "E01": "done",
     "E02": "done",
     "E03": "done",
     "E05": "done",
     "E06": "done",
     "E07": "done",
     "E08": "done",
-    "E09": "pending",
+    "E09": "done",
     "F01": "done",
     "F02": "done",
     "F03": "done",
@@ -226,7 +231,7 @@
     "J03": "done",
     "J04": "partial",
     "J05": "partial",
-    "J06": "modeled",
+    "J06": "partial",
     "J07": "modeled",
     "J08": "done",
     "J09": "partial",
@@ -314,10 +319,8 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "G01": "Planos importados en el editor (imagen validada, SVG ejecutable rechazado) y mostrados en el visor (TEST-IMP-001..022, TEST-PLM-001..014)",
-      "G02": "Puntos colocados pulsando sobre el plano, y navegación desde ellos en el visor, comprobada en navegador real (TEST-PLM-002..005, TEST-E2E-015)",
-      "G03": "Zonas y pisos agrupados por orden declarado, en el editor y en el visor (TEST-PLN-013..020, TEST-PLV-013..016)",
-      "G05": "Orientación por punto aplicada al rumbo del radar, con el mismo cálculo en editor y visor (TEST-PLN-001..012, TEST-PLM-012)"
+      "E01": "Ventanas de información compuestas por el autor: texto con formato, imagen, vídeo, documento, ficha de activo, valor de proceso y enlaces, con editor, migración 2 del esquema y comprobación en navegador real (TEST-INF-001..040, TEST-IWM-001..016, TEST-IWB-001..020, TEST-E2E-017..019)",
+      "E09": "Servicios externos enmarcados desde las ventanas, con rechazo de red interna y metadatos de nube, permisos mínimos del marco y el origen declarado en la política del paquete (TEST-INF-025..030, TEST-FRM-016..018, TEST-E2E-018)"
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -344,12 +347,10 @@
     "pruebas": "1546 pruebas TypeScript, 76 del servidor, 46 del cosido, 13 de extremo a extremo y 12 de Rust: 1693 en verde.",
     "reproduccion": "El visor publicado ejecuta recorridos y evaluaciones. El motor de estados sigue siendo la función pura del dominio; el visor aporta los temporizadores, el audio y la cámara. Dos cosas que no son detalles: la espera por narración tiene plazo máximo, porque el navegador bloquea la reproducción automática con sonido y una parada que esperase el final de un audio que nunca suena dejaría el recorrido congelado delante del visitante; y pausar cancela el temporizador, porque un recorrido «pausado» que salta de escena a los pocos segundos desmiente el botón. La búsqueda de marcadores se responde en la escena, no en un cuadro de diálogo: una lista de marcadores para pulsar anularía lo que esa pregunta evalúa. La condición de acceso se comprueba en memoria y se dice al visitante que el resultado vale sólo para esta visita, porque el paquete publicado no escribe nada.",
     "defectosCorregidos": [
-      "El radar del visor no se dibujaba hasta que el visitante arrastraba la cámara: la vista sólo se conocía al moverla. Encontrado en navegador real (TEST-E2E-014).",
-      "El cono del radar se estiraba con la forma del plano: sesenta grados sobre un plano 2:1 se veían como cien. Ahora se dibuja en caja cuadrada sobre el punto (TEST-PLV-011b).",
-      "La apertura del cono se comparaba con el campo de visión vertical de la cámara; el cono salía casi la mitad de ancho de lo que el visitante ve (TEST-PLN-010b..d).",
-      "El minimapa del editor mostraba siempre el primer plano e ignoraba la orientación del punto, de modo que el autor orientaba con un radar y el visitante veía otro.",
-      "La importación de imágenes se quedaba colgada si la imagen no se decodificaba, y un fallo inesperado no se mostraba: el autor pulsaba y no pasaba nada.",
-      "Los botones de punto del plano se anunciaban «Ir a» sin destino cuando el punto no tenía rótulo."
+      "La acción openInfoWindow apuntaba desde el principio a un identificador que no correspondía a nada: el visor abría un recuadro que decía que la función no estaba. Ahora existe la colección, con su migración.",
+      "La política del paquete no recogía los orígenes de los bloques de contenido web de las ventanas, así que un bloque correcto se habría bloqueado siempre y el autor no habría sabido por qué. Lo encontró el intento de probar el camino bueno en navegador real; la prueba del camino bloqueado pasaba por el motivo equivocado.",
+      "Las acciones de cierre de ventana se ejecutaban con el evento «click» en lugar de «windowClose», de modo que el filtro del ejecutor las descartaba.",
+      "La prueba del atajo de teclado de los módulos repetía el dígito a mano y se rompía al añadir un módulo; ahora lo lee del registro y comprueba todos."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

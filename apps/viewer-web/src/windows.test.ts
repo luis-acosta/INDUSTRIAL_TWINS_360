@@ -16,6 +16,7 @@ import {
   documentUrlWithPage,
   documentWindow,
   isEmbeddableDocument,
+  infoWindow,
   isFrameAllowed,
   mediaKindOf,
   mediaWindow,
@@ -23,8 +24,8 @@ import {
   stepAlbum,
   type WindowContext,
 } from './windows';
-import { toManifest } from '@it360/domain';
-import { makeDocument, makeMedia, makeProject, testUuid } from '@it360/domain/testing';
+import { actionSchema, createInfoWindow, toManifest, type InfoWindow } from '@it360/domain';
+import { makeDocument, makeMedia, makeProject, makeScene, testUuid } from '@it360/domain/testing';
 import type { Manifest } from '@it360/domain';
 
 const NOW = '2026-09-10T10:00:00.000Z';
@@ -385,5 +386,172 @@ describe('safeDownloadName', () => {
 
   it('TEST-WIN-034 quita los caracteres de control', () => {
     expect(safeDownloadName('doc\u0000\u001f.pdf', 'a.bin')).toBe('doc.pdf');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Ventanas compuestas por el autor (E01, F08, F09)
+ * ------------------------------------------------------------------ */
+
+describe('infoWindow', () => {
+  const windowWith = (blocks: InfoWindow['tabs'][number]['blocks']): InfoWindow => ({
+    ...createInfoWindow('Ficha de la bomba', id(201), id(200)),
+    tabs: [{ id: id(201) as InfoWindow['tabs'][number]['id'], title: 'General', blocks }],
+  });
+
+  it('TEST-WIN-030 el título y el texto llegan con las variables sustituidas', () => {
+    const built = infoWindow(
+      context({}),
+      {
+        ...windowWith([{ type: 'text', text: 'Está en **{{escena}}**.' }]),
+        title: 'Ficha de {{escena}}',
+      },
+      { escena: 'Sala de bombas' },
+    );
+
+    expect(built.kind).toBe('info');
+    if (built.kind !== 'info') return;
+    expect(built.title).toBe('Ficha de Sala de bombas');
+
+    const block = built.tabs[0]?.blocks[0];
+    expect(block?.kind).toBe('richText');
+    if (block?.kind !== 'richText') return;
+    const spans = block.nodes[0]?.kind === 'paragraph' ? block.nodes[0].spans : [];
+    expect(spans.find((span) => span.kind === 'bold')?.text).toBe('Sala de bombas');
+  });
+
+  it('TEST-WIN-031 sin título propio se usa el nombre de la ventana', () => {
+    const built = infoWindow(context({}), { ...windowWith([]), title: '' }, {});
+    expect(built.kind === 'info' && built.title).toBe('Ficha de la bomba');
+  });
+
+  it('TEST-WIN-032 una imagen del paquete se resuelve a su URL', () => {
+    const built = infoWindow(
+      context({ media: [{ id: id(10), name: 'bomba.jpg', mime: 'image/jpeg' }] }),
+      windowWith([{ type: 'image', mediaId: id(10) as never, caption: 'Vista {{escena}}' }]),
+      { escena: 'lateral' },
+    );
+
+    const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;
+    expect(block?.kind).toBe('media');
+    if (block?.kind !== 'media') return;
+    expect(block.media.url).toContain(id(10));
+    expect(block.media.kind).toBe('image');
+    expect(block.caption).toBe('Vista lateral');
+  });
+
+  it('TEST-WIN-033 una imagen que falta del paquete se convierte en aviso, no en hueco', () => {
+    // El visitante tiene que poder distinguir «aquí falta algo» de «aquí no
+    // había nada», y el autor que prueba su recorrido necesita verlo.
+    const built = infoWindow(
+      context({ media: [{ id: id(10), name: 'bomba.jpg', mime: 'image/jpeg' }], missingUrls: [id(10)] }),
+      windowWith([{ type: 'image', mediaId: id(10) as never, caption: '' }]),
+      {},
+    );
+
+    const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;
+    expect(block?.kind).toBe('missing');
+  });
+
+  it('TEST-WIN-034 los demás bloques sobreviven a uno roto', () => {
+    const built = infoWindow(
+      context({ media: [{ id: id(10), name: 'x.jpg', mime: 'image/jpeg' }], missingUrls: [id(10)] }),
+      windowWith([
+        { type: 'image', mediaId: id(10) as never, caption: '' },
+        { type: 'text', text: 'El procedimiento sigue aquí.' },
+      ]),
+      {},
+    );
+
+    const blocks = built.kind === 'info' ? (built.tabs[0]?.blocks ?? []) : [];
+    expect(blocks.map((block) => block.kind)).toEqual(['missing', 'richText']);
+  });
+
+  it('TEST-WIN-035 un documento se resuelve con su página y si se puede enmarcar', () => {
+    const built = infoWindow(
+      context({
+        media: [{ id: id(11), name: 'hoja.pdf', mime: 'application/pdf' }],
+        documents: [{ id: id(20), mediaId: id(11), title: 'Hoja de datos' }],
+      }),
+      windowWith([{ type: 'document', documentId: id(20) as never, page: 3 }]),
+      {},
+    );
+
+    const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;
+    expect(block?.kind).toBe('document');
+    if (block?.kind !== 'document') return;
+    expect(block.page).toBe(3);
+    expect(block.embeddable).toBe(true);
+    expect(block.title).toBe('Hoja de datos');
+  });
+
+  it('TEST-WIN-036 las pestañas se conservan en orden', () => {
+    const built = infoWindow(
+      context({}),
+      {
+        ...createInfoWindow('Ficha', id(201), id(200)),
+        tabs: [
+          {
+            id: id(201) as InfoWindow['tabs'][number]['id'],
+            title: 'General',
+            blocks: [{ type: 'text', text: 'a' }],
+          },
+          {
+            id: id(202) as InfoWindow['tabs'][number]['id'],
+            title: 'Documentos',
+            blocks: [{ type: 'text', text: 'b' }],
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(built.kind === 'info' && built.tabs.map((tab) => tab.title)).toEqual([
+      'General',
+      'Documentos',
+    ]);
+  });
+
+  it('TEST-WIN-037 las acciones de cierre viajan con la ventana', () => {
+    const closing = [
+      actionSchema.parse({ id: id(210), event: 'click', config: { type: 'stopTour' } }),
+    ];
+    const built = infoWindow(context({}), { ...windowWith([]), onCloseActions: closing }, {});
+
+    expect(built.kind === 'info' && built.onClose).toHaveLength(1);
+  });
+
+  it('TEST-WIN-038 el contenido web pasa su dirección tal cual, para que el visor decida', () => {
+    // La decisión de enmarcar o no depende de la política del paquete, que
+    // sólo se conoce en el visor; aquí sólo se traslada.
+    const built = infoWindow(
+      context({}),
+      windowWith([
+        { type: 'webframe', url: 'https://mapa.example.com/x', heightPx: 300, allowFullscreen: true },
+      ]),
+      {},
+    );
+
+    const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;
+    expect(block?.kind === 'webframe' && block.url).toBe('https://mapa.example.com/x');
+    expect(block?.kind === 'webframe' && block.heightPx).toBe(300);
+  });
+
+  it('TEST-WIN-039 un enlace a escena toma el título de la escena si no tiene rótulo', () => {
+    const base = makeProject();
+    const scene = makeScene(30, base.id, { title: 'Plataforma superior' });
+    const manifest = toManifest(
+      { ...base, scenes: [scene] },
+      { publishedAt: NOW, appVersion: '0.23.0', offlineCapable: true },
+    );
+
+    const built = infoWindow(
+      { manifest, mediaUrls: new Map() },
+      windowWith([{ type: 'sceneLink', sceneId: scene.id, label: '' }]),
+      {},
+    );
+
+    const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;
+    expect(block?.kind === 'sceneLink' && block.label).toBe('Plataforma superior');
   });
 });

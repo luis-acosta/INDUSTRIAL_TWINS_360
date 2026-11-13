@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { isErr, isOk, unwrap, type Project } from '@it360/domain';
+import { CURRENT_SCHEMA_VERSION, isErr, isOk, unwrap, type Project } from '@it360/domain';
 import { makeFullProject, makeNote, makeScene, testUuid } from '@it360/domain/testing';
 import { zipSync } from 'fflate';
 import { MemoryStorage } from './storage';
@@ -40,8 +40,12 @@ describe('ciclo de vida del proyecto', () => {
   });
 
   it('TEST-WS-001: las versiones de esquema del dominio y de las migraciones coinciden', () => {
+    // Se comprueba contra la constante del dominio y no contra un número
+    // escrito aquí: una migración nueva no debe obligar a tocar la prueba, y
+    // lo que importa es justamente que las dos cuentas no se separen.
     expect(() => assertSchemaVersionsAligned()).not.toThrow();
-    expect(MIGRATIONS).toHaveLength(1);
+    expect(MIGRATIONS).toHaveLength(CURRENT_SCHEMA_VERSION);
+    expect(MIGRATIONS[MIGRATIONS.length - 1]?.version).toBe(CURRENT_SCHEMA_VERSION);
   });
 
   it('TEST-WS-002: crea un proyecto vacío válido', () => {
@@ -405,8 +409,50 @@ describe('migraciones', () => {
       expect(currentVersion(db)).toBe(0);
       const report = unwrap(migrate(db, { now: '2026-11-12T19:00:00.000Z' }));
       expect(report.from).toBe(0);
-      expect(report.to).toBe(1);
-      expect(report.applied).toHaveLength(1);
+      expect(report.to).toBe(CURRENT_SCHEMA_VERSION);
+      expect(report.applied).toHaveLength(CURRENT_SCHEMA_VERSION);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('TEST-WS-025b: una base en la versión 1 se actualiza sin perder lo guardado', async () => {
+    // Es el caso real: hay proyectos guardados con la versión 1. La prueba
+    // escribe algo con sólo la primera migración aplicada, aplica el resto y
+    // comprueba que sigue estando. Sin esto, una migración podría recrear una
+    // tabla y vaciarla sin que ninguna prueba se enterase.
+    const db = unwrap(await openDatabase(null));
+    try {
+      const soloLaPrimera = MIGRATIONS.filter((m) => m.version === 1);
+      unwrap(migrate(db, { now: '2026-11-12T19:00:00.000Z', migrations: soloLaPrimera }));
+      expect(currentVersion(db)).toBe(1);
+
+      db.run(
+        `INSERT INTO skin (id, name, description, layout_mode, design_width, design_height,
+           root_json, template_id, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [
+          '00000000-0000-4000-8000-000000000001',
+          'Interfaz de la planta',
+          '',
+          'fluid',
+          1920,
+          1080,
+          '[]',
+          null,
+          '2026-11-12T19:00:00.000Z',
+          '2026-11-12T19:00:00.000Z',
+        ],
+      );
+
+      const report = unwrap(migrate(db, { now: '2026-11-12T19:05:00.000Z' }));
+      expect(report.from).toBe(1);
+      expect(report.to).toBe(CURRENT_SCHEMA_VERSION);
+
+      const row = db.get('SELECT name FROM skin');
+      expect(row?.['name']).toBe('Interfaz de la planta');
+      // Y la tabla nueva existe y está vacía, no ausente.
+      expect(db.get('SELECT COUNT(*) AS n FROM info_window')?.['n']).toBe(0);
     } finally {
       db.close();
     }

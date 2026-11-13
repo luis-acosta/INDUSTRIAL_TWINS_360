@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { collectFrameOrigins, frameSrcDirective } from './frame-origins';
 import { makeHotspot, makeProject, makeScene, testUuid } from '@it360/domain/testing';
+import { createInfoWindow } from '@it360/domain';
 import { skinSchema, type Action, type Project, type Scene } from '@it360/domain';
 
 const NOW = '2026-09-01T10:00:00.000Z';
@@ -48,6 +49,52 @@ function projectWith(urls: readonly string[], over: Partial<Scene> = {}): Projec
 /* ------------------------------------------------------------------ *
  * Recolección
  * ------------------------------------------------------------------ */
+
+describe('collectFrameOrigins con ventanas de información', () => {
+  /** Proyecto con un bloque de contenido web dentro de una ventana. */
+  const projectWithWindowFrame = (url: string): Project => {
+    const base = makeProject();
+    const window = createInfoWindow('Ficha', testUuid(201), testUuid(200));
+
+    return {
+      ...base,
+      infoWindows: [
+        {
+          ...window,
+          tabs: [
+            {
+              ...(window.tabs[0] as (typeof window.tabs)[number]),
+              blocks: [{ type: 'webframe', url, heightPx: 300, allowFullscreen: false }],
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  it('TEST-FRM-016 el bloque de contenido web de una ventana declara su origen', () => {
+    // Sin esto el origen no entra en la política, el visor bloquea el marco con
+    // toda la razón y el bloque no funcionaría nunca.
+    const report = collectFrameOrigins(projectWithWindowFrame('https://mapa.ejemplo.com/embed?x=1'));
+
+    expect(report.origins).toEqual(['https://mapa.ejemplo.com']);
+    expect(report.rejected).toEqual([]);
+  });
+
+  it('TEST-FRM-017 un bloque sin configurar no entra ni cuenta como error', () => {
+    const report = collectFrameOrigins(projectWithWindowFrame('https://example.invalid/'));
+
+    expect(report.origins).toEqual([]);
+    expect(report.rejected).toHaveLength(1);
+  });
+
+  it('TEST-FRM-018 un bloque http se rechaza con su motivo', () => {
+    const report = collectFrameOrigins(projectWithWindowFrame('http://mapa.ejemplo.com/embed'));
+
+    expect(report.origins).toEqual([]);
+    expect(report.rejected[0]?.reason).toContain('http');
+  });
+});
 
 describe('collectFrameOrigins', () => {
   it('TEST-FRM-001 un recorrido sin Webframes no admite ningún origen', () => {

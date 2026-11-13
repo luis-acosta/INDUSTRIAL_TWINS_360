@@ -17,8 +17,10 @@ import { z } from 'zod';
 import { sha256Schema, mediaSchema, publishQualitySchema } from './media';
 import { assetClassSchema, assetLocationSchema, assetSchema, technicalDocumentSchema } from './asset';
 import { noteCategorySchema, noteSchema } from './note';
-import { planMarkerSchema, planSchema, sceneSchema } from './scene';
-import { skinSchema } from './skin';
+import { planMarkerSchema, planSchema, sceneSchema, type Scene } from './scene';
+import { skinSchema, walkSkin } from './skin';
+import { infoWindowSchema, referencedWindowIds, type InfoWindow } from './info-window';
+import type { Action } from './action';
 import { quizSchema, tourSchema } from './tour';
 import {
   conditionRuleSchema,
@@ -45,7 +47,7 @@ import { tagUniquenessScopeSchema, uuidSchema } from './identity';
  * rápida de corromper el trabajo de alguien. Se avisa y se ofrece actualizar
  * la aplicación.
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /** Versión mínima que las migraciones saben leer. */
 export const MINIMUM_SCHEMA_VERSION = 1;
@@ -142,6 +144,7 @@ export const projectSchema = z.object({
   telemetryMappings: z.array(telemetryMappingSchema).default([]),
   conditionRules: z.array(conditionRuleSchema).default([]),
 
+  infoWindows: z.array(infoWindowSchema).default([]),
   skins: z.array(skinSchema).default([]),
   tours: z.array(tourSchema).default([]),
   quizzes: z.array(quizSchema).default([]),
@@ -202,6 +205,13 @@ export const manifestSchema = z.object({
   assetClasses: z.array(assetClassSchema),
   assetLocations: z.array(assetLocationSchema),
   documents: z.array(technicalDocumentSchema),
+  /**
+   * Sólo las ventanas a las que apunta alguna acción publicable.
+   *
+   * Una ventana que el autor dejó a medias y no abre nadie no tiene por qué
+   * viajar en el paquete: su contenido puede ser un borrador interno.
+   */
+  infoWindows: z.array(infoWindowSchema).default([]),
   skins: z.array(skinSchema),
   tours: z.array(tourSchema),
   quizzes: z.array(quizSchema),
@@ -661,6 +671,61 @@ export interface ManifestOptions {
  * recorrido las expondría a cualquiera que reciba el enlace. La etapa 11
  * las sirve a través de la API con control de acceso.
  */
+/**
+ * Ventanas que viajan en el paquete.
+ *
+ * Son las que alguna acción publicable abre, más las que esas ventanas abren
+ * a su vez al cerrarse: una ventana puede encadenar a otra (J06), y perder el
+ * segundo eslabón dejaría al visitante con un botón que no hace nada.
+ *
+ * Se recorre todo lo que puede llevar acciones —marcadores y escenas, los
+ * componentes de la interfaz, los pasos y los extremos del recorrido— porque
+ * cualquiera de ellos puede ser el único sitio desde el que se abre una
+ * ventana. Olvidar una fuente se notaría como una ventana que falta en el
+ * paquete publicado y en ninguna otra parte.
+ */
+function publishableInfoWindows(
+  project: Project,
+  publishableScenes: readonly Scene[],
+): InfoWindow[] {
+  const actions: Action[] = [];
+
+  for (const scene of publishableScenes) {
+    actions.push(...scene.actions);
+    for (const hotspot of scene.hotspots) actions.push(...hotspot.actions);
+  }
+  for (const skin of project.skins) {
+    for (const { node } of walkSkin(skin.root)) actions.push(...node.actions);
+  }
+  for (const tour of project.tours) {
+    actions.push(...tour.onStart, ...tour.onEnd);
+    for (const waypoint of tour.waypoints) actions.push(...waypoint.actions);
+  }
+
+  const wanted = referencedWindowIds(actions);
+  const byId = new Map(project.infoWindows.map((window) => [window.id as string, window]));
+
+  /* Cierre transitivo: lo que abre una ventana al cerrarse también hace falta. */
+  const included = new Map<string, InfoWindow>();
+  const pending = [...wanted];
+
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === undefined || included.has(id)) continue;
+    const window = byId.get(id);
+    if (window === undefined) continue;
+
+    included.set(id, window);
+    for (const next of referencedWindowIds(window.onCloseActions)) {
+      if (!included.has(next)) pending.push(next);
+    }
+  }
+
+  // El orden del proyecto, no el del recorrido: así dos publicaciones del
+  // mismo proyecto producen el mismo manifiesto byte a byte.
+  return project.infoWindows.filter((window) => included.has(window.id));
+}
+
 export function toManifest(project: Project, options: ManifestOptions): Manifest {
   const publishableScenes = project.scenes
     .filter((scene) => !scene.excludedFromPublish)
@@ -693,6 +758,7 @@ export function toManifest(project: Project, options: ManifestOptions): Manifest
     assetClasses: project.assetClasses,
     assetLocations: project.assetLocations.filter((l) => usedSceneIds.has(l.sceneId)),
     documents: project.documents,
+    infoWindows: publishableInfoWindows(project, publishableScenes),
     skins: project.skins,
     tours: project.tours,
     quizzes: project.quizzes,
