@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsc/tsconfig.tsbuildinfo",
+    "baseUrl": ".",
+    "types": [
+      "node",
+      "vitest/globals",
+      "webxr"
+    ],
+    "paths": {
+      "@it360/tokens": [
+        "packages/tokens/src/index.ts"
+      ],
+      "@it360/tokens/tokens.css": [
+        "packages/tokens/src/tokens.css"
+      ],
+      "@it360/domain": [
+        "packages/domain/src/index.ts"
+      ],
+      "@it360/domain/testing": [
+        "packages/domain/src/testing.ts"
+      ],
+      "@it360/persistence": [
+        "packages/persistence/src/index.ts"
+      ],
+      "@it360/persistence/hash": [
+        "packages/persistence/src/hash.ts"
+      ],
+      "@it360/ui": [
+        "packages/ui/src/index.ts"
+      ],
+      "@it360/ui/styles.css": [
+        "packages/ui/src/styles.css"
+      ],
+      "@it360/viewer": [
+        "packages/viewer/src/index.ts"
+      ],
+      "@it360/viewer/viewer.css": [
+        "packages/viewer/src/viewer.css"
+      ],
+      "@it360/editor": [
+        "packages/editor/src/index.ts"
+      ],
+      "@it360/exporter": [
+        "packages/exporter/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "packages/*/scripts/**/*.ts",
+    "apps/*/src/**/*.ts",
+    "apps/*/src/**/*.tsx",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "**/dist-ts",
+    "**/target"
+  ],
+  "files": [
+    "packages/persistence/src/types/sql.js.d.ts"
+  ]
+}

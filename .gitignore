@@ -1,0 +1,53 @@
+# Dependencias
+node_modules/
+
+# Resultados de compilación y publicación
+dist/
+build/
+*.tsbuildinfo
+
+# Resultados de pruebas
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# Caches de herramientas
+.cache/
+.vite/
+.eslintcache
+
+# Artefactos de Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Proyectos y respaldos del usuario: nunca entran en el repositorio.
+# Un .ivp es el proyecto de un cliente, con sus panorámicas y su catálogo de
+# activos; subirlo publicaría la planta de un tercero.
+*.ivp
+*.ivp.json
+
+# Credenciales. La especificación lo exige y conviene que el repositorio lo
+# impida por su cuenta: una conexión a InfluxDB lleva organización y token.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# Artefactos de Python (servidor de telemetría y cosedora)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

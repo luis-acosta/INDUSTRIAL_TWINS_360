@@ -1,0 +1,20 @@
+{
+  "name": "@it360/domain",
+  "version": "0.14.0",
+  "private": true,
+  "type": "module",
+  "description": "Modelo de dominio, esquemas Zod, coordenadas y casos de uso",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "build": "echo \"sin salida propia: el paquete se consume como fuente\""
+  },
+  "dependencies": {
+    "zod": "3.24.1",
+    "uuid": "11.0.5"
+  }
+}

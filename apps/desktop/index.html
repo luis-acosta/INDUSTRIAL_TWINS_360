@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!--
+      Política de seguridad de contenido.
+
+      Sin `connect-src` hacia Internet: la aplicación habla con el servicio
+      local de telemetría y con nada más. `script-src 'self'` impide que un
+      proyecto importado inyecte código desde fuera, lo que es justo el ataque
+      que un recorrido con JavaScript del autor haría posible si no se
+      restringiera aquí.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:8787 ws://127.0.0.1:5173 blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>INDUSTRIAL TWINS 360</title>
+    <meta name="color-scheme" content="dark light" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      INDUSTRIAL TWINS 360 necesita JavaScript para dibujar el recorrido en tres dimensiones.
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,76 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permisos de la ventana principal. El alcance del sistema de archivos se limita a las carpetas del producto y a los recursos de solo lectura de la instalación: la vista web no puede leer ni escribir fuera de ellas, ni por error de programación ni por un guion de un proyecto importado.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-start-dragging",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    "fs:allow-stat",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$DOCUMENT/INDUSTRIAL TWINS 360"
+        },
+        {
+          "path": "$DOCUMENT/INDUSTRIAL TWINS 360/**"
+        },
+        {
+          "path": "$APPDATA/projects"
+        },
+        {
+          "path": "$APPDATA/projects/**"
+        },
+        {
+          "path": "$APPLOCALDATA/cache"
+        },
+        {
+          "path": "$APPLOCALDATA/cache/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$RESOURCE/viewer"
+        },
+        {
+          "path": "$RESOURCE/viewer/**"
+        }
+      ],
+      "deny": [
+        {
+          "path": "$APPDATA/secrets/**"
+        },
+        {
+          "path": "$APPDATA/*.log"
+        },
+        {
+          "path": "$APPLOCALDATA/logs/**"
+        }
+      ]
+    }
+  ]
+}

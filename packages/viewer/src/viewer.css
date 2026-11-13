@@ -1,0 +1,236 @@
+/*
+ * Estilos del visor panorámico y 3D.
+ *
+ * El lienzo ocupa todo el contenedor y los marcadores viven en una capa por
+ * encima, posicionados en píxeles por la proyección. No se usan
+ * transformaciones 3D de CSS para colocarlos: la proyección ya la calcula el
+ * renderizador, y duplicarla en CSS produciría dos fuentes de verdad que se
+ * desincronizan al redimensionar.
+ */
+
+.it-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--it-color-surface-sunken);
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+.it-viewer:focus-visible { outline: var(--it-border-focus) solid var(--it-color-border-focus); outline-offset: -2px; }
+.it-viewer:active { cursor: grabbing; }
+.it-viewer[data-status='loading'],
+.it-viewer[data-status='error'],
+.it-viewer[data-status='unsupported'] { cursor: default; }
+
+.it-viewer__canvas { display: block; width: 100%; height: 100%; }
+
+.it-viewer__hotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--it-z-hotspotLabel);
+}
+
+/* ----- Marcador ----- */
+
+.it-hotspot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: center;
+  transition: transform var(--it-duration-fast) var(--it-ease-standard);
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.55));
+}
+.it-hotspot:focus-visible { outline: var(--it-border-focus) solid var(--it-color-border-focus); outline-offset: 3px; border-radius: var(--it-radius-circle); }
+.it-hotspot__icon { width: 100%; height: 100%; }
+.it-hotspot--selected { color: var(--it-color-canvas-hotspotSelected) !important; }
+.it-hotspot--locked { cursor: default; color: var(--it-color-canvas-hotspotLocked) !important; }
+
+.it-hotspot--pulse .it-hotspot__icon { animation: it-hotspot-pulse 2.2s var(--it-ease-standard) infinite; }
+@keyframes it-hotspot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.it-hotspot__text {
+  padding: var(--it-space-1) var(--it-space-2);
+  background: var(--it-color-surface-overlay);
+  border: var(--it-border-hairline) solid currentColor;
+  border-radius: var(--it-radius-md);
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-sm);
+  white-space: nowrap;
+}
+
+.it-hotspot__label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, var(--it-space-1));
+  padding: 2px var(--it-space-1_5);
+  background: var(--it-color-surface-overlay);
+  border-radius: var(--it-radius-sm);
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-2xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.it-hotspot__dwell {
+  position: absolute;
+  inset: -25%;
+  width: 150%;
+  height: 150%;
+  pointer-events: none;
+}
+
+/* ----- Estados ----- */
+
+.it-viewer__status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--it-space-2);
+  background: color-mix(in srgb, var(--it-color-surface-canvas) 82%, transparent);
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  text-align: center;
+  padding: var(--it-space-6);
+}
+.it-viewer__status p { margin: 0; }
+.it-viewer__status--error { color: var(--it-color-status-alarm); }
+.it-viewer__status-detail { color: var(--it-color-text-secondary); font-size: var(--it-text-xs); max-width: 44ch; }
+
+.it-viewer__spinner {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--it-color-border-strong);
+  border-top-color: var(--it-color-accent-default);
+  border-radius: var(--it-radius-circle);
+  animation: it-spin 640ms linear infinite;
+}
+
+.it-viewer__progress {
+  width: min(240px, 60%);
+  height: 4px;
+  border-radius: var(--it-radius-pill);
+  background: var(--it-color-surface-overlay);
+  overflow: hidden;
+}
+.it-viewer__progress span {
+  display: block;
+  height: 100%;
+  background: var(--it-color-accent-default);
+  transition: width var(--it-duration-normal) var(--it-ease-standard);
+}
+
+.it-viewer__notice {
+  position: absolute;
+  left: var(--it-space-3);
+  bottom: var(--it-space-3);
+  margin: 0;
+  padding: var(--it-space-1) var(--it-space-2);
+  background: var(--it-color-surface-overlay);
+  border-radius: var(--it-radius-md);
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-2xs);
+  pointer-events: none;
+}
+.it-viewer__notice--warning { color: var(--it-color-status-warning); }
+
+/* ----- Transición entre escenas ----- */
+
+.it-viewer-stack { position: relative; width: 100%; height: 100%; }
+.it-viewer-stack__layer { position: absolute; inset: 0; }
+.it-viewer-stack__layer--outgoing { z-index: 1; }
+.it-viewer-stack__layer--incoming { z-index: 2; }
+
+/* ----- Radar sobre plano (G04) ----- */
+
+.it-radar { position: absolute; pointer-events: none; transform: translate(-50%, -50%); }
+.it-radar__cone { fill: var(--it-color-canvas-radarCone); }
+.it-radar__dot { fill: var(--it-color-accent-default); }
+
+/* ------------------------------------------------------------------ *
+ * Formas de marcador (D01-D07)
+ *
+ * Cada forma necesita su propio tratamiento. El denominador común —posición
+ * absoluta, sin fondo, cursor de puntero— está en `.it-hotspot`; aquí va lo
+ * que distingue a cada una.
+ * ------------------------------------------------------------------ */
+
+/* Polígono: superficie, no punto. El borde se dibuja con un contorno interior
+   en lugar de `border`, porque el recorte lo cortaría. */
+.it-hotspot--polygon {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  box-shadow: inset 0 0 0 2px currentColor;
+  border-radius: 0;
+}
+
+.it-hotspot--polygon:hover,
+.it-hotspot--polygon.it-hotspot--hovered {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* Imagen proyectada: la transformación la pone el componente y no debe
+   competir con ninguna del CSS. */
+.it-hotspot--projectedImage {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.it-hotspot--projectedImage:focus-visible {
+  outline: 2px solid var(--it-color-border-focus);
+  outline-offset: 0;
+}
+
+/* Texto: se lee sobre cualquier fondo de panorámica, que puede ser claro u
+   oscuro en la misma escena. */
+.it-hotspot--text {
+  min-width: 0;
+  padding: var(--it-space-1) var(--it-space-2);
+  background: color-mix(in srgb, var(--it-color-surface-overlay) 82%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: var(--it-radius-sm);
+  backdrop-filter: blur(4px);
+}
+
+.it-hotspot__text {
+  display: block;
+  font-size: var(--it-text-sm);
+  line-height: 1.35;
+  color: var(--it-color-text-primary);
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Icono propio del autor (D01), APNG incluido (D15). */
+.it-hotspot__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  /* Sin interpolación suave al ampliar: un icono de 24 px escalado a 48 se ve
+     mejor nítido que borroso. */
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .it-hotspot--text {
+    backdrop-filter: none;
+  }
+}

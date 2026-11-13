@@ -1,0 +1,49 @@
+[package]
+name = "industrial-twins-360"
+version = "0.14.0"
+description = "INDUSTRIAL TWINS 360 — recorridos virtuales industriales"
+authors = ["PDI Advanced"]
+edition = "2021"
+rust-version = "1.77"
+# Sin publicación en crates.io: es la cáscara de una aplicación de escritorio.
+publish = false
+
+[lib]
+name = "industrial_twins_360_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.4", features = [] }
+
+[dependencies]
+# Versiones fijas, no rangos: el plan exige que una compilación de hoy y otra
+# de dentro de seis meses produzcan el mismo binario. Un rango «^» convierte
+# cualquier publicación de un tercero en un cambio silencioso del producto.
+tauri = { version = "2.1.1", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2.2.0"
+tauri-plugin-fs = "2.2.0"
+tauri-plugin-opener = "2.2.5"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.135"
+thiserror = "2.0.11"
+# Almacén de credenciales del sistema: en Windows, el Administrador de
+# credenciales. Es lo que permite que el token de InfluxDB no esté en el
+# proyecto ni en la configuración de la aplicación.
+keyring = { version = "3.6.1", features = ["windows-native", "apple-native", "sync-secret-service"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "time"] }
+log = "0.4.25"
+tauri-plugin-log = "2.2.0"
+
+[features]
+# Función por defecto de Tauri para el arranque personalizado del protocolo.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+# Optimización por tamaño y un solo codegen unit: el instalador se distribuye
+# por red corporativa, donde treinta megas de más se notan.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,268 @@
+/**
+ * El recorrido publicado, abierto con un navegador de verdad.
+ *
+ * Estas pruebas valen por lo que no pueden comprobar las unitarias: el
+ * contrato entre el exportador y el visor. Son dos mitades escritas por
+ * separado y cada una pasa sus pruebas estando de acuerdo consigo misma; lo
+ * que aquí se verifica es que estén de acuerdo entre ellas.
+ *
+ * Concretamente: que el HTML que genera el exportador cargue el JavaScript que
+ * compila el visor, que el visor encuentre el manifiesto donde el exportador lo
+ * escribe, que lo valide sin quejarse, y que lo que sale en pantalla sea el
+ * recorrido y no un mensaje de error.
+ *
+ * El paquete que se sirve lo genera `tools/make-sample-package.ts` con el
+ * exportador real y el visor real compilado. No hay simulaciones en el camino.
+ */
+import { expect, test } from '@playwright/test';
+
+/** Errores de consola que no delatan un problema del producto. */
+const RUIDO_ESPERADO = [
+  // WebGL por software en el contenedor: avisos del controlador, no del visor.
+  'swiftshader',
+  'GroupMarkerNotSet',
+  'Automatic fallback to software WebGL',
+  'WebGL',
+];
+
+test.describe('recorrido publicado', () => {
+  test('carga el manifiesto que escribió el exportador y dibuja el recorrido', async ({ page }) => {
+    // TEST-E2E-001
+    const errores: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const text = message.text();
+      if (RUIDO_ESPERADO.some((noise) => text.includes(noise))) return;
+      errores.push(text);
+    });
+
+    await page.goto('/');
+
+    // El título sale del manifiesto, no del HTML: si el visor no hubiera
+    // podido leerlo, seguiría poniendo el título genérico del índice.
+    const barra = page.getByRole('banner');
+    await expect(barra.getByText('Unidad U-200 — paquete de prueba')).toBeVisible();
+
+    // La escena de entrada es la que declara el manifiesto. Se mira en la
+    // barra y no en cualquier sitio: el nombre también aparece en la lista de
+    // navegación, y un localizador ambiguo falla por una razón que no es el
+    // producto.
+    await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+    // Y no hay ningún mensaje de error de carga.
+    await expect(page.getByText('No se pudo abrir el recorrido')).toHaveCount(0);
+    expect(errores, `Errores de consola: ${errores.join(' | ')}`).toEqual([]);
+  });
+
+  test('el lienzo del visor existe y tiene tamaño', async ({ page }) => {
+    // TEST-E2E-002: un lienzo de 0×0 es el síntoma de que el visor montó pero
+    // no se le dio sitio, y la pantalla se ve negra sin ningún error.
+    await page.goto('/');
+
+    const canvas = page.locator('canvas').first();
+    await expect(canvas).toBeVisible();
+
+    const box = await canvas.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(200);
+    expect(box?.height ?? 0).toBeGreaterThan(200);
+  });
+
+  test('navega entre escenas al pulsar el marcador del recorrido', async ({ page }) => {
+    // TEST-E2E-003: recorre el camino completo —marcador del manifiesto,
+    // ejecutor de acciones, resolución de la vista de entrada, cambio de
+    // escena— con un clic real sobre el marcador, no sobre el menú.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+    await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+    await page.getByRole('button', { name: 'A la plataforma' }).click();
+
+    await expect(barra.getByText('Plataforma superior')).toBeVisible();
+  });
+
+  test('navega también desde la lista de escenas', async ({ page }) => {
+    // TEST-E2E-009: es la vía que usa quien no encuentra el marcador, y en una
+    // planta con cuarenta escenas es la principal.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+
+    await page.getByRole('button', { name: 'Plataforma superior' }).click();
+
+    await expect(barra.getByText('Plataforma superior')).toBeVisible();
+  });
+
+  test('no pide datos de proceso cuando el paquete no los trae', async ({ page }) => {
+    // TEST-E2E-004: el paquete de prueba no declara telemetría. Si el visor
+    // consultara igualmente, el navegador del cliente llenaría la consola de
+    // errores de red y el operador los leería como una planta en fallo.
+    const peticiones: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/telemetry')) peticiones.push(request.url());
+    });
+
+    await page.goto('/');
+    await expect(page.getByRole('banner').getByText('Sala de bombas')).toBeVisible();
+    await page.waitForTimeout(1500);
+
+    expect(peticiones).toEqual([]);
+  });
+
+  test('el paquete servido no contiene credenciales', async ({ page, request }) => {
+    // TEST-E2E-005: la comprobación se hace sobre lo que el servidor entrega
+    // de verdad, no sobre la estructura en memoria del exportador.
+    const manifest = await request.get('/manifiesto.json');
+    expect(manifest.ok()).toBe(true);
+
+    const texto = await manifest.text();
+    for (const prohibido of ['tokenRef', 'token', 'password', 'telemetryConnections', 'auditLog', 'grants']) {
+      expect(texto, `El manifiesto contiene «${prohibido}»`).not.toContain(prohibido);
+    }
+
+    // Y el índice tampoco.
+    const index = await request.get('/index.html');
+    expect(await index.text()).not.toContain('token');
+    await page.goto('/');
+  });
+
+  test('las sumas de verificación corresponden a los archivos servidos', async ({ request }) => {
+    // TEST-E2E-006: el archivo de sumas existe para que el cliente pueda
+    // comprobar que su copia está completa. Si las sumas no correspondieran,
+    // sería peor que no tenerlas: una comprobación que siempre falla se ignora.
+    const sums = await request.get('/SUMAS.txt');
+    expect(sums.ok()).toBe(true);
+
+    const lines = (await sums.text()).trim().split('\n');
+    expect(lines.length).toBeGreaterThan(3);
+
+    for (const line of lines) {
+      const [hash, path] = line.split(/\s{2}/);
+      expect(hash, `Suma mal formada: ${line}`).toMatch(/^[0-9a-f]{64}$/);
+
+      const file = await request.get(`/${path}`);
+      expect(file.ok(), `Falta el archivo ${path} que declara SUMAS.txt`).toBe(true);
+
+      const digest = await sha256Hex(await file.body());
+      expect(digest, `La suma de ${path} no corresponde`).toBe(hash);
+    }
+  });
+
+  test('la política de seguridad del contenido se declara', async ({ request }) => {
+    // TEST-E2E-007
+    const index = await request.get('/index.html');
+    const html = await index.text();
+
+    expect(html).toContain('Content-Security-Policy');
+    expect(html).toContain('object-src');
+    expect(html).not.toContain('unsafe-eval');
+  });
+
+  test('se puede tomar una nota de campo anclada al punto que se está mirando', async ({
+    page,
+  }) => {
+    // TEST-E2E-009: es el requisito P01 de extremo a extremo, en el único
+    // sitio donde se puede comprobar de verdad. Lo que se verifica es que la
+    // nota escrita en el recorrido publicado sobreviva a una recarga de la
+    // página: una observación tomada en planta, en una tableta sin cobertura,
+    // no puede depender de que el navegador no se refresque.
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Notas de campo' }).click();
+    const dialogo = page.getByRole('dialog', { name: 'Notas de campo' });
+    await expect(dialogo).toBeVisible();
+
+    // Dice con todas las letras dónde quedan, que es lo que evita que alguien
+    // tome doce observaciones creyendo que llegan solas a alguna parte.
+    await expect(dialogo.getByText(/guardadas en este navegador/)).toBeVisible();
+
+    // Sin asunto y sin nombre no se guarda.
+    const guardar = dialogo.getByRole('button', { name: 'Guardar la nota' });
+    await expect(guardar).toBeDisabled();
+
+    await dialogo.getByLabel('Asunto').fill('Goteo en la brida de aspiración');
+    await dialogo.getByLabel('Qué se observa').fill('Charco bajo la bomba, goteo continuo.');
+    await dialogo.getByLabel('Su nombre').fill('Operador de turno');
+    await expect(guardar).toBeEnabled();
+    await guardar.click();
+
+    await expect(dialogo.getByText('Notas tomadas (1)')).toBeVisible();
+    await expect(
+      dialogo.getByRole('button', { name: /^Descargar 1 nota/ }),
+    ).toBeEnabled();
+
+    // La prueba de fondo: recargar y seguir ahí.
+    await page.reload();
+    await page.getByRole('button', { name: 'Notas de campo' }).click();
+    const tras = page.getByRole('dialog', { name: 'Notas de campo' });
+
+    await expect(tras.getByText('Notas tomadas (1)')).toBeVisible();
+    await expect(tras.getByText('Goteo en la brida de aspiración')).toBeVisible();
+    // Y el nombre del autor se recuerda, para no teclearlo doce veces.
+    await expect(tras.getByLabel('Su nombre')).toHaveValue('Operador de turno');
+  });
+
+  test('abre un álbum de fotografías dentro del recorrido', async ({ page }) => {
+    // TEST-E2E-010: antes, una foto se abría en una pestaña nueva. El
+    // visitante salía del recorrido y un álbum era imposible, porque en una
+    // pestaña nueva no hay «siguiente». Esto comprueba el camino completo
+    // contra el paquete real: acción, ventana, navegación y cierre.
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Fotos de detalle' }).click();
+
+    const ventana = page.getByRole('dialog');
+    await expect(ventana).toBeVisible();
+
+    // La posición dice en qué foto se está: sin eso, el visitante no sabe si
+    // ha visto el álbum entero.
+    await expect(ventana.getByText('1 de 2')).toBeVisible();
+
+    // No da la vuelta: en la primera, «Anterior» está desactivado.
+    await expect(ventana.getByRole('button', { name: 'Anterior' })).toBeDisabled();
+    await ventana.getByRole('button', { name: 'Siguiente' }).click();
+
+    await expect(ventana.getByText('2 de 2')).toBeVisible();
+    await expect(ventana.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
+    await expect(ventana.getByRole('button', { name: 'Anterior' })).toBeEnabled();
+
+    // Escape cierra, que es lo primero que prueba cualquiera.
+    await page.keyboard.press('Escape');
+    await expect(ventana).toBeHidden();
+
+    // Y el recorrido sigue ahí: no se abrió ninguna pestaña nueva.
+    await expect(page.getByRole('banner')).toBeVisible();
+    expect(page.context().pages()).toHaveLength(1);
+  });
+
+  test('la política admite enmarcar el propio paquete y nada de terceros', async ({ request }) => {
+    // TEST-E2E-011: `frame-src 'self'` es lo que permite mostrar un PDF del
+    // recorrido dentro del recorrido. La alternativa fácil habría sido un
+    // comodín, que convertiría cada marco en una ventana a la que nadie ha
+    // dado el visto bueno.
+    const index = await request.get('/index.html');
+    const html = await index.text();
+
+    expect(html).toContain("frame-src &#39;self&#39;");
+    expect(html).not.toMatch(/frame-src[^;&]*\*/);
+    expect(html).toContain('object-src &#39;none&#39;');
+  });
+
+  test('funciona servido desde una subcarpeta', async ({ page }) => {
+    // TEST-E2E-008: la publicación habitual del cliente es una subcarpeta de
+    // su intranet. Con rutas absolutas no cargaría ni un archivo, y es un
+    // fallo que no se ve probando en la raíz.
+    //
+    // Se comprueba sobre el HTML servido: las rutas son relativas o no lo son.
+    const index = await page.request.get('/index.html');
+    const html = await index.text();
+
+    expect(html).toContain('src="./viewer/');
+    expect(html).not.toContain('src="/viewer/');
+    expect(html).not.toContain('href="/viewer/');
+  });
+});
+
+/** SHA-256 en hexadecimal, con la API del entorno de Node. */
+async function sha256Hex(data: Buffer): Promise<string> {
+  const { createHash } = await import('node:crypto');
+  return createHash('sha256').update(data).digest('hex');
+}

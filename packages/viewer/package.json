@@ -1,0 +1,22 @@
+{
+  "name": "@it360/viewer",
+  "version": "0.14.0",
+  "private": true,
+  "type": "module",
+  "description": "Motor de visualizaci\u00f3n 360 y 3D sobre Three.js",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./viewer.css": "./src/viewer.css"
+  },
+  "scripts": {
+    "build": "echo \"sin salida propia: el paquete se consume como fuente\""
+  },
+  "dependencies": {
+    "@it360/domain": "*",
+    "@it360/tokens": "*",
+    "three": "0.172.0",
+    "react": "18.3.1"
+  }
+}

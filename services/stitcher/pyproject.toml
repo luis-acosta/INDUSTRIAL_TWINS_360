@@ -1,0 +1,22 @@
+[project]
+name = "it360-stitcher"
+version = "0.14.0"
+description = "Cosido de panorámicas. Función experimental: todo resultado se evalúa y puede rechazarse."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy==2.2.1",
+]
+
+[project.optional-dependencies]
+# OpenCV es opcional a propósito: un despliegue que sólo usa panorámicas ya
+# cosidas no debe cargar con 60 MB de binarios, y el servicio avisa al
+# llamarlo en lugar de fallar al arrancar.
+cv = ["opencv-python-headless==4.11.0.86"]
+dev = ["pytest==8.3.4", "ruff==0.9.2", "mypy==1.14.1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]

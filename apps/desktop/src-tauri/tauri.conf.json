@@ -1,0 +1,90 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "INDUSTRIAL TWINS 360",
+  "version": "0.14.0",
+  "identifier": "com.pdiadvanced.industrialtwins360",
+  "build": {
+    "beforeDevCommand": "npm run dev --workspace @it360/desktop",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:viewer && npm run build --workspace @it360/desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "INDUSTRIAL TWINS 360",
+        "width": 1600,
+        "height": 960,
+        "minWidth": 1280,
+        "minHeight": 720,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark",
+        "decorations": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$DOCUMENT/INDUSTRIAL TWINS 360/**",
+          "$APPDATA/projects/**",
+          "$APPLOCALDATA/cache/**"
+        ]
+      },
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost blob: data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+      "freezePrototype": true,
+      "dangerousDisableAssetCspModification": false
+    },
+    "withGlobalTauri": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "msi",
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "copyright": "© PDI Advanced",
+    "category": "Productivity",
+    "shortDescription": "Recorridos virtuales industriales con activos y telemetría",
+    "longDescription": "Plataforma de escritorio para construir, documentar y publicar recorridos virtuales de instalaciones industriales: panorámicas 360, modelos 3D, catálogo de activos con TAG, documentos técnicos, observaciones y telemetría de sólo lectura.",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "allowDowngrades": false,
+      "wix": {
+        "language": [
+          "es-ES",
+          "en-US"
+        ]
+      },
+      "nsis": {
+        "languages": [
+          "Spanish",
+          "English"
+        ],
+        "displayLanguageSelector": true,
+        "installMode": "both",
+        "compression": "lzma"
+      }
+    },
+    "createUpdaterArtifacts": false,
+    "resources": {
+      "../../viewer-web/dist/viewer/": "viewer/"
+    }
+  },
+  "plugins": {}
+}

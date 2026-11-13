@@ -1,0 +1,724 @@
+[
+ {
+  "n": 0,
+  "title": "ETAPA 00 — Fundamentos, repositorio y ejecutable Windows",
+  "goal": "Aplicación Windows instalada que crea, guarda, abre y duplica proyectos, con recuperación tras reinicio.",
+  "codes": [
+   [
+    "Y01",
+    "Crear, guardar y reabrir proyectos editables."
+   ],
+   [
+    "Y03",
+    "Guardar una copia del proyecto con otro nombre."
+   ],
+   [
+    "Y04",
+    "Deshacer y rehacer cambios."
+   ],
+   [
+    "Y07",
+    "Previsualizar desde la escena que se está editando."
+   ]
+  ]
+ },
+ {
+  "n": 1,
+  "title": "ETAPA 01 — Visor panorámico 360 y biblioteca de medios",
+  "goal": "Editor/visor local con panorama equirectangular, fotos normales y navegación de cámara.",
+  "codes": [
+   [
+    "C02",
+    "Configurar dirección inicial, velocidad e inercia."
+   ],
+   [
+    "C03",
+    "Limitar el zoom permitido."
+   ],
+   [
+    "C11",
+    "Elegir entrada inteligente, vista inicial, misma orientación o vista personalizada."
+   ],
+   [
+    "V01",
+    "Configurar calidad y resolución de publicación."
+   ],
+   [
+    "V02",
+    "Publicar imágenes como JPEG/PNG, WebP o AVIF."
+   ],
+   [
+    "V05",
+    "Admitir formatos habituales de imagen, audio y video."
+   ]
+  ]
+ },
+ {
+  "n": 2,
+  "title": "ETAPA 02 — Escenas, hotspots y navegación",
+  "goal": "Recorrido de varias escenas con hotspots editables y navegación persistente; conexiones manuales completas.",
+  "codes": [
+   [
+    "C01",
+    "Conectar escenas manualmente mediante hotspots."
+   ],
+   [
+    "C04",
+    "Aplicar transiciones visuales con sensación de movimiento 3D."
+   ],
+   [
+    "C05",
+    "Generar conexiones automáticamente entre panoramas."
+   ],
+   [
+    "C06",
+    "Elegir conexiones automáticas a nivel de suelo u horizonte."
+   ],
+   [
+    "C07",
+    "Aprovechar GPS embebido durante la conexión automática."
+   ],
+   [
+    "C08",
+    "Ajustar la búsqueda automática: rápida o detallada."
+   ],
+   [
+    "C09",
+    "Usar altura de captura y separación de referencia para colocar conexiones."
+   ],
+   [
+    "C10",
+    "Usar geometría 3D como fondo de transición, cuando exista."
+   ],
+   [
+    "D01",
+    "Marcadores mediante imágenes o iconos propios."
+   ],
+   [
+    "D02",
+    "Marcadores de texto."
+   ],
+   [
+    "D03",
+    "Polígonos interactivos sobre equipos u objetos."
+   ],
+   [
+    "D05",
+    "Imágenes proyectadas ajustadas al panorama."
+   ],
+   [
+    "D07",
+    "Modos flotante y adherido a la escena: sticker."
+   ],
+   [
+    "D08",
+    "Editar tamaño, posición y rotación en vista esférica."
+   ],
+   [
+    "D09",
+    "Transformar marcadores sobre tres ejes."
+   ],
+   [
+    "D11",
+    "Editar vértices e invertir polígonos."
+   ],
+   [
+    "D12",
+    "Bloquear marcadores durante la edición."
+   ],
+   [
+    "D13",
+    "Activar acciones por clic, paso del puntero o foco central."
+   ],
+   [
+    "D14",
+    "Configurar precarga y visibilidad según dispositivo."
+   ],
+   [
+    "D15",
+    "Usar iconos animados APNG."
+   ],
+   [
+    "Y05",
+    "Copiar y pegar varios hotspots."
+   ],
+   [
+    "Y08",
+    "Buscar elementos y organizar etiquetas dentro del editor."
+   ]
+  ]
+ },
+ {
+  "n": 3,
+  "title": "ETAPA 03 — Interfaz visual, plantillas y acciones",
+  "goal": "Editor visual de interfaces y motor de acciones declarativas con plantillas guardadas.",
+  "codes": [
+   [
+    "F01",
+    "Diseñar la interfaz mediante arrastrar y soltar."
+   ],
+   [
+    "F02",
+    "Usar y adaptar plantillas de interfaz: skins."
+   ],
+   [
+    "F03",
+    "Incorporar logotipo, botones e imágenes propios."
+   ],
+   [
+    "F04",
+    "Reutilizar componentes e interfaces guardados."
+   ],
+   [
+    "F05",
+    "Distribuir la interfaz en tamaño fijo o adaptable."
+   ],
+   [
+    "F06",
+    "Agrupar elementos dentro de contenedores."
+   ],
+   [
+    "F07",
+    "Usar menús desplegables."
+   ],
+   [
+    "F08",
+    "Organizar ventanas mediante pestañas."
+   ],
+   [
+    "F09",
+    "Mostrar textos dinámicos con variables del recorrido."
+   ],
+   [
+    "F10",
+    "Mostrar barras de progreso y reproducción."
+   ],
+   [
+    "F11",
+    "Aplicar estilos, transparencias y desenfoque de fondo."
+   ],
+   [
+    "F12",
+    "Utilizar fuentes tipográficas propias."
+   ],
+   [
+    "F13",
+    "Navegar mediante carruseles y listas de miniaturas."
+   ],
+   [
+    "J04",
+    "Programar temporizadores o acciones por inactividad."
+   ],
+   [
+    "J05",
+    "Mostrar y ocultar elementos mediante acciones."
+   ],
+   [
+    "J06",
+    "Encadenar acciones al finalizar audio o cerrar ventanas."
+   ],
+   [
+    "J07",
+    "Desencadenar acciones al entrar o salir del foco visual."
+   ],
+   [
+    "J09",
+    "Ejecutar código JavaScript personalizado."
+   ],
+   [
+    "J10",
+    "Usar variables dinámicas de título, puntuación y tiempo."
+   ],
+   [
+    "Y06",
+    "Copiar y pegar componentes de interfaz."
+   ]
+  ]
+ },
+ {
+  "n": 4,
+  "title": "ETAPA 04 — Contenido técnico, archivos y planos",
+  "goal": "Recorrido que muestra PDFs, fotografías, enlaces, Webframes y plano con radar.",
+  "codes": [
+   [
+    "E01",
+    "Abrir ventanas de información con texto y multimedia."
+   ],
+   [
+    "E02",
+    "Mostrar fotografías de detalle en ventanas emergentes."
+   ],
+   [
+    "E03",
+    "Abrir álbumes de fotografías."
+   ],
+   [
+    "E05",
+    "Mostrar documentos PDF."
+   ],
+   [
+    "E06",
+    "Permitir descargas de archivos."
+   ],
+   [
+    "E07",
+    "Abrir enlaces web externos."
+   ],
+   [
+    "E08",
+    "Incrustar páginas y servicios mediante Webframes."
+   ],
+   [
+    "E09",
+    "Integrar servicios externos como mapas o reproductores de video."
+   ],
+   [
+    "D06",
+    "Contenido web integrado como hotspot: Webframe."
+   ],
+   [
+    "G01",
+    "Mostrar planos o mapas dentro del recorrido."
+   ],
+   [
+    "G02",
+    "Colocar puntos navegables en el plano."
+   ],
+   [
+    "G03",
+    "Organizar navegación entre zonas o pisos."
+   ],
+   [
+    "G04",
+    "Mostrar radar con dirección de la mirada."
+   ],
+   [
+    "G05",
+    "Asociar radar a panoramas o video 360°."
+   ]
+  ]
+ },
+ {
+  "n": 5,
+  "title": "ETAPA 05 — Catálogo industrial de activos e instrumentos",
+  "goal": "Inventario local de activos con TAG, jerarquía, ficha técnica y vínculos visuales.",
+  "codes": [
+   [
+    "X01",
+    "Base de activos e instrumentos con UUID y TAG industrial."
+   ],
+   [
+    "X02",
+    "Jerarquía planta, unidad, área y equipo."
+   ],
+   [
+    "X03",
+    "Ficha técnica y atributos configurables por clase de activo."
+   ],
+   [
+    "X04",
+    "Un mismo activo enlazado desde varias panorámicas."
+   ],
+   [
+    "X05",
+    "Búsqueda por TAG y apertura de su ubicación."
+   ],
+   [
+    "X06",
+    "Importación y exportación del catálogo mediante CSV."
+   ],
+   [
+    "X07",
+    "Documentos técnicos vinculados al activo y su revisión."
+   ]
+  ]
+ },
+ {
+  "n": 6,
+  "title": "ETAPA 06 — Notas, tareas y colaboración local",
+  "goal": "Notas ancladas, comentarios, prioridades, responsables y ciclo de vida, utilizables sin servidor.",
+  "codes": [
+   [
+    "P01",
+    "Crear notas ancladas a puntos del recorrido publicado."
+   ],
+   [
+    "P02",
+    "Mantener conversaciones por nota."
+   ],
+   [
+    "P03",
+    "Clasificar notas por categorías."
+   ],
+   [
+    "P05",
+    "Asignar tareas vinculadas al contexto visual."
+   ],
+   [
+    "P06",
+    "Adjuntar fotos, video, audio, enlaces y documentos."
+   ],
+   [
+    "P08",
+    "Resolver y archivar notas."
+   ],
+   [
+    "X08",
+    "Observaciones con prioridad, responsable y estados."
+   ]
+  ]
+ },
+ {
+  "n": 7,
+  "title": "ETAPA 07 — Telemetría InfluxDB y condición operacional",
+  "goal": "Panel de instrumentos con lectura InfluxDB, valores con timestamp, calidad, históricos y alarmas visuales.",
+  "codes": [
+   [
+    "X09",
+    "Conexión de lectura con InfluxDB."
+   ],
+   [
+    "X10",
+    "Vinculación de cada variable con su serie externa."
+   ],
+   [
+    "X11",
+    "Visualización de valores, unidades y timestamp de origen."
+   ],
+   [
+    "X12",
+    "Distinción entre dato actual, obsoleto, ausente y error."
+   ],
+   [
+    "X13",
+    "Gráficas históricas y selección de intervalo."
+   ],
+   [
+    "X14",
+    "Indicadores visuales de condición con reglas configurables."
+   ]
+  ]
+ },
+ {
+  "n": 8,
+  "title": "ETAPA 08 — Modelos 3D industriales",
+  "goal": "Importar GLB y navegar orbital/primera persona con hotspots y vínculo con panoramas.",
+  "codes": [
+   [
+    "L01",
+    "Importar modelos GLB/glTF."
+   ],
+   [
+    "L02",
+    "Explorar modelos con cámara orbital."
+   ],
+   [
+    "L03",
+    "Explorar modelos en modo Fly Over."
+   ],
+   [
+    "L04",
+    "Recorrer modelos en primera persona."
+   ],
+   [
+    "L05",
+    "Enlazar panoramas con ubicaciones del modelo."
+   ],
+   [
+    "L06",
+    "Colocar hotspots sobre modelos."
+   ],
+   [
+    "L07",
+    "Adherir hotspots como stickers a superficies 3D."
+   ],
+   [
+    "L08",
+    "Configurar vistas y límites de cámara."
+   ],
+   [
+    "L09",
+    "Gestionar iluminación, sombras y fondo."
+   ],
+   [
+    "L10",
+    "Reproducir animaciones y acciones sobre el modelo."
+   ],
+   [
+    "L11",
+    "Mantener la vista al cambiar entre modelos compatibles."
+   ],
+   [
+    "L12",
+    "Mostrar u ocultar elementos mediante interacciones."
+   ],
+   [
+    "V03",
+    "Ajustar resolución 3D dinámicamente según rendimiento."
+   ],
+   [
+    "V07",
+    "Aplicar efectos visuales 3D como desenfoque de movimiento."
+   ]
+  ]
+ },
+ {
+  "n": 9,
+  "title": "ETAPA 09 — Recorridos automáticos y formación",
+  "goal": "Tour automático con cuestionarios, puntuaciones y exportación de resultados; SCORM como subentrega independiente.",
+  "codes": [
+   [
+    "J01",
+    "Crear recorridos automáticos: autopilot."
+   ],
+   [
+    "J02",
+    "Definir puntos de paso y acciones asociadas."
+   ],
+   [
+    "J03",
+    "Permitir que el visitante interrumpa la navegación automática."
+   ],
+   [
+    "J08",
+    "Condicionar recorridos a resultados de formación."
+   ],
+   [
+    "O01",
+    "Crear tarjetas de preguntas."
+   ],
+   [
+    "O02",
+    "Incorporar preguntas de selección."
+   ],
+   [
+    "O03",
+    "Presentar multimedia dentro de las evaluaciones."
+   ],
+   [
+    "O04",
+    "Diseñar búsqueda de riesgos u objetos."
+   ],
+   [
+    "O05",
+    "Sumar o restar puntos por acciones y respuestas."
+   ],
+   [
+    "O06",
+    "Mantener varias puntuaciones independientes."
+   ],
+   [
+    "O07",
+    "Crear ramas de preguntas según respuestas."
+   ],
+   [
+    "O08",
+    "Desbloquear acciones al alcanzar objetivos."
+   ],
+   [
+    "O09",
+    "Mostrar reportes, tiempos y fin de sesión."
+   ],
+   [
+    "O10",
+    "Exportar resultados e integrar formación con LMS/SCORM."
+   ]
+  ]
+ },
+ {
+  "n": 10,
+  "title": "ETAPA 10 — Publicación web, ejecutable y modo sin conexión",
+  "goal": "Exportar un recorrido autocontenido para web, consulta local Windows y paquete offline.",
+  "codes": [
+   [
+    "S01",
+    "Publicar para navegador web."
+   ],
+   [
+    "S02",
+    "Incrustar el recorrido en otra página."
+   ],
+   [
+    "S03",
+    "Alojar la publicación en servidor propio."
+   ],
+   [
+    "S04",
+    "Generar ejecutables para consulta local."
+   ],
+   [
+    "S05",
+    "Distribuir contenido para consulta sin Internet."
+   ],
+   [
+    "S07",
+    "Exportar presentaciones hacia video para distribución."
+   ],
+   [
+    "S08",
+    "Preparar paquetes optimizados para la app de consulta."
+   ],
+   [
+    "S09",
+    "Compartir enlaces y vistas del recorrido."
+   ],
+   [
+    "S10",
+    "Personalizar app y visor con marca propia mediante servicio adicional."
+   ],
+   [
+    "V04",
+    "Optimizar videos de alta resolución por dispositivo."
+   ],
+   [
+    "V06",
+    "Aplicar efectos de lluvia, polvo y otros efectos visuales."
+   ],
+   [
+    "V08",
+    "Añadir nieve y destellos de lente."
+   ],
+   [
+    "Y02",
+    "Exportar el proyecto junto con sus archivos multimedia."
+   ]
+  ]
+ },
+ {
+  "n": 11,
+  "title": "ETAPA 11 — Usuarios, permisos, versiones y auditoría",
+  "goal": "Servidor privado opcional con identidades, roles, revisión/publicación, API y respaldos; edición local permanece.",
+  "codes": [
+   [
+    "P04",
+    "Restringir acceso según perfiles y categorías."
+   ],
+   [
+    "P07",
+    "Notificar cambios mediante correo electrónico."
+   ],
+   [
+    "P09",
+    "Consultar notas y participar desde dispositivos móviles."
+   ],
+   [
+    "X15",
+    "Permisos por planta, área y tipo de operación."
+   ],
+   [
+    "X16",
+    "Borradores, revisión y publicación controlada."
+   ],
+   [
+    "X17",
+    "Auditoría de cambios y resolución de ediciones simultáneas."
+   ],
+   [
+    "X18",
+    "Respaldo y restauración de datos y archivos."
+   ],
+   [
+    "X19",
+    "API propia para futuras integraciones."
+   ],
+   [
+    "X20",
+    "Instalación privada local o en nube según el cliente."
+   ]
+  ]
+ },
+ {
+  "n": 12,
+  "title": "ETAPA 12 — Preparación y cosido de panoramas",
+  "goal": "Herramienta independiente para crear panoramas desde fotografías y enviarlos al editor.",
+  "codes": [
+   [
+    "B01",
+    "Coser fotografías para generar panoramas."
+   ],
+   [
+    "B02",
+    "Trabajar con lentes estándar, gran angular y ojo de pez."
+   ],
+   [
+    "B03",
+    "Generar panoramas completos o parciales."
+   ],
+   [
+    "B04",
+    "Elegir proyecciones esféricas, cúbicas y otras."
+   ],
+   [
+    "B05",
+    "Procesar varios panoramas por lotes."
+   ],
+   [
+    "B06",
+    "Preparar contenido Live Panorama y Adaptive HDR."
+   ],
+   [
+    "B07",
+    "Ajustar puntos de control del cosido."
+   ],
+   [
+    "B08",
+    "Corregir diferencias de exposición y reducir imágenes fantasma."
+   ]
+  ]
+ },
+ {
+  "n": 13,
+  "title": "ETAPA 13 — Realidad virtual y dispositivos",
+  "goal": "Visor WebXR opcional para panoramas, modelos y paneles de información compatibles.",
+  "codes": [
+   [
+    "N01",
+    "Consultar recorridos en visores VR compatibles."
+   ],
+   [
+    "N02",
+    "Visualizar modelos 3D en VR."
+   ],
+   [
+    "N03",
+    "Usar botones y paneles de interfaz dentro de VR."
+   ],
+   [
+    "N04",
+    "Configurar tamaño, profundidad y orientación de paneles."
+   ],
+   [
+    "N05",
+    "Usar paneles fijos, recentrados, arrastrables o modales."
+   ],
+   [
+    "N06",
+    "Definir componentes exclusivos o excluidos de VR."
+   ],
+   [
+    "N07",
+    "Configurar visibilidad de hotspots en VR."
+   ],
+   [
+    "N08",
+    "Usar tarjetas de preguntas y evaluaciones en VR."
+   ],
+   [
+    "N09",
+    "Mostrar puntuación, progreso y temporizadores en VR."
+   ],
+   [
+    "N10",
+    "Abrir multimedia emergente y ejecutar acciones compatibles."
+   ],
+   [
+    "N11",
+    "Controlar rotación mediante mandos del visor."
+   ],
+   [
+    "N12",
+    "Optimizar la publicación según el dispositivo VR."
+   ]
+  ]
+ }
+]

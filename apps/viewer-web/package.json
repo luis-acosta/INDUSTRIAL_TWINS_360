@@ -1,0 +1,20 @@
+{
+  "name": "@it360/viewer-web",
+  "version": "0.14.0",
+  "private": true,
+  "type": "module",
+  "description": "Visor web exportable de solo lectura",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4174"
+  },
+  "dependencies": {
+    "@it360/domain": "*",
+    "@it360/tokens": "*",
+    "@it360/ui": "*",
+    "@it360/viewer": "*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

@@ -1,0 +1,1967 @@
+/*
+ * Armazón de la aplicación de escritorio.
+ *
+ * La disposición es la de una herramienta de autor: barra de comandos arriba,
+ * raíl de módulos a la izquierda, panel contextual, lienzo central, inspector
+ * a la derecha y barra de estado abajo. Es la distribución que cualquiera que
+ * haya usado una herramienta técnica reconoce sin que se la expliquen, y eso
+ * importa más que una propuesta original: el usuario viene a inspeccionar una
+ * planta, no a aprenderse una interfaz.
+ *
+ * Todo el armazón usa `grid` con alturas y anchos de `--it-frame-*`, de modo
+ * que a 1366×768 —resolución que la etapa 03 exige soportar— el lienzo
+ * conserva un tamaño utilizable.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--it-color-surface-canvas);
+  color: var(--it-color-text-primary);
+  font-family: var(--it-font-sans);
+  font-size: var(--it-text-base);
+  line-height: var(--it-leading-normal);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ *
+ * Rejilla principal
+ * ------------------------------------------------------------------ */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--it-frame-commandBarHeight) 1fr var(--it-frame-statusBarHeight);
+  height: 100%;
+}
+
+.app__body {
+  display: grid;
+  grid-template-columns: var(--it-frame-railWidth) auto 1fr auto;
+  min-height: 0;
+}
+
+.app__sidebar {
+  width: var(--it-frame-sidebarWidth);
+  min-width: var(--it-frame-sidebarMinWidth);
+  border-right: var(--it-border-hairline) solid var(--it-color-border-default);
+  background: var(--it-color-surface-base);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app__main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--it-color-surface-canvas);
+  display: flex;
+  flex-direction: column;
+}
+
+.app__inspector {
+  width: var(--it-frame-inspectorWidth);
+  border-left: var(--it-border-hairline) solid var(--it-color-border-default);
+  background: var(--it-color-surface-base);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* A 1366 px el inspector se estrecha antes que el lienzo: el lienzo es el
+   trabajo, el inspector es el acompañamiento. */
+@media (max-width: 1500px) {
+  .app__inspector { width: 280px; }
+  .app__sidebar { width: 252px; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Barra de comandos
+ * ------------------------------------------------------------------ */
+
+.commandbar {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  padding: 0 var(--it-space-3);
+  background: var(--it-color-surface-base);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-default);
+  -webkit-app-region: drag;
+}
+.commandbar > * { -webkit-app-region: no-drag; }
+
+.commandbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  padding-right: var(--it-space-2);
+  margin-right: var(--it-space-1);
+  border-right: var(--it-border-hairline) solid var(--it-color-border-default);
+  height: 100%;
+}
+
+.brandmark {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--it-radius-sm);
+  border: 1.5px solid var(--it-color-accent-default);
+  position: relative;
+}
+.brandmark::before,
+.brandmark::after {
+  content: '';
+  position: absolute;
+  border-radius: var(--it-radius-circle);
+}
+.brandmark::before {
+  inset: 4px;
+  border: 1px solid var(--it-color-accent-onSurface);
+}
+.brandmark::after {
+  inset: 8.5px;
+  background: var(--it-color-accent-default);
+}
+
+.commandbar__name {
+  font-size: var(--it-text-xs);
+  font-weight: var(--it-weight-semibold);
+  letter-spacing: var(--it-tracking-wide);
+  white-space: nowrap;
+  color: var(--it-color-text-secondary);
+}
+
+.commandbar__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--it-space-2);
+  min-width: 0;
+  flex: 1;
+}
+.commandbar__project {
+  font-size: var(--it-text-sm);
+  font-weight: var(--it-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commandbar__path {
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-2xs);
+  color: var(--it-color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commandbar__dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--it-radius-circle);
+  background: var(--it-color-status-warning);
+  flex: none;
+}
+
+.commandbar__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--it-space-1);
+}
+.commandbar__group + .commandbar__group {
+  border-left: var(--it-border-hairline) solid var(--it-color-border-default);
+  margin-left: var(--it-space-1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Raíl de módulos
+ * ------------------------------------------------------------------ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--it-space-2) 0;
+  background: var(--it-color-surface-base);
+  border-right: var(--it-border-hairline) solid var(--it-color-border-default);
+}
+
+.rail__item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--it-radius-md);
+  background: transparent;
+  color: var(--it-color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--it-duration-fast) var(--it-ease-standard);
+}
+.rail__item:hover { color: var(--it-color-text-primary); background: var(--it-color-surface-overlay); }
+.rail__item--active { color: var(--it-color-accent-onSurface); background: var(--it-color-accent-subtle); }
+.rail__item--active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: var(--it-radius-pill);
+  background: var(--it-color-accent-default);
+}
+.rail__item:focus-visible { outline: var(--it-border-focus) solid var(--it-color-border-focus); outline-offset: 1px; }
+
+.rail__badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--it-radius-pill);
+  background: var(--it-color-status-alarm);
+  color: var(--it-color-text-onAccent);
+  font-family: var(--it-font-mono);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.rail__spacer { flex: 1; }
+
+/* ------------------------------------------------------------------ *
+ * Panel lateral
+ * ------------------------------------------------------------------ */
+
+.sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+  height: 34px;
+  padding: 0 var(--it-space-2) 0 var(--it-space-3);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-default);
+  flex: none;
+}
+.sidebar__title {
+  margin: 0;
+  font-size: var(--it-text-2xs);
+  font-weight: var(--it-weight-semibold);
+  letter-spacing: var(--it-tracking-caps);
+  text-transform: uppercase;
+  color: var(--it-color-text-tertiary);
+}
+.sidebar__search { padding: var(--it-space-2); flex: none; }
+.sidebar__body { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--it-space-1) var(--it-space-2); }
+.sidebar__foot {
+  flex: none;
+  padding: var(--it-space-2);
+  border-top: var(--it-border-hairline) solid var(--it-color-border-default);
+}
+
+/* ------------------------------------------------------------------ *
+ * Lienzo
+ * ------------------------------------------------------------------ */
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas__toolbar {
+  position: absolute;
+  top: var(--it-space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--it-z-canvasOverlay);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--it-space-1);
+  background: color-mix(in srgb, var(--it-color-surface-overlay) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+  box-shadow: var(--it-elevation-md);
+}
+.canvas__toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--it-color-border-default);
+  margin: 0 var(--it-space-1);
+}
+
+.canvas__corner {
+  position: absolute;
+  z-index: var(--it-z-canvasOverlay);
+  padding: var(--it-space-2);
+}
+.canvas__corner--br { right: 0; bottom: 0; }
+.canvas__corner--bl { left: 0; bottom: 0; }
+
+.canvas__filmstrip {
+  flex: none;
+  border-top: var(--it-border-hairline) solid var(--it-color-border-default);
+  background: var(--it-color-surface-base);
+}
+
+/* ------------------------------------------------------------------ *
+ * Minimapa y radar
+ * ------------------------------------------------------------------ */
+
+.minimap {
+  position: relative;
+  width: 232px;
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+  overflow: hidden;
+  background: var(--it-color-surface-base);
+  box-shadow: var(--it-elevation-md);
+}
+.minimap__image { display: block; width: 100%; }
+.minimap__marker {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: var(--it-radius-circle);
+  border: 1.5px solid var(--it-color-surface-base);
+  background: var(--it-color-text-secondary);
+  cursor: pointer;
+  padding: 0;
+}
+.minimap__marker--active { background: var(--it-color-accent-default); }
+.minimap__radar { position: absolute; pointer-events: none; }
+.minimap__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--it-space-1) var(--it-space-2);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-default);
+  font-size: var(--it-text-2xs);
+  color: var(--it-color-text-tertiary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Inspector
+ * ------------------------------------------------------------------ */
+
+.inspector__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2) var(--it-space-3);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-default);
+  flex: none;
+}
+.inspector__title { margin: 0; font-size: var(--it-text-sm); font-weight: var(--it-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inspector__subtitle { margin: 0; font-size: var(--it-text-2xs); color: var(--it-color-text-tertiary); font-family: var(--it-font-mono); }
+.inspector__body { flex: 1; min-height: 0; overflow: auto; padding: var(--it-space-3); }
+.inspector__group { display: flex; flex-direction: column; gap: var(--it-space-2); }
+
+/* ------------------------------------------------------------------ *
+ * Barra de estado
+ * ------------------------------------------------------------------ */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-4);
+  padding: 0 var(--it-space-3);
+  background: var(--it-color-surface-base);
+  border-top: var(--it-border-hairline) solid var(--it-color-border-default);
+  font-size: var(--it-text-2xs);
+  color: var(--it-color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.statusbar__item { display: inline-flex; align-items: center; gap: var(--it-space-1); }
+.statusbar__item--interactive {
+  background: transparent;
+  border: 0;
+  padding: 0 var(--it-space-1);
+  height: 100%;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.statusbar__item--interactive:hover { color: var(--it-color-text-secondary); }
+.statusbar__value { font-family: var(--it-font-mono); color: var(--it-color-text-secondary); }
+.statusbar__spacer { flex: 1; }
+.statusbar__dot { width: 6px; height: 6px; border-radius: var(--it-radius-circle); }
+
+/* ------------------------------------------------------------------ *
+ * Panel de instrumentos
+ * ------------------------------------------------------------------ */
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+  padding: var(--it-space-2_5);
+  background: var(--it-color-surface-raised);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-left: 3px solid var(--it-color-border-strong);
+  border-radius: var(--it-radius-md);
+}
+.gauge--nominal { border-left-color: var(--it-color-status-nominal); }
+.gauge--warning { border-left-color: var(--it-color-status-warning); }
+.gauge--alarm { border-left-color: var(--it-color-status-alarm); }
+.gauge--unknown { border-left-color: var(--it-color-text-tertiary); }
+
+.gauge__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--it-space-2); }
+.gauge__name { font-size: var(--it-text-xs); color: var(--it-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gauge__value { font-family: var(--it-font-mono); font-size: var(--it-text-2xl); font-weight: var(--it-weight-medium); letter-spacing: var(--it-tracking-tight); }
+.gauge__unit { font-size: var(--it-text-sm); color: var(--it-color-text-tertiary); margin-left: var(--it-space-1); }
+.gauge__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--it-space-2); font-size: var(--it-text-2xs); }
+.gauge__quality { display: inline-flex; align-items: center; gap: var(--it-space-1); }
+.gauge__time { font-family: var(--it-font-mono); color: var(--it-color-text-tertiary); }
+
+.gauge__scale { height: 4px; border-radius: var(--it-radius-pill); background: var(--it-color-surface-sunken); overflow: hidden; }
+.gauge__scale span { display: block; height: 100%; border-radius: var(--it-radius-pill); }
+
+/* Gráfica de histórico */
+.sparkline { display: block; width: 100%; height: 56px; }
+.sparkline__line { fill: none; stroke: var(--it-color-accent-default); stroke-width: 1.5; }
+.sparkline__area { fill: var(--it-color-accent-muted); }
+.sparkline__grid { stroke: var(--it-color-border-subtle); stroke-width: 1; }
+
+/* ------------------------------------------------------------------ *
+ * Vistas de módulo
+ * ------------------------------------------------------------------ */
+
+.module { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.module__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3) var(--it-space-4);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-default);
+  flex: none;
+}
+.module__title { margin: 0; font-size: var(--it-text-lg); font-weight: var(--it-weight-semibold); letter-spacing: var(--it-tracking-tight); }
+.module__subtitle { margin: 2px 0 0; font-size: var(--it-text-xs); color: var(--it-color-text-secondary); }
+.module__toolbar { display: flex; align-items: center; gap: var(--it-space-2); flex-wrap: wrap; }
+.module__body { flex: 1; min-height: 0; overflow: auto; padding: var(--it-space-4); }
+.module__grid { display: grid; gap: var(--it-space-3); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+/* ------------------------------------------------------------------ *
+ * Ficha de activo
+ * ------------------------------------------------------------------ */
+
+.assetcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  background: var(--it-color-surface-raised);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+}
+.assetcard__tag { font-family: var(--it-font-mono); font-size: var(--it-text-base); font-weight: var(--it-weight-medium); }
+.assetcard__name { font-size: var(--it-text-xs); color: var(--it-color-text-secondary); }
+.assetcard__path { font-family: var(--it-font-mono); font-size: var(--it-text-2xs); color: var(--it-color-text-tertiary); }
+
+/* ------------------------------------------------------------------ *
+ * Integridad
+ * ------------------------------------------------------------------ */
+
+.integrity { display: flex; flex-direction: column; gap: var(--it-space-2); }
+.integrity__item {
+  display: flex;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-raised);
+  border-left: 3px solid var(--it-color-status-warning);
+  font-size: var(--it-text-xs);
+}
+.integrity__item--error { border-left-color: var(--it-color-status-alarm); }
+.integrity__entity { font-family: var(--it-font-mono); font-size: var(--it-text-2xs); color: var(--it-color-text-tertiary); flex: none; }
+.integrity__recovery { color: var(--it-color-text-tertiary); margin-top: 2px; }
+
+/* ------------------------------------------------------------------ *
+ * Módulos de datos: panel lateral propio y rejillas
+ *
+ * Los módulos de catálogo, notas y telemetría ocupan el lienzo completo
+ * porque sus contenidos son tablas y fichas: comprimirlos en el panel de
+ * 288 px del editor los haría ilegibles. El reparto se hace con `grid` y
+ * columnas fijas para que la lista no se desplace al cambiar de selección.
+ * ------------------------------------------------------------------ */
+
+.module--split {
+  display: grid;
+  grid-template-columns: var(--it-frame-sidebarWidth) minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+}
+
+/* Notas invierte el reparto: la tabla manda y el detalle va a la derecha. */
+.module--split-wide {
+  grid-template-columns: minmax(0, 1fr) var(--it-frame-inspectorWidth);
+}
+
+.module__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--it-color-border-subtle);
+  background: var(--it-color-surface-base);
+  overflow: hidden;
+}
+
+.module__content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.module__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.module__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+  padding: var(--it-space-2) var(--it-space-4);
+  border-bottom: 1px solid var(--it-color-border-subtle);
+  background: var(--it-color-surface-base);
+}
+
+.module__filters > *:first-child {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.module__grid--instruments {
+  /* Los indicadores tienen una anchura mínima legible: por debajo de 240 px
+     el valor y su unidad empiezan a partirse en dos líneas. */
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+/* ------------------------------------------------------------------ *
+ * Tarjetas de destino de publicación
+ * ------------------------------------------------------------------ */
+
+.targetcard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--it-space-3);
+  align-items: start;
+  width: 100%;
+  padding: var(--it-space-3);
+  text-align: left;
+  font: inherit;
+  color: var(--it-color-text-primary);
+  background: var(--it-color-surface-base);
+  border: 1px solid var(--it-color-border-default);
+  border-radius: var(--it-radius-md);
+  cursor: pointer;
+  transition: border-color var(--it-duration-fast) var(--it-ease-standard),
+    background var(--it-duration-fast) var(--it-ease-standard);
+}
+
+.targetcard:hover {
+  border-color: var(--it-color-border-strong);
+  background: var(--it-color-surface-raised);
+}
+
+.targetcard:focus-visible {
+  outline: 2px solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.targetcard--active {
+  border-color: var(--it-color-accent-default);
+  background: var(--it-color-accent-subtle);
+}
+
+.targetcard__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--it-radius-sm);
+  color: var(--it-color-accent-default);
+  background: var(--it-color-surface-sunken);
+}
+
+.targetcard--active .targetcard__icon {
+  color: var(--it-color-text-onAccent);
+  background: var(--it-color-accent-default);
+}
+
+.targetcard__label {
+  display: block;
+  font-size: var(--it-text-sm);
+  font-weight: var(--it-weight-medium);
+}
+
+.targetcard__detail {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--it-text-xs);
+  line-height: 1.5;
+  color: var(--it-color-text-secondary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Adaptación a 1366 × 768
+ *
+ * La etapa 03 exige que la aplicación sea usable a esa resolución, que es la
+ * de los portátiles de planta. Con cuatro columnas el lienzo se queda en
+ * nada, así que por debajo del punto de ruptura el inspector se recoge y el
+ * panel lateral se estrecha.
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1365px) {
+  .app__inspector {
+    width: 280px;
+  }
+
+  .app__sidebar,
+  .module--split {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .app__sidebar {
+    width: 240px;
+  }
+
+  .module__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Lectura aislada entre huecos: se dibuja como punto porque el dato existió.
+   Omitirla haría creer que no hubo lectura en ese instante. */
+.sparkline__dot {
+  fill: var(--it-color-accent-default);
+  stroke: var(--it-color-surface-raised);
+  stroke-width: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Diálogo de catálogo en CSV (X06)
+ * ------------------------------------------------------------------ */
+
+.csv-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+}
+
+.csv-dialog__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.csv-dialog__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-relaxed);
+}
+
+.csv-dialog__hint b {
+  color: var(--it-color-text-primary);
+  font-weight: var(--it-weight-medium);
+}
+
+/* El campo de archivo se enmarca como una zona y no como un control suelto:
+   es la acción principal de la primera pantalla del diálogo. */
+.csv-dialog__file {
+  display: block;
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) dashed var(--it-color-border-strong);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-sunken);
+}
+
+.csv-dialog__file input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+}
+
+.csv-dialog__file input::file-selector-button {
+  margin-right: var(--it-space-3);
+  padding: var(--it-space-1) var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-raised);
+  color: var(--it-color-text-primary);
+  font: inherit;
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.csv-dialog__file input:focus-visible {
+  outline: var(--it-border-thick) solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.csv-dialog__warnings {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+}
+
+/* ------------------------------------------------------------------ *
+ * Editor de activos (X01–X04, X07)
+ * ------------------------------------------------------------------ */
+
+.asset-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+}
+
+.asset-editor__problems {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+}
+
+/* Dos columnas a partir del ancho mínimo de la etapa 03 (1366 px): la ficha
+   de un activo tiene doce campos y en una sola columna obliga a desplazarse
+   para ver si falta algo. */
+.asset-editor__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--it-space-3);
+}
+
+@media (min-width: 1024px) {
+  .asset-editor__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.asset-editor__section,
+.asset-editor__attributes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+}
+
+.asset-editor__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.asset-editor__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-relaxed);
+}
+
+.asset-editor__hint b {
+  color: var(--it-color-text-primary);
+  font-weight: var(--it-weight-medium);
+}
+
+.asset-editor__docs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.asset-editor__doc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-sunken);
+}
+
+.asset-editor__doc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Editor de clases de activo (X03)
+ * ------------------------------------------------------------------ */
+
+.class-editor {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--it-space-4);
+  align-items: start;
+}
+
+.class-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  position: sticky;
+  top: 0;
+}
+
+.class-editor__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+}
+
+.class-editor__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-px);
+}
+
+.class-editor__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: var(--it-space-2);
+  border: var(--it-border-hairline) solid transparent;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.class-editor__item:hover {
+  background: var(--it-color-surface-raised);
+}
+
+.class-editor__item[aria-current='true'] {
+  background: var(--it-color-accent-subtle);
+  border-color: var(--it-color-accent-muted);
+}
+
+.class-editor__item-name {
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+}
+
+.class-editor__item-code,
+.class-editor__mono {
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.class-editor__form,
+.class-editor__attributes,
+.class-editor__inherited {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+/* Los heredados se listan y no se editan: se cambian en la clase que los
+   define, y presentarlos como editables aquí sería mentir sobre dónde vive
+   el dato. */
+.class-editor__inherited-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-secondary);
+}
+
+.class-editor__inherited-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+}
+
+.class-editor__attr-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.class-editor__attr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-sunken);
+}
+
+.class-editor__attr-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Autoría de notas (P02, P03, P06, P08)
+ * ------------------------------------------------------------------ */
+
+.note-authoring__actions {
+  display: flex;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.note-authoring__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+.note-authoring__hint b {
+  color: var(--it-color-text-primary);
+  font-weight: var(--it-weight-medium);
+}
+
+.note-authoring__attachments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+}
+
+.note-authoring__attachments li {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  padding: var(--it-space-1) var(--it-space-2);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  font-size: var(--it-text-xs);
+}
+
+/* El nombre del adjunto puede ser un enlace largo: se recorta en lugar de
+   empujar el botón de quitar fuera del panel. */
+.note-authoring__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--it-font-mono);
+  color: var(--it-color-text-primary);
+}
+
+.note-authoring__attachment-caption {
+  color: var(--it-color-text-secondary);
+  white-space: nowrap;
+}
+
+/* El asunto de la nota y su marca de origen, en la misma celda. */
+.notes__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--it-space-2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Editor de interfaces (F01–F04)
+ * ------------------------------------------------------------------ */
+
+.module--skin {
+  min-height: 0;
+}
+
+.skin-editor {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  gap: var(--it-space-3);
+  min-height: 0;
+  flex: 1;
+}
+
+.skin-editor__left,
+.skin-editor__right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  overflow-y: auto;
+  padding-right: var(--it-space-2);
+}
+
+.skin-editor__center {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  min-width: 0;
+}
+
+.skin-editor__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+/* --- Árbol --- */
+
+.skin-editor__tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.skin-editor__tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  width: 100%;
+  padding: var(--it-space-1) var(--it-space-2);
+  border: none;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--it-text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skin-editor__tree-item:hover {
+  background: var(--it-color-surface-raised);
+}
+
+.skin-editor__tree-item[aria-selected='true'] {
+  background: var(--it-color-accent-subtle);
+}
+
+.skin-editor__tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--it-color-text-primary);
+}
+
+.skin-editor__tree-kind {
+  color: var(--it-color-text-tertiary);
+  white-space: nowrap;
+}
+
+.skin-editor__tree-actions,
+.skin-editor__palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--it-space-1);
+}
+
+.skin-editor__palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+}
+
+.skin-editor__palette-title {
+  margin: 0;
+  color: var(--it-color-text-tertiary);
+  font-size: var(--it-text-xs);
+}
+
+/* --- Lienzo --- */
+
+.skin-canvas {
+  position: relative;
+  overflow: hidden;
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-md);
+  /* Un tablero de cuadros deja ver la transparencia de los componentes, que
+     sobre un fondo liso sería indistinguible de un fondo opaco del mismo
+     color. */
+  background-color: var(--it-color-surface-canvas);
+  background-image:
+    linear-gradient(45deg, var(--it-color-surface-sunken) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--it-color-surface-sunken) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--it-color-surface-sunken) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--it-color-surface-sunken) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  aspect-ratio: 16 / 9;
+}
+
+.skin-canvas__surface {
+  position: relative;
+}
+
+.skin-canvas__node {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed var(--it-color-border-strong);
+  cursor: grab;
+  user-select: none;
+  overflow: visible;
+}
+
+.skin-canvas__node--selected {
+  outline: 2px solid var(--it-color-accent-default);
+  outline-offset: 1px;
+}
+
+.skin-canvas__node--drop {
+  outline: 2px solid var(--it-color-status-nominal);
+  outline-offset: 1px;
+}
+
+.skin-canvas__node--locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Un componente oculto al cargar se dibuja atenuado: existe, pero no se verá
+   hasta que una acción lo muestre. */
+.skin-canvas__node--hidden {
+  opacity: 0.45;
+  border-style: dotted;
+}
+
+.skin-canvas__label {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--it-color-surface-overlay);
+  color: var(--it-color-text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.skin-canvas__children {
+  position: absolute;
+  inset: 0;
+}
+
+.skin-canvas__handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--it-color-accent-default);
+  cursor: nwse-resize;
+}
+
+.skin-canvas__handle:focus-visible {
+  outline: var(--it-border-thick) solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.skin-canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--it-space-6);
+  color: var(--it-color-text-secondary);
+  text-align: center;
+}
+
+.skin-canvas__hint {
+  position: absolute;
+  left: var(--it-space-2);
+  bottom: var(--it-space-2);
+  margin: 0;
+  padding: var(--it-space-1) var(--it-space-2);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-overlay);
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-xs);
+}
+
+/* --- Propiedades --- */
+
+.skin-props {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.skin-props__head {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+}
+
+.skin-props__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--it-space-2);
+  align-items: end;
+}
+
+.skin-props__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+}
+
+.skin-props__devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--it-space-2);
+}
+
+/* --- Galería de plantillas --- */
+
+.skin-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--it-space-3);
+}
+
+.skin-templates__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-sunken);
+}
+
+.skin-templates__card h3 {
+  margin: 0;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+}
+
+.skin-templates__description {
+  margin: 0;
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-sm);
+}
+
+.skin-templates__guidance {
+  margin: 0;
+  flex: 1;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+/* Lista de variables de plantilla, plegada por defecto: estorba una vez
+   aprendida y hace falta la primera vez. */
+.skin-props__variables {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+}
+
+.skin-props__variables summary {
+  cursor: pointer;
+}
+
+.skin-props__variables ul {
+  margin: var(--it-space-1) 0 0;
+  padding-left: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skin-props__variables code {
+  font-family: var(--it-font-mono);
+  color: var(--it-color-text-primary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Escenas de modelo 3D (etapa 08)
+ * ------------------------------------------------------------------ */
+
+.model-module {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--it-space-3);
+  height: 100%;
+  min-height: 0;
+}
+
+.model-module__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  min-width: 0;
+}
+
+.model-module__canvas {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--it-radius-md);
+  overflow: hidden;
+  background: var(--it-color-surface-canvas);
+}
+
+.model-module__scene {
+  width: 100%;
+  height: 100%;
+}
+
+.model-module__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  overflow-y: auto;
+  padding-right: var(--it-space-2);
+}
+
+.model-module__hint {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-relaxed);
+}
+
+.model-module__file {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  margin: 0;
+  font-size: var(--it-text-xs);
+  font-family: var(--it-font-mono);
+  color: var(--it-color-text-primary);
+}
+
+/* La lista de piezas de un modelo de planta puede tener cientos de entradas:
+   se desplaza en su propia caja en lugar de empujar el resto del panel. */
+.model-module__meshes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: var(--it-space-1);
+}
+
+.model-scene__failed {
+  margin: 0;
+  padding: var(--it-space-4);
+  color: var(--it-color-status-alarm);
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-relaxed);
+}
+
+/* ------------------------------------------------------------------ *
+ * Respaldo y restauración (X18)
+ * ------------------------------------------------------------------ */
+
+.backup__intro {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-relaxed);
+}
+
+.backup__intro b {
+  color: var(--it-color-text-primary);
+  font-weight: var(--it-weight-medium);
+}
+
+.backup__actions {
+  display: flex;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Recorridos y evaluaciones (etapa 09)
+ *
+ * Dos columnas: la lista de recorridos y evaluaciones, y el editor de lo
+ * seleccionado. La lista queda fija al desplazarse porque el editor es largo
+ * y perder de vista qué se está editando desorienta.
+ * ------------------------------------------------------------------ */
+
+.tours {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--it-space-4);
+  align-items: start;
+  padding: var(--it-space-4);
+  overflow: auto;
+  min-height: 0;
+}
+
+.tours__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+  position: sticky;
+  top: 0;
+}
+
+.tours__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.tours__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+}
+
+.tours__empty {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.tours__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-px);
+}
+
+.tours__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name badge' 'meta badge';
+  gap: 1px var(--it-space-2);
+  align-items: center;
+  width: 100%;
+  padding: var(--it-space-2);
+  border: var(--it-border-hairline) solid transparent;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tours__item:hover {
+  background: var(--it-color-surface-raised);
+}
+
+.tours__item[aria-current='true'] {
+  background: var(--it-color-accent-subtle);
+  border-color: var(--it-color-accent-muted);
+}
+
+.tours__item-name {
+  grid-area: name;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tours__item-meta {
+  grid-area: meta;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.tours__item > :not(.tours__item-name):not(.tours__item-meta) {
+  grid-area: badge;
+}
+
+.tours__detail {
+  min-width: 0;
+}
+
+/* ---- Editor ---- */
+
+.tour-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+  min-width: 0;
+}
+
+.tour-editor__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--it-space-4);
+  align-items: end;
+}
+
+.tour-editor__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-3);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+  white-space: nowrap;
+}
+
+.tour-editor__problems {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-normal);
+}
+
+.tour-editor__hint {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  line-height: var(--it-leading-normal);
+}
+
+.tour-editor__behaviour,
+.tour-editor__gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.tour-editor__gate {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--it-space-3);
+  align-items: start;
+}
+
+.tour-editor__add {
+  display: flex;
+  align-items: end;
+  gap: var(--it-space-2);
+  margin-top: var(--it-space-3);
+  padding-top: var(--it-space-3);
+  border-top: var(--it-border-hairline) solid var(--it-color-border-subtle);
+}
+
+.tour-editor__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--it-space-2);
+}
+
+/* El texto de ayuda de un interruptor no lo trae el componente del sistema
+   de diseño, y aquí hace falta: «no interrumpible» sin explicación parece una
+   preferencia y es una decisión con consecuencias. */
+.switch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-row__hint {
+  margin: 0;
+  padding-left: calc(var(--it-space-5) + var(--it-space-1));
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  line-height: var(--it-leading-normal);
+}
+
+/* ---- Paradas y preguntas ---- */
+
+.waypoints {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-px);
+  counter-reset: waypoint;
+}
+
+.waypoint {
+  border: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+}
+
+.waypoint[data-problem='blocking'] {
+  border-color: var(--it-color-status-alarm);
+}
+
+.waypoint__head {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2);
+}
+
+.waypoint__ordinal {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--it-radius-circle);
+  background: var(--it-color-surface-sunken);
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+}
+
+.waypoint__title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.waypoint__scene {
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waypoint__meta {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.waypoint__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-px);
+  flex: none;
+}
+
+.waypoint__problems {
+  margin: 0;
+  padding: 0 var(--it-space-3) var(--it-space-2) calc(var(--it-space-2) + 28px);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-normal);
+}
+
+.waypoint__problems > li[data-severity='blocking'] {
+  color: var(--it-color-status-alarm);
+}
+
+.waypoint__problems > li[data-severity='advisory'] {
+  color: var(--it-color-text-secondary);
+}
+
+.waypoint__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3);
+  border-top: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  background: var(--it-color-surface-sunken);
+}
+
+.waypoint__times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--it-space-3);
+}
+
+/* ---- Opciones de una pregunta ---- */
+
+.choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2);
+  border: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+}
+
+.choice__main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 84px auto auto;
+  gap: var(--it-space-2);
+  align-items: center;
+}
+
+.choice__correct {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-1);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choice__extra {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--it-space-2);
+}
+
+.ordering {
+  margin: 0;
+  padding: 0 0 0 var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-px);
+  font-size: var(--it-text-sm);
+}
+
+.ordering__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--it-space-2);
+  align-items: center;
+  padding: var(--it-space-1) 0;
+}
+
+.quiz-scores {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.quiz-scores__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: var(--it-space-3);
+  align-items: end;
+}
+
+.quiz-scores__key {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+}
+
+@media (max-width: 960px) {
+  .tours {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tours__list {
+    position: static;
+  }
+
+  .tour-editor__gate,
+  .choice__extra,
+  .quiz-scores__row,
+  .waypoint__times {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Marcadores a buscar y objetivos de puntuación (O04, O08). */
+
+.hunt-target {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 84px auto;
+  gap: var(--it-space-2);
+  align-items: center;
+}
+
+.hunt-target__place {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-1);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+}
+
+.goal__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 120px auto;
+  gap: var(--it-space-2);
+  align-items: end;
+}
+
+@media (max-width: 960px) {
+  .hunt-target,
+  .goal__head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Geometría del marcador (etapa 02)
+ *
+ * Los vértices se editan en una lista numerada: arrastrar sobre la panorámica
+ * es más cómodo cuando se puede, pero la lista es lo que permite trabajar con
+ * teclado y dar la cifra exacta cuando el contorno tiene que coincidir con el
+ * borde de un equipo.
+ * ------------------------------------------------------------------ */
+
+.polygon__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+}
+
+.polygon__area {
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  white-space: nowrap;
+}
+
+.polygon__problems {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--it-text-xs);
+  line-height: var(--it-leading-normal);
+}
+
+.polygon__points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-px);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.polygon__point {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--it-space-1);
+  align-items: center;
+  padding: var(--it-space-px) 0;
+}
+
+.polygon__ordinal {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--it-radius-circle);
+  background: var(--it-color-surface-sunken);
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+}
+
+.polygon__corner-label {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.axes__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+}
+
+.axes__depth {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+}
+
+/* Texto explicativo dentro del inspector, fuera de un campo concreto. */
+.inspector__hint {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  line-height: var(--it-leading-normal);
+}

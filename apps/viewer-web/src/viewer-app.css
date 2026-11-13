@@ -1,0 +1,726 @@
+/**
+ * Estilos del recorrido publicado.
+ *
+ * Deliberadamente escasos. El recorrido es la panorámica: todo lo que se
+ * dibuja encima le quita sitio y atención. Las barras son finas, los paneles
+ * aparecen sólo cuando se piden, y nada de esto compite con la imagen.
+ *
+ * Las variables son las mismas del sistema de diseño del editor. Un cliente
+ * que ve los dos reconoce el producto, y mantener dos paletas sería mantener
+ * dos productos.
+ */
+
+.tour {
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  background: var(--it-color-surface-canvas);
+  color: var(--it-color-text-primary);
+  font-family: var(--it-font-sans);
+  overflow: hidden;
+}
+
+.tour--boot {
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+}
+
+/* ------------------------------------------------------------------ *
+ * Barra superior
+ * ------------------------------------------------------------------ */
+
+.tour__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-3);
+  padding: 0 var(--it-space-4);
+  background: var(--it-color-surface-overlay);
+  border-bottom: 1px solid var(--it-color-border-subtle);
+  /* Por encima del lienzo pero por debajo de los diálogos. */
+  z-index: 1;
+}
+
+.tour__title {
+  font-size: var(--it-text-sm);
+  font-weight: var(--it-weight-semibold);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+}
+
+.tour__scene {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tour__spacer {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------------ *
+ * Escena
+ * ------------------------------------------------------------------ */
+
+.tour__stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ *
+ * Navegación entre escenas
+ *
+ * Abajo a la izquierda y con fondo translúcido: en una panorámica, las
+ * esquinas inferiores son la zona que menos información visual lleva, y es
+ * donde la mano busca los controles en una tableta.
+ * ------------------------------------------------------------------ */
+
+.tour__nav {
+  position: absolute;
+  left: var(--it-space-4);
+  bottom: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  max-height: calc(100% - var(--it-space-8));
+  max-width: 280px;
+  overflow-y: auto;
+  padding: var(--it-space-3);
+  background: color-mix(in srgb, var(--it-color-surface-overlay) 88%, transparent);
+  border: 1px solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-md);
+  backdrop-filter: blur(8px);
+}
+
+.tour__navgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tour__navlabel {
+  font-size: var(--it-text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--it-color-text-tertiary);
+  padding: 0 var(--it-space-2) 2px;
+}
+
+.tour__navitem {
+  text-align: left;
+  font: inherit;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--it-radius-sm);
+  padding: var(--it-space-1) var(--it-space-2);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tour__navitem:hover {
+  color: var(--it-color-text-primary);
+  background: var(--it-color-surface-raised);
+}
+
+.tour__navitem:focus-visible {
+  outline: 2px solid var(--it-color-border-focus);
+  outline-offset: 1px;
+}
+
+.tour__navitem--active {
+  color: var(--it-color-accent-onSurface);
+  background: var(--it-color-accent-subtle);
+  border-color: var(--it-color-accent-default);
+}
+
+/* ------------------------------------------------------------------ *
+ * Plano
+ * ------------------------------------------------------------------ */
+
+.planview {
+  display: grid;
+  gap: var(--it-space-3);
+}
+
+.planview__frame {
+  position: relative;
+  line-height: 0;
+  background: var(--it-color-surface-sunken);
+  border-radius: var(--it-radius-sm);
+  overflow: hidden;
+}
+
+.planview__frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.planview__marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--it-color-surface-overlay);
+  background: var(--it-color-accent-default);
+  cursor: pointer;
+}
+
+.planview__marker:focus-visible {
+  outline: 2px solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.planview__marker--active {
+  /* El punto activo crece en lugar de cambiar sólo de color: en un plano
+     impreso en escala de grises, el color no se distingue. */
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  background: var(--it-color-status-warning);
+}
+
+.planview__bearing {
+  margin: 0;
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Pantallas pequeñas
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  .tour__scene {
+    display: none;
+  }
+
+  .tour__nav {
+    left: var(--it-space-2);
+    right: var(--it-space-2);
+    bottom: var(--it-space-2);
+    max-width: none;
+    /* En horizontal: en un móvil, una lista vertical de escenas tapa media
+       panorámica. */
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .tour__navlabel {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__nav {
+    backdrop-filter: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Notas de campo (P01)
+ * ------------------------------------------------------------------ */
+
+.field-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-4);
+}
+
+.field-notes__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+}
+
+.field-notes__where {
+  margin: 0;
+  padding: var(--it-space-2) var(--it-space-3);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+}
+
+.field-notes__where b {
+  color: var(--it-color-text-primary);
+}
+
+.field-notes__list-title {
+  margin: 0 0 var(--it-space-2);
+  font-size: var(--it-text-sm);
+  font-weight: var(--it-weight-semibold);
+  color: var(--it-color-text-primary);
+}
+
+.field-notes__list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+}
+
+.field-notes__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  font-size: var(--it-text-sm);
+}
+
+.field-notes__list li strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-notes__scene,
+.field-notes__when {
+  color: var(--it-color-text-tertiary);
+  font-size: var(--it-text-xs);
+  white-space: nowrap;
+}
+
+.field-notes__when {
+  font-family: var(--it-font-mono);
+}
+
+/* ------------------------------------------------------------------ *
+ * Ventanas del recorrido (E01–E03, E05, E08)
+ * ------------------------------------------------------------------ */
+
+.tour-window__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--it-space-5);
+  /* El fondo se oscurece pero no se oculta: el visitante tiene que seguir
+     sabiendo dónde está dentro del recorrido. */
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.tour-window {
+  display: flex;
+  flex-direction: column;
+  max-width: min(1100px, 100%);
+  max-height: 100%;
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+  background: var(--it-color-surface-raised);
+  box-shadow: var(--it-elevation-xl);
+  overflow: hidden;
+}
+
+.tour-window:focus-visible {
+  outline: var(--it-border-thick) solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.tour-window__head {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3) var(--it-space-4);
+  border-bottom: var(--it-border-hairline) solid var(--it-color-border-subtle);
+}
+
+.tour-window__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--it-text-md);
+  font-weight: var(--it-weight-semibold);
+  color: var(--it-color-text-primary);
+}
+
+.tour-window__close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.tour-window__close:hover {
+  background: var(--it-color-surface-sunken);
+  color: var(--it-color-text-primary);
+}
+
+.tour-window__close:focus-visible {
+  outline: var(--it-border-thick) solid var(--it-color-border-focus);
+  outline-offset: 1px;
+}
+
+.tour-window__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--it-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  align-items: center;
+}
+
+.tour-window__media {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--it-radius-md);
+  object-fit: contain;
+}
+
+.tour-window__audio {
+  width: 100%;
+}
+
+/* El texto conserva los saltos de línea del autor sin interpretar HTML:
+   interpretarlo sería una vía de inyección en una página que se sirve a
+   cualquiera con el enlace. */
+.tour-window__text {
+  margin: 0;
+  align-self: stretch;
+  white-space: pre-wrap;
+  color: var(--it-color-text-primary);
+  font-size: var(--it-text-sm);
+  line-height: var(--it-leading-relaxed);
+}
+
+.tour-window__frame {
+  width: min(900px, 100%);
+  height: min(70vh, 700px);
+  border: none;
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-base);
+}
+
+.tour-window__fallback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-3);
+  align-items: flex-start;
+}
+
+.tour-window__link {
+  color: var(--it-color-accent-default);
+  font-size: var(--it-text-sm);
+}
+
+.tour-window__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-3);
+  padding: var(--it-space-3) var(--it-space-4);
+  border-top: var(--it-border-hairline) solid var(--it-color-border-subtle);
+}
+
+.tour-window__foot button {
+  padding: var(--it-space-1) var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  color: var(--it-color-text-primary);
+  font: inherit;
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.tour-window__foot button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tour-window__position {
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ *
+ * Recorrido automático (J01–J03)
+ *
+ * Una barra sobre la panorámica, abajo, con el avance y los mandos. No tapa
+ * el centro de la escena: lo que se está enseñando está ahí.
+ * ------------------------------------------------------------------ */
+
+.autopilot {
+  position: absolute;
+  left: 50%;
+  bottom: var(--it-space-4);
+  transform: translateX(-50%);
+  width: min(680px, calc(100% - var(--it-space-8)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+  background: var(--it-color-surface-overlay);
+  box-shadow: var(--it-elevation-xl);
+  z-index: 4;
+}
+
+.autopilot__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 160px) auto;
+  gap: var(--it-space-3);
+  align-items: center;
+}
+
+.autopilot__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.autopilot__name {
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autopilot__stop {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.autopilot__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-1);
+}
+
+.autopilot__caption {
+  margin: 0;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+  line-height: var(--it-leading-relaxed);
+}
+
+.autopilot__caption--muted {
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-xs);
+}
+
+.tour-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-1);
+}
+
+.tour-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: var(--it-space-2);
+  border: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tour-list__item:hover {
+  border-color: var(--it-color-accent-default);
+}
+
+.tour-list__name {
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+}
+
+.tour-list__meta {
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Evaluación (O01–O09)
+ * ------------------------------------------------------------------ */
+
+.quiz__prompt {
+  margin: var(--it-space-3) 0 var(--it-space-2);
+  font-size: var(--it-text-md);
+  color: var(--it-color-text-primary);
+  line-height: var(--it-leading-relaxed);
+}
+
+.quiz__hint {
+  margin: 0 0 var(--it-space-2);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.quiz__timer {
+  margin: var(--it-space-2) 0 0;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz__timer--urgent {
+  color: var(--it-color-status-warning);
+}
+
+.quiz__media {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  margin-bottom: var(--it-space-3);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  object-fit: contain;
+}
+
+.quiz__choices,
+.quiz__targets,
+.quiz__feedback {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.quiz__feedback {
+  padding-left: var(--it-space-4);
+  list-style: disc;
+  gap: var(--it-space-1);
+}
+
+.quiz__choice {
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-2);
+  width: 100%;
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+  color: var(--it-color-text-primary);
+  font: inherit;
+  font-size: var(--it-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quiz__choice:hover {
+  border-color: var(--it-color-accent-default);
+}
+
+.quiz__choice[aria-pressed='true'] {
+  border-color: var(--it-color-accent-default);
+  border-width: var(--it-border-thick);
+  background: var(--it-color-accent-subtle);
+}
+
+.quiz__choice-order {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-sunken);
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-secondary);
+}
+
+.quiz__hunt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+}
+
+.quiz__targets > li {
+  padding: var(--it-space-2);
+  border: var(--it-border-hairline) solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-tertiary);
+}
+
+.quiz__targets > li[data-found='true'] {
+  border-color: var(--it-color-accent-default);
+  color: var(--it-color-text-primary);
+}
+
+/* El recuento de la búsqueda, cuando la ventana se aparta para buscar en la
+   escena: ocupa una esquina y deja la panorámica libre. */
+.hunt-hud {
+  position: absolute;
+  top: var(--it-space-4);
+  right: var(--it-space-4);
+  width: min(300px, calc(100% - var(--it-space-8)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  border: var(--it-border-hairline) solid var(--it-color-border-default);
+  border-radius: var(--it-radius-lg);
+  background: var(--it-color-surface-overlay);
+  box-shadow: var(--it-elevation-xl);
+  z-index: 5;
+}
+
+.hunt-hud__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+}
+
+.hunt-hud__prompt {
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-primary);
+  line-height: var(--it-leading-relaxed);
+}
+
+.hunt-hud__hint {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+  line-height: var(--it-leading-relaxed);
+}
