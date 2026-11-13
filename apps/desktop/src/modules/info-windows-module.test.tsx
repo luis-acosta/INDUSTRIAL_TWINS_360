@@ -157,8 +157,8 @@ describe('InfoWindowsModule', () => {
     await user.click(screen.getByRole('button', { name: /Texto/ }));
     await user.click(screen.getByText('Variables disponibles'));
 
-    expect(screen.getByText('{{escena}}')).toBeInTheDocument();
-    expect(screen.getByText('{{puntuacion}}')).toBeInTheDocument();
+    expect(screen.getByText('{{scene.title}}')).toBeInTheDocument();
+    expect(screen.getByText('{{score.total}}')).toBeInTheDocument();
   });
 
   it('TEST-IWM-008 una variable que el visor no conoce se denuncia', async () => {

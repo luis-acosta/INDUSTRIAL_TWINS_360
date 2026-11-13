@@ -83,11 +83,17 @@ export const modelLightingSchema = z.object({
   /** Tono del fondo: token del sistema o color propio. */
   background: z
     .discriminatedUnion('kind', [
-      z.object({ kind: z.literal('token'), token: z.enum(['canvas', 'sunken', 'base']) }),
+      // `surfaceToken` y no `token`: el manifiesto publicado rechaza las
+      // claves llamadas `token` para que no viaje una credencial, y un fondo
+      // del sistema hacía saltar esa guarda.
+      z.object({
+        kind: z.literal('token'),
+        surfaceToken: z.enum(['canvas', 'sunken', 'base']),
+      }),
       z.object({ kind: z.literal('color'), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) }),
       z.object({ kind: z.literal('panorama'), mediaId: uuidSchema }),
     ])
-    .default({ kind: 'token', token: 'sunken' }),
+    .default({ kind: 'token', surfaceToken: 'sunken' }),
   /** Exposición del renderizador en paradas. */
   exposure: z.number().min(0.1).max(4).default(1),
 });
@@ -143,7 +149,7 @@ export const modelSettingsSchema = z.object({
     directionalYaw: 0.8,
     directionalPitch: 0.9,
     shadows: true,
-    background: { kind: 'token', token: 'sunken' },
+    background: { kind: 'token', surfaceToken: 'sunken' },
     exposure: 1,
   }),
   savedViews: z.array(savedViewSchema).default([]),

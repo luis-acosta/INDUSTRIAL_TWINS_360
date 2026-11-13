@@ -468,6 +468,65 @@ CREATE TABLE info_window (
 );
 `;
 
+/**
+ * Renombra `token` a `surfaceToken` en los fondos guardados.
+ *
+ * El manifiesto publicado rechaza cualquier clave llamada `token` —es la
+ * guarda que impide que una credencial viaje en el paquete— y los fondos del
+ * sistema de diseño usaban ese nombre. El efecto era que **un proyecto con un
+ * fondo del sistema no se podía publicar**, y el fondo del sistema es el de
+ * partida tanto de los contenedores de la interfaz como de las escenas de
+ * modelo. Se renombra el campo y se arreglan los proyectos ya guardados.
+ *
+ * Se recorre el JSON entero en lugar de apuntar a las rutas conocidas: los
+ * fondos están en dos esquemas distintos y a varias profundidades, y una lista
+ * de rutas se quedaría corta en cuanto apareciera un tercero.
+ */
+function renameBackgroundToken(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(renameBackgroundToken);
+  if (value === null || typeof value !== 'object') return value;
+
+  const source = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+
+  for (const [key, inner] of Object.entries(source)) {
+    // Sólo donde es de verdad un fondo del sistema: `kind: 'token'` junto a la
+    // clave. Así no se toca ninguna otra cosa que se llame `token`.
+    if (key === 'token' && source['kind'] === 'token' && typeof inner === 'string') {
+      result['surfaceToken'] = inner;
+      continue;
+    }
+    result[key] = renameBackgroundToken(inner);
+  }
+
+  return result;
+}
+
+/** Reescribe una columna JSON aplicando el renombrado. */
+function rewriteJsonColumn(db: SqlDatabase, table: string, column: string): void {
+  const rows = db.all(`SELECT id, ${column} AS payload FROM ${table}`);
+
+  for (const row of rows) {
+    const payload = row['payload'];
+    if (typeof payload !== 'string' || payload === '') continue;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      // Un JSON que no se puede leer no se toca: el problema es anterior a
+      // esta migración y romperlo más no ayuda a nadie.
+      continue;
+    }
+
+    const migrated = JSON.stringify(renameBackgroundToken(parsed));
+    const id = row['id'];
+    if (migrated !== payload && (typeof id === 'string' || typeof id === 'number')) {
+      db.run(`UPDATE ${table} SET ${column} = ? WHERE id = ?`, [migrated, id]);
+    }
+  }
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
@@ -485,6 +544,16 @@ export const MIGRATIONS: readonly Migration[] = [
       'Ventanas de información con pestañas y bloques de contenido (E01, F08), a las que ya apuntaba la acción openInfoWindow.',
     up: (db) => {
       db.exec(INFO_WINDOW_SCHEMA);
+    },
+  },
+  {
+    version: 3,
+    name: 'fondo-surface-token',
+    description:
+      'Renombra «token» a «surfaceToken» en los fondos del sistema de diseño, que hacían saltar la guarda de claves prohibidas del manifiesto y dejaban sin publicar cualquier proyecto con un fondo de partida.',
+    up: (db) => {
+      rewriteJsonColumn(db, 'skin', 'root_json');
+      rewriteJsonColumn(db, 'scene', 'model_json');
     },
   },
 ];

@@ -403,10 +403,10 @@ describe('infoWindow', () => {
     const built = infoWindow(
       context({}),
       {
-        ...windowWith([{ type: 'text', text: 'Está en **{{escena}}**.' }]),
-        title: 'Ficha de {{escena}}',
+        ...windowWith([{ type: 'text', text: 'Está en **{{scene.title}}**.' }]),
+        title: 'Ficha de {{scene.title}}',
       },
-      { escena: 'Sala de bombas' },
+      { 'scene.title': 'Sala de bombas' },
     );
 
     expect(built.kind).toBe('info');
@@ -428,8 +428,8 @@ describe('infoWindow', () => {
   it('TEST-WIN-032 una imagen del paquete se resuelve a su URL', () => {
     const built = infoWindow(
       context({ media: [{ id: id(10), name: 'bomba.jpg', mime: 'image/jpeg' }] }),
-      windowWith([{ type: 'image', mediaId: id(10) as never, caption: 'Vista {{escena}}' }]),
-      { escena: 'lateral' },
+      windowWith([{ type: 'image', mediaId: id(10) as never, caption: 'Vista {{scene.title}}' }]),
+      { 'scene.title': 'lateral' },
     );
 
     const block = built.kind === 'info' ? built.tabs[0]?.blocks[0] : undefined;

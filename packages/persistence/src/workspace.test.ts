@@ -458,6 +458,57 @@ describe('migraciones', () => {
     }
   });
 
+  it('TEST-WS-025c: la migración 3 renombra los fondos ya guardados', async () => {
+    // Un proyecto guardado antes trae `token` en los fondos del sistema, y con
+    // ese nombre no se podía publicar. La migración lo arregla sin tocar nada
+    // más de la interfaz.
+    const db = unwrap(await openDatabase(null));
+    try {
+      const hastaLaDos = MIGRATIONS.filter((m) => m.version <= 2);
+      unwrap(migrate(db, { now: '2026-11-12T19:00:00.000Z', migrations: hastaLaDos }));
+
+      const root = JSON.stringify([
+        {
+          id: 'n1',
+          name: 'Barra',
+          style: { background: { kind: 'token', token: 'overlay' }, textAlign: 'left' },
+          children: [
+            { id: 'n2', style: { background: { kind: 'color', color: '#112233' } } },
+          ],
+        },
+      ]);
+
+      db.run(
+        `INSERT INTO skin (id, name, description, layout_mode, design_width, design_height,
+           root_json, template_id, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [
+          '00000000-0000-4000-8000-000000000002',
+          'Interfaz',
+          '',
+          'fluid',
+          1920,
+          1080,
+          root,
+          null,
+          '2026-11-12T19:00:00.000Z',
+          '2026-11-12T19:00:00.000Z',
+        ],
+      );
+
+      unwrap(migrate(db, { now: '2026-11-12T19:10:00.000Z' }));
+
+      const after = String(db.get('SELECT root_json FROM skin')?.['root_json'] ?? '');
+      expect(after).toContain('"surfaceToken":"overlay"');
+      expect(after).not.toContain('"token":"overlay"');
+      // Lo que no era un fondo del sistema se queda igual.
+      expect(after).toContain('"color":"#112233"');
+      expect(after).toContain('"name":"Barra"');
+    } finally {
+      db.close();
+    }
+  });
+
   it('TEST-WS-026: migrar dos veces no hace nada la segunda', async () => {
     const db = unwrap(await openDatabase(null));
     try {

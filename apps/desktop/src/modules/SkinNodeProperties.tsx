@@ -19,10 +19,14 @@
  */
 import {
   COMPONENT_LABELS,
+  INFO_VARIABLES,
+  unknownVariables,
   type ComponentConfig,
+  type Project,
   type Skin,
   type SkinNode,
 } from '@it360/domain';
+import { ComponentPanel } from './SkinComponentPanel';
 import {
   Badge,
   Callout,
@@ -306,7 +310,7 @@ export function SkinNodeProperties({
               const kind = event.currentTarget.value;
               if (kind === 'none') setStyle({ background: { kind: 'none' } }, 'bg');
               else if (kind === 'token')
-                setStyle({ background: { kind: 'token', token: 'overlay' } }, 'bg');
+                setStyle({ background: { kind: 'token', surfaceToken: 'overlay' } }, 'bg');
               else setStyle({ background: { kind: 'color', color: '#101418', opacity: 1 } }, 'bg');
             }}
           >
@@ -436,7 +440,7 @@ export function SkinNodeProperties({
       {/* ---------------- Contenido ---------------- */}
 
       <SectionLabel>Contenido</SectionLabel>
-      <ConfigFields node={node} images={images} setConfig={setConfig} />
+      <ConfigFields node={node} images={images} project={project} setConfig={setConfig} />
 
       {/* ---------------- Visibilidad (F05, J05) ---------------- */}
 
@@ -561,10 +565,11 @@ const DEVICE_LABELS = {
 interface ConfigFieldsProps {
   readonly node: SkinNode;
   readonly images: readonly { readonly id: string; readonly originalName: string }[];
+  readonly project: Project;
   readonly setConfig: (patch: Record<string, unknown>, key: string) => void;
 }
 
-function ConfigFields({ node, images, setConfig }: ConfigFieldsProps): JSX.Element {
+function ConfigFields({ node, images, project, setConfig }: ConfigFieldsProps): JSX.Element {
   const config = node.config;
 
   if (config.kind === 'text') {
@@ -572,7 +577,7 @@ function ConfigFields({ node, images, setConfig }: ConfigFieldsProps): JSX.Eleme
       <>
         <Field
           label="Texto"
-          hint="Variables entre llaves dobles. Una que no exista se queda a la vista, para que se vea cuál está mal escrita."
+          hint="Variables entre llaves dobles. Una que el visor no conozca sale vacía, así que se avisa aquí debajo."
         >
           {({ id, describedBy }) => (
             <TextArea
@@ -584,24 +589,36 @@ function ConfigFields({ node, images, setConfig }: ConfigFieldsProps): JSX.Eleme
             />
           )}
         </Field>
+        {unknownVariables(config.template).length > 0 && (
+          <Callout tone="warning" title="Variables que el visor no rellena">
+            {unknownVariables(config.template)
+              .map((name) => `{{${name}}}`)
+              .join(', ')}
+            . Saldrán vacías.
+          </Callout>
+        )}
+
+        {/* La lista sale del dominio, que es quien las rellena: escribirla a
+            mano aquí ya produjo una vez un vocabulario distinto del que el
+            visor entendía, y los textos salían en blanco. */}
         <details className="skin-props__variables">
           <summary>Variables disponibles</summary>
-          <ul>
-            <li>
-              <code>{'{{scene.title}}'}</code>, <code>{'{{scene.index}}'}</code>,{' '}
-              <code>{'{{scene.total}}'}</code>
-            </li>
-            <li>
-              <code>{'{{asset.tag}}'}</code>, <code>{'{{asset.name}}'}</code>,{' '}
-              <code>{'{{asset.manufacturer}}'}</code>, <code>{'{{asset.model}}'}</code>
-            </li>
-            <li>
-              <code>{'{{score.<clave>}}'}</code>, <code>{'{{telemetry.<clave>}}'}</code>
-            </li>
-            <li>
-              <code>{'{{time.elapsed}}'}</code>, <code>{'{{time.remaining}}'}</code>
-            </li>
-          </ul>
+          <dl>
+            {Object.entries(INFO_VARIABLES).map(([name, description]) => (
+              <div key={name}>
+                <dt>
+                  <code>{`{{${name}}}`}</code>
+                </dt>
+                <dd>{description}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>
+                <code>{'{{score.<clave>}}'}</code>
+              </dt>
+              <dd>Puntuación con la clave que use el recorrido</dd>
+            </div>
+          </dl>
         </details>
 
         <Field label="Interpretar Markdown" inline>
@@ -789,30 +806,5 @@ function ConfigFields({ node, images, setConfig }: ConfigFieldsProps): JSX.Eleme
     );
   }
 
-  if (config.kind === 'dropdown') {
-    return (
-      <Field
-        label="Etiqueta del menú"
-        inline
-        hint={`${config.items.length} entrada(s). Se editan en la pestaña de acciones.`}
-      >
-        {({ id, describedBy }) => (
-          <TextInput
-            id={id}
-            size="sm"
-            aria-describedby={describedBy}
-            value={config.label}
-            onChange={(event) => setConfig({ label: event.target.value }, 'label')}
-          />
-        )}
-      </Field>
-    );
-  }
-
-  return (
-    <p className="skin-props__hint">
-      «{COMPONENT_LABELS[config.kind]}» no tiene más ajustes propios: se configura con su
-      colocación, su estilo y las acciones.
-    </p>
-  );
+  return <ComponentPanel node={node} project={project} setConfig={setConfig} />;
 }

@@ -618,7 +618,7 @@ export function defaultModelSettings(): NonNullable<DomainScene['model']> {
       directionalPitch: 0.9,
       shadows: false,
       exposure: 1,
-      background: { kind: 'token', token: 'canvas' },
+      background: { kind: 'token', surfaceToken: 'canvas' },
     },
     savedViews: [],
     adaptiveResolution: true,

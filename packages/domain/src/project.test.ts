@@ -14,7 +14,7 @@ import {
   type Project,
 } from './project';
 import { actionSchema, type Action } from './action';
-import { validateSceneConsistency } from './scene';
+import { modelSettingsSchema, validateSceneConsistency } from './scene';
 import { createNode } from './skin-editing';
 
 /** Acción que abre una ventana, para armar los casos de publicación. */
@@ -287,6 +287,47 @@ describe('publicación: proyecto -> manifiesto', () => {
     );
 
     expect(manifest.infoWindows).toHaveLength(1);
+  });
+
+  it('TEST-PRJ-018b: un proyecto con fondos del sistema se puede publicar', () => {
+    /* Esta prueba existe por un defecto concreto: la guarda de claves
+       prohibidas del manifiesto rechaza cualquier clave llamada `token`, y los
+       fondos del sistema de diseño usaban ese nombre. El resultado era que un
+       proyecto con un contenedor de interfaz o una escena de modelo —los dos
+       nacen con fondo del sistema— no se podía publicar en absoluto. No lo
+       detectó ninguna prueba porque el proyecto de prueba no traía ni interfaz
+       con fondo ni escena de modelo. */
+    const base = makeFullProject();
+    const skin = base.skins[0];
+    const scene = base.scenes[0];
+    if (skin === undefined || scene === undefined) throw new Error('faltan datos de prueba');
+
+    const node = createNode({ kind: 'container', name: 'Barra', taken: new Set<string>() });
+
+    const project: Project = {
+      ...base,
+      skins: [
+        {
+          ...skin,
+          root: [
+            {
+              ...node,
+              style: { ...node.style, background: { kind: 'token', surfaceToken: 'overlay' } },
+            },
+          ],
+        },
+      ],
+      scenes: [
+        {
+          ...scene,
+          model: modelSettingsSchema.parse({}),
+        },
+        ...base.scenes.slice(1),
+      ],
+    };
+
+    const manifest = toManifest(project, options);
+    expect(findForbiddenKeys(manifest)).toEqual([]);
   });
 
   it('TEST-PRJ-019: el manifiesto generado es válido', () => {

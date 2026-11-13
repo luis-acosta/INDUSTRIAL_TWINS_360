@@ -594,7 +594,7 @@ export function makeFullProject(): Project {
             id: testUuid(101),
             title: 'General',
             blocks: [
-              { type: 'text', text: 'Bomba **P-101A** de la {{escena}}.' },
+              { type: 'text', text: 'Bomba **P-101A** de la {{scene.title}}.' },
               { type: 'image', mediaId: planImage.id, caption: 'Ubicación' },
             ],
           },

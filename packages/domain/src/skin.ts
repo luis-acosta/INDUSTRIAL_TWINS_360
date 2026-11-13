@@ -69,7 +69,16 @@ export const skinStyleSchema = z.object({
       z.object({ kind: z.literal('none') }),
       z.object({
         kind: z.literal('token'),
-        token: z.enum(['canvas', 'base', 'raised', 'overlay', 'accent']),
+        /**
+         * Superficie del sistema de diseño.
+         *
+         * Se llama `surfaceToken` y no `token` porque el manifiesto publicado
+         * rechaza cualquier clave llamada `token`: es la guarda que impide que
+         * una credencial viaje en el paquete, y vale precisamente por ser
+         * ciega. Un nombre genérico aquí la hacía saltar y dejaba sin publicar
+         * cualquier proyecto con un fondo del sistema, que es el de partida.
+         */
+        surfaceToken: z.enum(['canvas', 'base', 'raised', 'overlay', 'accent']),
       }),
       z.object({
         kind: z.literal('color'),

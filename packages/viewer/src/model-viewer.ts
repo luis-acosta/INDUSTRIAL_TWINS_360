@@ -344,7 +344,7 @@ export function applyLighting(scene: Scene, renderer: WebGLRenderer, lighting: M
     scene.background = new Color(lighting.background.color);
   } else if (lighting.background.kind === 'token') {
     const tokens: Record<string, number> = { canvas: 0x0b0e13, sunken: 0x05070a, base: 0x11151c };
-    scene.background = new Color(tokens[lighting.background.token] ?? 0x05070a);
+    scene.background = new Color(tokens[lighting.background.surfaceToken] ?? 0x05070a);
   }
 }
 

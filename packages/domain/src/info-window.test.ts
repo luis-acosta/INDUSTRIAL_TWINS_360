@@ -128,21 +128,21 @@ describe('moveBlock', () => {
 
 describe('variables', () => {
   it('TEST-INF-008 encuentra las variables sin repetir', () => {
-    expect(variablesIn('{{escena}} y {{escena}} con {{puntuacion}}')).toEqual([
-      'escena',
-      'puntuacion',
+    expect(variablesIn('{{scene.title}} y {{scene.title}} con {{score.total}}')).toEqual([
+      'scene.title',
+      'score.total',
     ]);
   });
 
   it('TEST-INF-009 admite espacios dentro de las llaves', () => {
-    expect(variablesIn('{{ escena }}')).toEqual(['escena']);
+    expect(variablesIn('{{ scene.title }}')).toEqual(['scene.title']);
   });
 
   it('TEST-INF-010 sustituye con los valores dados', () => {
     expect(
-      resolveVariables('Está en {{escena}} ({{puntuacion}} puntos)', {
-        escena: 'Sala de bombas',
-        puntuacion: 40,
+      resolveVariables('Está en {{scene.title}} ({{score.total}} puntos)', {
+        'scene.title': 'Sala de bombas',
+        'score.total': 40,
       }),
     ).toBe('Está en Sala de bombas (40 puntos)');
   });
@@ -153,13 +153,17 @@ describe('variables', () => {
   });
 
   it('TEST-INF-012 denuncia las variables que el visor no sabe rellenar', () => {
-    expect(unknownVariables('{{escena}} {{inventada}}')).toEqual(['inventada']);
+    expect(unknownVariables('{{scene.title}} {{inventada}}')).toEqual(['inventada']);
   });
 
   it('TEST-INF-013 no denuncia las variables del propio recorrido', () => {
     // `var:` son las que el recorrido define con `setVariable`, y aquí no se
     // puede saber si existirán.
     expect(unknownVariables('{{var:quiz.aciertos}}')).toEqual([]);
+    // Y la puntuación con clave libre del autor.
+    expect(unknownVariables('{{score.seguridad}}')).toEqual([]);
+    // Pero el espacio a secas, sin clave, no vale.
+    expect(unknownVariables('{{score.}}')).toEqual(['score.']);
   });
 
   it('TEST-INF-014 todas las variables documentadas se consideran conocidas', () => {

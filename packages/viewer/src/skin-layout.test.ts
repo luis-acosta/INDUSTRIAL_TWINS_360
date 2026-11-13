@@ -341,10 +341,58 @@ describe('activeTabOf', () => {
     expect(activeTabOf(node(), EMPTY_SKIN_STATE, tabs)).toBe('resumen');
   });
 
+  // TEST-SKL-026b
+  it('la pestaña por omisión del autor manda sobre la primera', () => {
+    // Un contenedor cuya primera pestaña es la de detalle debe abrirse por el
+    // resumen si eso es lo que el autor declaró.
+    const tabbed = node({
+      config: {
+        kind: 'tabs',
+        tabs: [
+          { id: 'resumen', label: 'Resumen', icon: '' },
+          { id: 'detalles', label: 'Detalles', icon: '' },
+        ],
+        activeTabId: 'detalles',
+      },
+    });
+
+    expect(activeTabOf(tabbed, EMPTY_SKIN_STATE, tabs)).toBe('detalles');
+  });
+
+  // TEST-SKL-026c
+  it('si la pestaña por omisión ya no existe, se cae en la primera', () => {
+    const tabbed = node({
+      config: {
+        kind: 'tabs',
+        tabs: [{ id: 'resumen', label: 'Resumen', icon: '' }],
+        activeTabId: 'borrada',
+      },
+    });
+
+    expect(activeTabOf(tabbed, EMPTY_SKIN_STATE, tabs)).toBe('resumen');
+  });
+
   // TEST-SKL-027
   it('respeta la pestaña elegida', () => {
     const state: SkinState = { ...EMPTY_SKIN_STATE, activeTab: new Map([['n1', 'detalles']]) };
     expect(activeTabOf(node(), state, tabs)).toBe('detalles');
+  });
+
+  // TEST-SKL-027b
+  it('lo que el visitante elige manda sobre la omisión del autor', () => {
+    const tabbed = node({
+      config: {
+        kind: 'tabs',
+        tabs: [
+          { id: 'resumen', label: 'Resumen', icon: '' },
+          { id: 'detalles', label: 'Detalles', icon: '' },
+        ],
+        activeTabId: 'detalles',
+      },
+    });
+    const state: SkinState = { ...EMPTY_SKIN_STATE, activeTab: new Map([['n1', 'resumen']]) };
+
+    expect(activeTabOf(tabbed, state, tabs)).toBe('resumen');
   });
 
   // TEST-SKL-028
@@ -408,7 +456,7 @@ describe('styleToCss', () => {
 
   // TEST-SKL-036
   it('un token de fondo se traduce a variable del sistema', () => {
-    const css = styleToCss(style({ background: { kind: 'token', token: 'overlay' } }));
+    const css = styleToCss(style({ background: { kind: 'token', surfaceToken: 'overlay' } }));
     expect(css['background']).toBe('var(--it-color-surface-overlay)');
   });
 

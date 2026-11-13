@@ -2479,3 +2479,46 @@ body {
 .iwin__variables dd {
   margin: 0;
 }
+
+/* Ajustes propios de un componente de interfaz: entradas de un menú, pestañas
+   de un contenedor. Cada ficha se separa para que no parezcan un solo bloque
+   de campos sueltos. */
+.skin-props__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  padding: var(--it-space-2);
+  border: 1px solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-sm);
+  background: var(--it-color-surface-base);
+}
+
+.skin-props__item-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.skin-props__variables dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skin-props__variables dl > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: var(--it-space-2);
+}
+
+.skin-props__variables dt {
+  margin: 0;
+}
+
+.skin-props__variables dd {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+}

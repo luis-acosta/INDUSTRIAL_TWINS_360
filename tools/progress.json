@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.33.0",
-  "updatedAt": "2026-11-13T18:40:00Z",
+  "version": "0.34.0",
+  "updatedAt": "2026-11-13T20:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -157,6 +157,11 @@
       "at": "2026-11-13T18:40:00Z",
       "title": "Ventanas de información y servicios externos (E01, E09)",
       "detail": "Etapa 04 cerrada. El contenido técnico ya llega al visitante: texto con formato seguro —sin ninguna vía a HTML—, multimedia, documentos, fichas de activo y valores de proceso, en pestañas. La migración 2 del esquema se aplica sobre proyectos de la versión 1 sin perder nada, probado."
+    },
+    {
+      "at": "2026-11-13T20:10:00Z",
+      "title": "La interfaz del autor se dibuja en el recorrido publicado",
+      "detail": "Etapa 03 casi cerrada: dieciocho tipos de componente, con los paneles pesados reutilizados del visor y los que aún no se dibujan declarados en su sitio. Por el camino salió un defecto que impedía publicar cualquier proyecto con un fondo del sistema de diseño."
     }
   ],
   "status": {
@@ -214,13 +219,13 @@
     "F04": "done",
     "F05": "done",
     "F06": "done",
-    "F07": "modeled",
-    "F08": "partial",
-    "F09": "partial",
+    "F07": "done",
+    "F08": "done",
+    "F09": "done",
     "F10": "partial",
     "F11": "done",
     "F12": "done",
-    "F13": "partial",
+    "F13": "done",
     "G01": "done",
     "G02": "done",
     "G03": "done",
@@ -230,12 +235,12 @@
     "J02": "done",
     "J03": "done",
     "J04": "partial",
-    "J05": "partial",
+    "J05": "done",
     "J06": "partial",
     "J07": "modeled",
     "J08": "done",
     "J09": "partial",
-    "J10": "partial",
+    "J10": "done",
     "X01": "done",
     "X02": "done",
     "X03": "done",
@@ -319,8 +324,12 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "E01": "Ventanas de información compuestas por el autor: texto con formato, imagen, vídeo, documento, ficha de activo, valor de proceso y enlaces, con editor, migración 2 del esquema y comprobación en navegador real (TEST-INF-001..040, TEST-IWM-001..016, TEST-IWB-001..020, TEST-E2E-017..019)",
-      "E09": "Servicios externos enmarcados desde las ventanas, con rechazo de red interna y metadatos de nube, permisos mínimos del marco y el origen declarado en la política del paquete (TEST-INF-025..030, TEST-FRM-016..018, TEST-E2E-018)"
+      "F07": "Menús desplegables con entradas y acciones propias, autoría y dibujado (TEST-SCP-001..004, TEST-SKR-012)",
+      "F08": "Pestañas en la interfaz y en las ventanas, con la pestaña por omisión del autor respetada (TEST-SKL-026b..027b, TEST-SKR-013..014, TEST-SCP-005..008)",
+      "F09": "Un único vocabulario de variables para editor y visor, con aviso de las que no se rellenan (TEST-INF-008..014, TEST-SKR-006)",
+      "F13": "Listas de miniaturas que navegan y carruseles con flechas y puntos (TEST-SKR-017..018, TEST-SCP-014, TEST-E2E-022)",
+      "J05": "Mostrar, ocultar y alternar componentes desde una acción, comprobado de principio a fin en navegador real (TEST-SKR-004..005, TEST-E2E-024)",
+      "J10": "Título, puntuación y tiempo disponibles como variables en los textos del autor (TEST-SKR-006, TEST-INF-010)"
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -347,10 +356,13 @@
     "pruebas": "1546 pruebas TypeScript, 76 del servidor, 46 del cosido, 13 de extremo a extremo y 12 de Rust: 1693 en verde.",
     "reproduccion": "El visor publicado ejecuta recorridos y evaluaciones. El motor de estados sigue siendo la función pura del dominio; el visor aporta los temporizadores, el audio y la cámara. Dos cosas que no son detalles: la espera por narración tiene plazo máximo, porque el navegador bloquea la reproducción automática con sonido y una parada que esperase el final de un audio que nunca suena dejaría el recorrido congelado delante del visitante; y pausar cancela el temporizador, porque un recorrido «pausado» que salta de escena a los pocos segundos desmiente el botón. La búsqueda de marcadores se responde en la escena, no en un cuadro de diálogo: una lista de marcadores para pulsar anularía lo que esa pregunta evalúa. La condición de acceso se comprueba en memoria y se dice al visitante que el resultado vale sólo para esta visita, porque el paquete publicado no escribe nada.",
     "defectosCorregidos": [
-      "La acción openInfoWindow apuntaba desde el principio a un identificador que no correspondía a nada: el visor abría un recuadro que decía que la función no estaba. Ahora existe la colección, con su migración.",
-      "La política del paquete no recogía los orígenes de los bloques de contenido web de las ventanas, así que un bloque correcto se habría bloqueado siempre y el autor no habría sabido por qué. Lo encontró el intento de probar el camino bueno en navegador real; la prueba del camino bloqueado pasaba por el motivo equivocado.",
-      "Las acciones de cierre de ventana se ejecutaban con el evento «click» en lugar de «windowClose», de modo que el filtro del ejecutor las descartaba.",
-      "La prueba del atajo de teclado de los módulos repetía el dígito a mano y se rompía al añadir un módulo; ahora lo lee del registro y comprueba todos."
+      "La interfaz que diseñaba el autor no se dibujaba en ninguna parte del visor publicado: existía el cálculo de distribución y nada que lo usara.",
+      "El manifiesto rechaza cualquier clave llamada «token» —la guarda contra credenciales— y los fondos del sistema de diseño usaban ese nombre: ningún proyecto con un contenedor de interfaz o una escena de modelo se podía publicar. Renombrado a «surfaceToken», con migración 3 para lo ya guardado.",
+      "El editor anunciaba variables ({{scene.title}}, {{time.elapsed}}) que el visor no rellenaba, y el visor entendía otras: un texto correcto salía en blanco. Ahora hay un solo vocabulario, en el dominio.",
+      "El panel de propiedades decía «no tiene más ajustes propios» de once tipos de componente, y era falso: dejaba pestañas sin pestañas y menús sin entradas.",
+      "El campo de claves del marcador de puntuación se reformateaba en cada tecla y borraba la coma: no se podía escribir más de una clave.",
+      "El visor declaraba siempre «escritorio», así que las reglas de visibilidad por dispositivo del autor no se aplicaban nunca.",
+      "La prueba de credenciales del paquete buscaba la subcadena «token» en lugar de la clave: habría llevado a relajar la comprobación entera por un nombre de campo inocuo."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

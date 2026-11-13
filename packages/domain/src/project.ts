@@ -47,7 +47,7 @@ import { tagUniquenessScopeSchema, uuidSchema } from './identity';
  * rápida de corromper el trabajo de alguien. Se avisa y se ofrece actualizar
  * la aplicación.
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /** Versión mínima que las migraciones saben leer. */
 export const MINIMUM_SCHEMA_VERSION = 1;
@@ -213,6 +213,13 @@ export const manifestSchema = z.object({
    */
   infoWindows: z.array(infoWindowSchema).default([]),
   skins: z.array(skinSchema),
+  /**
+   * Interfaz que el visor dibuja, de entre las publicadas.
+   *
+   * Sin esto el visor tendría que adivinar cuál usar cuando hay varias, y la
+   * que el autor marcó por omisión es un dato del proyecto, no del visor.
+   */
+  defaultSkinId: uuidSchema.nullable().default(null),
   tours: z.array(tourSchema),
   quizzes: z.array(quizSchema),
   noteCategories: z.array(noteCategorySchema),
@@ -760,6 +767,11 @@ export function toManifest(project: Project, options: ManifestOptions): Manifest
     documents: project.documents,
     infoWindows: publishableInfoWindows(project, publishableScenes),
     skins: project.skins,
+    defaultSkinId:
+      project.settings.defaultSkinId !== null &&
+      project.skins.some((skin) => skin.id === project.settings.defaultSkinId)
+        ? project.settings.defaultSkinId
+        : (project.skins[0]?.id ?? null),
     tours: project.tours,
     quizzes: project.quizzes,
     noteCategories: project.noteCategories,

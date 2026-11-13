@@ -15,8 +15,8 @@
  * elementos, nunca como marcado. No es Markdown y no se llama Markdown: es
  * texto con formato sencillo, y lo que no esté en la lista sale tal cual.
  *
- * **Las variables se resuelven con lo que hay.** `{{escena}}` y
- * `{{puntuacion}}` dejan al autor escribir un texto que sirve para veinte
+ * **Las variables se resuelven con lo que hay.** `{{scene.title}}` y
+ * `{{score.total}}` dejan al autor escribir un texto que sirve para veinte
  * escenas. Una variable que no existe se queda vacía en el visor —el visitante
  * no tiene por qué leer las llaves— pero la validación del editor la denuncia,
  * que es donde el autor puede arreglarla.
@@ -130,21 +130,38 @@ export type InfoWindow = z.infer<typeof infoWindowSchema>;
 /**
  * Variables que el visor sabe rellenar, con su descripción para el editor.
  *
- * La lista es corta a propósito. Sólo entra aquí lo que el manifiesto publicado
- * lleva de verdad: el cliente y la instalación, por ejemplo, se quedan fuera
- * del paquete —es una proyección con pérdida deliberada— y ofrecer una
- * variable que siempre saldría vacía sería peor que no ofrecerla.
+ * **Un solo vocabulario para toda la aplicación.** Los nombres llevan espacio
+ * —`scene.`, `tour.`, `time.`— porque el de puntuación necesita una clave
+ * libre detrás (`score.seguridad`) y sin espacio no habría forma de
+ * distinguirla de una variable fija. El editor muestra esta misma lista, de
+ * modo que lo que el autor lee es lo que el visor rellena: dos vocabularios
+ * distintos harían que un texto correcto saliera en blanco.
+ *
+ * La lista es corta a propósito. Sólo entra lo que el manifiesto publicado
+ * lleva de verdad: el cliente y la instalación se quedan fuera del paquete —es
+ * una proyección con pérdida deliberada— y ofrecer una variable que siempre
+ * saldría vacía es peor que no ofrecerla.
  */
 export const INFO_VARIABLES: Readonly<Record<string, string>> = {
-  escena: 'Título de la escena actual',
-  proyecto: 'Título del proyecto',
-  recorrido: 'Nombre del recorrido en curso',
-  paso: 'Número del paso actual del recorrido',
-  pasos: 'Número total de pasos del recorrido',
-  puntuacion: 'Puntuación acumulada de la evaluación',
-  tiempo: 'Tiempo transcurrido en el recorrido, en minutos y segundos',
-  fecha: 'Fecha de hoy',
+  'scene.title': 'Título de la escena actual',
+  'scene.index': 'Número de la escena actual',
+  'scene.total': 'Número de escenas del recorrido',
+  'project.title': 'Título del proyecto',
+  'tour.name': 'Nombre del recorrido en curso',
+  'tour.step': 'Número del paso actual del recorrido',
+  'tour.steps': 'Número total de pasos del recorrido',
+  'score.total': 'Puntuación acumulada',
+  'time.elapsed': 'Tiempo transcurrido en la visita',
+  'date.today': 'Fecha de hoy',
 };
+
+/**
+ * Espacios con clave libre detrás.
+ *
+ * `score.seguridad` o `var:quiz.aciertos` los define el propio recorrido con
+ * `setVariable`, así que aquí no se puede saber si existirán y no se denuncian.
+ */
+const OPEN_NAMESPACES = ['score.', 'var:', 'telemetry.'] as const;
 
 const VARIABLE_PATTERN = /\{\{\s*([A-Za-z][A-Za-z0-9_.:-]*)\s*\}\}/g;
 
@@ -158,16 +175,12 @@ export function variablesIn(text: string): string[] {
   return found;
 }
 
-/**
- * Variables de un texto que el visor no sabría rellenar.
- *
- * `var:` es el prefijo de las variables que el propio recorrido define con
- * `setVariable`, y de esas no se puede saber aquí si existirán: no se
- * denuncian.
- */
+/** Variables de un texto que el visor no sabría rellenar. */
 export function unknownVariables(text: string): string[] {
   return variablesIn(text).filter(
-    (name) => !name.startsWith('var:') && INFO_VARIABLES[name] === undefined,
+    (name) =>
+      INFO_VARIABLES[name] === undefined &&
+      !OPEN_NAMESPACES.some((prefix) => name.startsWith(prefix) && name.length > prefix.length),
   );
 }
 

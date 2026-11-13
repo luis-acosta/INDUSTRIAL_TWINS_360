@@ -91,6 +91,106 @@ test.describe('recorrido publicado', () => {
     await expect(barra.getByText('Plataforma superior')).toBeVisible();
   });
 
+  test('la interfaz que diseñó el autor se dibuja sobre el recorrido', async ({ page }) => {
+    // TEST-E2E-020: el skin no se dibujaba en ninguna parte. Aquí se comprueba
+    // con disposición de verdad, que es lo único que jsdom no puede dar.
+    await page.goto('/');
+
+    const barra = page.locator('.skin-node--container').first();
+    await expect(barra).toBeVisible();
+
+    // La plantilla del autor llegó con la variable sustituida y con formato.
+    await expect(barra.locator('strong', { hasText: 'Sala de bombas' })).toBeVisible();
+
+    // Y está donde el autor la ancló: abajo, dentro del escenario.
+    const caja = await barra.boundingBox();
+    const escena = await page.locator('.tour__stage').boundingBox();
+    expect(caja).not.toBeNull();
+    expect(escena).not.toBeNull();
+    expect((caja?.y ?? 0) + (caja?.height ?? 0)).toBeLessThanOrEqual(
+      (escena?.y ?? 0) + (escena?.height ?? 0) + 1,
+    );
+    expect(caja?.y ?? 0).toBeGreaterThan((escena?.y ?? 0) + (escena?.height ?? 0) / 2);
+  });
+
+  test('un botón de la interfaz ejecuta su acción', async ({ page }) => {
+    // TEST-E2E-021: el camino completo —componente, acción, anfitrión— con un
+    // clic real sobre el botón que el autor colocó.
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Plano de planta' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('img', { name: /Plano/ })).toBeVisible();
+  });
+
+  test('la lista de miniaturas de la interfaz navega y marca la escena actual', async ({
+    page,
+  }) => {
+    // TEST-E2E-022: F13.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+
+    const lista = page.locator('.skin-thumbs');
+    await expect(lista).toBeVisible();
+    await expect(lista.locator('.skin-thumb--current')).toHaveCount(1);
+
+    await lista.getByRole('button', { name: /Plataforma superior/ }).click();
+    await expect(barra.getByText('Plataforma superior')).toBeVisible();
+  });
+
+  test('una acción de la interfaz oculta y vuelve a mostrar un componente', async ({ page }) => {
+    // TEST-E2E-024: J05 de principio a fin —botón, ejecutor de acciones,
+    // estado de la interfaz, dibujado—. Es el camino que no cubre ninguna
+    // prueba unitaria: cada mitad funciona por separado.
+    await page.goto('/');
+
+    const lista = page.locator('.skin-thumbs');
+    await expect(lista).toBeVisible();
+
+    await page.getByRole('button', { name: 'Ocultar escenas' }).click();
+    await expect(lista).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Ocultar escenas' }).click();
+    await expect(page.locator('.skin-thumbs')).toBeVisible();
+  });
+
+  test('la interfaz no captura el puntero en sus huecos', async ({ page }) => {
+    // TEST-E2E-023: el lienzo de la interfaz cubre el escenario entero. Si
+    // capturase el puntero en las zonas vacías, arrastrar no giraría la
+    // panorámica y el visor parecería congelado. Es un fallo que no se ve
+    // mirando, sólo arrastrando, y que ninguna prueba en jsdom puede detectar
+    // porque allí no hay superposición real.
+    await page.goto('/');
+
+    const caja = await page.locator('.tour__stage').boundingBox();
+    expect(caja).not.toBeNull();
+
+    // Varios puntos libres: cerca de cada borde y en el centro. Lo que se
+    // comprueba no es qué hay debajo —un marcador, el lienzo— sino que no sea
+    // la interfaz.
+    const puntos = [
+      [0.2, 0.2],
+      [0.5, 0.5],
+      [0.8, 0.35],
+      [0.2, 0.75],
+    ] as const;
+
+    for (const [fx, fy] of puntos) {
+      const x = (caja?.x ?? 0) + (caja?.width ?? 0) * fx;
+      const y = (caja?.y ?? 0) + (caja?.height ?? 0) * fy;
+
+      const dentroDeLaInterfaz = await page.evaluate(
+        ([px, py]) => {
+          const el = document.elementFromPoint(px as number, py as number);
+          return el !== null && el.closest('.skin') !== null;
+        },
+        [x, y],
+      );
+
+      expect(dentroDeLaInterfaz, `punto (${fx}, ${fy})`).toBe(false);
+    }
+  });
+
   test('una ventana de información se abre con su contenido compuesto', async ({ page }) => {
     // TEST-E2E-017: el texto con formato, el pie de la imagen y las pestañas
     // sólo se pueden comprobar con el paquete real y un navegador real.
@@ -245,13 +345,37 @@ test.describe('recorrido publicado', () => {
     expect(manifest.ok()).toBe(true);
 
     const texto = await manifest.text();
-    for (const prohibido of ['tokenRef', 'token', 'password', 'telemetryConnections', 'auditLog', 'grants']) {
-      expect(texto, `El manifiesto contiene «${prohibido}»`).not.toContain(prohibido);
+
+    /* Se buscan **claves** y no subcadenas: `surfaceToken` —el fondo del
+       sistema de diseño— contiene «token» y es legítimo, mientras que una
+       clave llamada `token` es exactamente lo que no puede viajar. Buscar la
+       subcadena daba un fallo por un nombre de campo inocuo, y un día habría
+       llevado a relajar la comprobación entera. */
+    for (const prohibido of [
+      'tokenRef',
+      'token',
+      'password',
+      'secret',
+      'apiKey',
+      'credential',
+      'telemetryConnections',
+      'auditLog',
+      'grants',
+      'users',
+    ]) {
+      expect(texto, `El manifiesto trae la clave «${prohibido}»`).not.toContain(`"${prohibido}":`);
     }
 
-    // Y el índice tampoco.
+    // Y lo que de verdad delataría una credencial: el valor de un token de
+    // InfluxDB empieza siempre por este prefijo.
+    expect(texto).not.toContain('influxdb-token');
+
+    // El índice tampoco trae ninguna clave de esas.
     const index = await request.get('/index.html');
-    expect(await index.text()).not.toContain('token');
+    const indexText = await index.text();
+    for (const prohibido of ['tokenRef', 'password', 'apiKey']) {
+      expect(indexText).not.toContain(`"${prohibido}":`);
+    }
     await page.goto('/');
   });
 

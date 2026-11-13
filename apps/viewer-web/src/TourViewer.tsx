@@ -28,6 +28,7 @@ import {
   type Quiz,
   type QuizRuntime,
   type Scene,
+  type DeviceKind,
   type TelemetrySample,
 } from '@it360/domain';
 import {
@@ -67,6 +68,14 @@ import {
   type TourWindow,
 } from './windows';
 import { PublishedTelemetry } from './telemetry';
+import { SkinRenderer } from './SkinRenderer';
+import { classifyDevice, currentDeviceSignals } from './device';
+import {
+  applyVisibilityAction,
+  EMPTY_SKIN_STATE,
+  progressFraction,
+  type SkinState,
+} from '@it360/viewer';
 import { QuizPlayer } from './QuizPlayer';
 import { TourPlayerBar } from './TourPlayerBar';
 import { useSceneTransition } from './useSceneTransition';
@@ -137,6 +146,44 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   const startedAtRef = useRef<number | null>(null);
   if (startedAtRef.current === null) startedAtRef.current = Date.now();
 
+  /**
+   * Estado de la interfaz del autor: qué está oculto, qué pestaña está
+   * abierta, en qué posición va cada carrusel (J05, F08, F13).
+   */
+  const [skinState, setSkinState] = useState<SkinState>(EMPTY_SKIN_STATE);
+
+  /**
+   * Tamaño del escenario, que es el lienzo de la interfaz.
+   *
+   * Se vigila con `ResizeObserver` porque el modo fijo escala el diseño
+   * completo según el tamaño disponible: sin volver a medir, al cambiar de
+   * tamaño la ventana la interfaz quedaría a la escala de la carga.
+   */
+  const [stageSize, setStageSize] = useState<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
+
+  /**
+   * Clase de dispositivo, que decide qué componentes de la interfaz aparecen
+   * (D14). Se vuelve a calcular al cambiar el tamaño porque girar una tableta
+   * cambia la respuesta.
+   */
+  const [device, setDevice] = useState<DeviceKind>(() =>
+    classifyDevice(currentDeviceSignals()),
+  );
+
+  useEffect(() => {
+    const update = (): void => setDevice(classifyDevice(currentDeviceSignals()));
+    globalThis.addEventListener?.('resize', update);
+    return () => globalThis.removeEventListener?.('resize', update);
+  }, []);
+
+  /* Las acciones se ejecutan desde callbacks estables, así que leen el
+     dispositivo de una referencia y no de la variable capturada. */
+  const deviceRef = useRef(device);
+  deviceRef.current = device;
+
   /** Evaluación en curso y resultados de la sesión (J08, O09). */
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
   const [results, setResults] = useState<readonly SessionResult[]>([]);
@@ -156,6 +203,20 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     () => new PublishedTelemetry(manifest, tour.baseUrl),
     [manifest, tour.baseUrl],
   );
+
+  /**
+   * Interfaz que el autor diseñó para este recorrido.
+   *
+   * `null` cuando el proyecto no declara ninguna: entonces se dibuja la barra
+   * propia del visor, que es la que ha existido hasta ahora. Un recorrido sin
+   * interfaz diseñada no debe quedarse sin controles.
+   */
+  const skin = useMemo(() => {
+    const declared = manifest.skins.find((candidate) => candidate.id === manifest.defaultSkinId);
+    return declared ?? null;
+  }, [manifest.skins, manifest.defaultSkinId]);
+
+  const skinNodes = useMemo(() => skin?.root ?? [], [skin]);
 
   /**
    * Valores de proceso de la ventana abierta.
@@ -204,6 +265,22 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     },
     [manifest.telemetryMappings, windowSamples],
   );
+
+  /* Se mide el escenario mientras haya interfaz que dibujar: el modo fijo
+     escala el diseño completo según el espacio disponible. */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null || skin === null) return undefined;
+
+    const measure = (): void =>
+      setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
+    measure();
+
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [skin]);
 
   /**
    * La dirección refleja la escena en la que se está (S09).
@@ -337,7 +414,7 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     if (runner === null) return;
     void runner.run(actions, event, {
       context: {
-        device: 'desktop',
+        device: deviceRef.current,
         online: globalThis.navigator?.onLine ?? true,
         published: true,
         inVr: false,
@@ -370,17 +447,73 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
       : Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
     const total = Object.values(scoresRef.current).reduce((sum, value) => sum + value, 0);
 
+    const sceneIndex = manifest.scenes.findIndex((candidate) => candidate.id === scene?.id);
+
+    /* Las puntuaciones con clave libre entran con su espacio: el autor escribe
+       `{{score.seguridad}}` y aquí llega `score.seguridad`. */
+    const scoreEntries = Object.fromEntries(
+      Object.entries(scoresRef.current).map(([key, value]) => [
+        key.startsWith('score.') || key.startsWith('quiz.') ? key : `score.${key}`,
+        value,
+      ]),
+    );
+
     return {
-      escena: scene?.title ?? '',
-      proyecto: manifest.title,
-      recorrido: playback.tour?.name ?? '',
-      paso: playback.tour === null ? '' : playback.stopIndex + 1,
-      pasos: playback.tour === null ? '' : playback.stopCount,
-      puntuacion: total,
-      tiempo: formatElapsed(elapsedS),
-      fecha: new Date().toLocaleDateString('es-ES'),
+      ...scoreEntries,
+      'scene.title': scene?.title ?? '',
+      'scene.index': sceneIndex < 0 ? '' : sceneIndex + 1,
+      'scene.total': manifest.scenes.length,
+      'project.title': manifest.title,
+      'tour.name': playback.tour?.name ?? '',
+      'tour.step': playback.tour === null ? '' : playback.stopIndex + 1,
+      'tour.steps': playback.tour === null ? '' : playback.stopCount,
+      'score.total': total,
+      'time.elapsed': formatElapsed(elapsedS),
+      'date.today': new Date().toLocaleDateString('es-ES'),
     };
   }, [manifest, playback.tour, playback.stopIndex, playback.stopCount, scene]);
+
+  /**
+   * Progreso de las barras de la interfaz (F10).
+   *
+   * Devuelve `null` cuando no hay nada en curso, y no cero: una barra vacía
+   * dice «empezado y sin avance», que es distinto de «no empezado». Para la
+   * puntuación hace falta un objetivo, y el visor no lo conoce; mientras no se
+   * declare, esa barra no se dibuja en lugar de inventarse un máximo.
+   */
+  const skinProgress = useCallback(
+    (source: 'tour' | 'media' | 'score' | 'quiz', _scoreKey: string): number | null => {
+      if (source === 'tour') {
+        return playback.tour === null ? null : progressFraction(playback.progress, 1);
+      }
+      if (source === 'quiz') {
+        return activeQuizId === null ? null : progressFraction(playback.progress, 1);
+      }
+      return null;
+    },
+    [playback.tour, playback.progress, activeQuizId],
+  );
+
+  /** Texto del temporizador de la interfaz (F10). */
+  const timerText = useCallback((mode: 'elapsed' | 'countdown', durationS: number): string => {
+    const started = startedAtRef.current ?? Date.now();
+    const elapsed = Math.max(0, Math.round((Date.now() - started) / 1000));
+    return mode === 'countdown'
+      ? formatElapsed(Math.max(0, durationS - elapsed))
+      : formatElapsed(elapsed);
+  }, []);
+
+  /** Líneas del marcador de puntuación (O06). */
+  const skinScoreLines = useCallback(
+    (keys: readonly string[]): readonly { label: string; value: string }[] => {
+      const entries = Object.entries(scoresRef.current);
+      const wanted =
+        keys.length === 0 ? entries : entries.filter(([key]) => keys.includes(key.split('.')[1] ?? key));
+
+      return wanted.map(([key, value]) => ({ label: key, value: String(value) }));
+    },
+    [],
+  );
 
   /**
    * Cierra la ventana abierta y ejecuta lo que el autor encadenó al cierre
@@ -502,7 +635,11 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           allowFullscreen,
         });
       },
-      setElementVisibility: () => undefined,
+      setElementVisibility: (elementIds, visible) => {
+        // El estado de la interfaz lo gobierna la acción; la declaración del
+        // autor (dispositivo, escena, pestaña) sigue mandando al dibujar.
+        setSkinState((current) => applyVisibilityAction(current, elementIds, visible, skinNodes));
+      },
       setVariable: (namespace, key, operation, value) => {
         setScores((current) => {
           const previous = current[`${namespace}.${key}`] ?? 0;
@@ -582,7 +719,7 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     if (runner === null) return;
     void runner.run(hotspot.actions, trigger === 'focus' ? 'focusEnter' : 'click', {
       context: {
-        device: 'desktop',
+        device: deviceRef.current,
         online: globalThis.navigator?.onLine ?? true,
         published: true,
         inVr: false,
@@ -608,7 +745,7 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
     if (runner === null || previous?.id === hotspot?.id) return;
 
     const context = {
-      device: 'desktop' as const,
+      device: deviceRef.current,
       online: globalThis.navigator?.onLine ?? true,
       published: true,
       inVr: false,
@@ -733,9 +870,72 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           onHotspotHover={hoverHotspot}
         />
 
-        <SceneNav scenes={manifest.scenes} activeId={scene?.id ?? null} onSelect={(id) => goToScene(id)} />
-
-        <TourPlayerBar playback={playback} />
+        {/* La interfaz del autor, si la hay, sustituye a la navegación propia
+            del visor: dos barras de escenas superpuestas es peor que
+            cualquiera de las dos. Sin interfaz diseñada se mantiene la de
+            siempre, porque un recorrido no puede quedarse sin controles. */}
+        {skin !== null && stageSize.width > 0 ? (
+          <SkinRenderer
+            skin={skin}
+            viewport={stageSize}
+            host={{
+              manifest,
+              mediaUrls,
+              device,
+              sceneId: scene?.id ?? null,
+              state: skinState,
+              variables: variableValues(),
+              onActions: (actions) => runActions(actions, 'click'),
+              onTab: (nodeId, tabId) =>
+                setSkinState((current) => ({
+                  ...current,
+                  activeTab: new Map(current.activeTab).set(nodeId, tabId),
+                })),
+              onCarousel: (nodeId, index) =>
+                setSkinState((current) => ({
+                  ...current,
+                  carouselIndex: new Map(current.carouselIndex).set(nodeId, index),
+                })),
+              onSelectScene: (id) => goToScene(id),
+              progress: (source, scoreKey) => skinProgress(source, scoreKey),
+              timerText: (mode, durationS) => timerText(mode, durationS),
+              scoreLines: (keys) => skinScoreLines(keys),
+              slots: {
+                planView: () => (
+                  <PlanView
+                    manifest={manifest}
+                    mediaUrls={mediaUrls}
+                    activeSceneId={scene?.id ?? null}
+                    view={view ?? scene?.camera.initialView ?? null}
+                    onSelect={(id) => goToScene(id)}
+                  />
+                ),
+                assetPanel: (assetId) => {
+                  const target = assetId ?? openAssetId;
+                  return target === null ? (
+                    <p className="skin-missing">Ningún activo seleccionado.</p>
+                  ) : (
+                    <AssetCard
+                      manifest={manifest}
+                      assetId={target}
+                      telemetry={telemetry}
+                      mediaUrls={mediaUrls}
+                    />
+                  );
+                },
+              },
+            }}
+          />
+        ) : (
+          <>
+            <SceneNav
+              scenes={manifest.scenes}
+              activeId={scene?.id ?? null}
+              onSelect={(id) => goToScene(id)}
+            />
+            <TourPlayerBar playback={playback} />
+          </>
+        )}
       </div>
 
       {asset !== null && (

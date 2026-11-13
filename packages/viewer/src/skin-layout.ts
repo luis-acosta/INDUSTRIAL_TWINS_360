@@ -253,6 +253,16 @@ export function activeTabOf(
 ): string | null {
   const stored = state.activeTab.get(node.id);
   if (stored !== undefined && fallbackTabs.some((tab) => tab.id === stored)) return stored;
+
+  /* La pestaña que el autor declaró por omisión manda sobre «la primera»: un
+     contenedor cuya primera pestaña es la de detalle debe abrirse por el
+     resumen si eso es lo que el autor pidió. Sólo se respeta si existe entre
+     las pestañas; si el autor la borró, se cae en la primera. */
+  if (node.config.kind === 'tabs' && node.config.activeTabId !== null) {
+    const declared = node.config.activeTabId;
+    if (fallbackTabs.some((tab) => tab.id === declared)) return declared;
+  }
+
   return fallbackTabs[0]?.id ?? null;
 }
 
@@ -312,7 +322,7 @@ export function styleToCss(
 
   switch (style.background.kind) {
     case 'token':
-      css['background'] = BACKGROUND_TOKENS[style.background.token] ?? 'transparent';
+      css['background'] = BACKGROUND_TOKENS[style.background.surfaceToken] ?? 'transparent';
       break;
     case 'color':
       css['background'] =
