@@ -330,10 +330,66 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
     ];
   }
 
+  /* Un plano con las dos escenas situadas.
+   *
+   * El paquete lo lleva porque el plano y el radar sólo se pueden comprobar en
+   * un navegador de verdad: en jsdom la imagen no tiene tamaño y el visor no
+   * puede dibujar el cono. Las dos escenas van en zonas distintas para que el
+   * selector de zonas exista y se pueda probar.
+   */
+  const planBytes = stripedPng(512, 512);
+  const planPath = 'media/planos/planta.png';
+  files.set(planPath, planBytes);
+
+  const planMediaId = newUuid();
+  media.push({
+    id: planMediaId,
+    sha256: await sha256(planBytes),
+    mime: 'image/png' as const,
+    kind: 'image' as const,
+    relativePath: planPath,
+    originalName: 'Planta.png',
+    byteSize: planBytes.byteLength,
+    width: 512,
+    height: 512,
+    durationS: null,
+    thumbnailPath: null,
+    panorama: null,
+    tiles: [],
+    quarantined: false,
+    quarantineReason: null,
+    createdAt: now,
+  });
+
+  const planId = newUuid();
+  const plans = [
+    {
+      id: planId,
+      name: 'Planta general',
+      mediaId: planMediaId,
+      floor: 'Cota 0',
+      floorOrder: 1,
+      orientation: { northRad: 0, sceneNorthOffsetRad: 0 },
+      showRadar: true,
+      radarApertureDeg: 60,
+    },
+  ];
+
+  const planMarkers = scenes.map((scene, index) => ({
+    id: newUuid(),
+    planId,
+    sceneId: scene.id,
+    position: index === 0 ? { x: 0.3, y: 0.7 } : { x: 0.72, y: 0.28 },
+    label: '',
+    headingRad: index === 0 ? 0 : Math.PI / 2,
+  }));
+
   const project: Project = {
     ...base,
     media,
     scenes,
+    plans,
+    planMarkers,
     settings: { ...base.settings, entrySceneId: (first?.id ?? null) as Uuid | null },
   };
 

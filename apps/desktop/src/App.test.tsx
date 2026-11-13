@@ -179,18 +179,32 @@ describe('App — armazón', () => {
     const user = userEvent.setup();
     await renderApp();
 
-    // Escribir «4» en un campo de texto no debe cambiar de módulo.
+    // Escribir «5» en un campo de texto no debe cambiar de módulo.
     const title = screen.getByLabelText('Título');
     await user.click(title);
-    await user.keyboard('4');
+    await user.keyboard('5');
     expect(screen.getByRole('button', { name: /Escenas y marcadores/ })).toHaveAttribute(
       'aria-current',
       'page',
     );
 
-    await user.keyboard('{Alt>}4{/Alt}');
+    await user.keyboard('{Alt>}5{/Alt}');
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Telemetría', level: 1 })).toBeInTheDocument();
+    });
+  });
+
+  // TEST-APP-009b
+  it('el módulo de planos se alcanza con Alt+2', async () => {
+    const user = userEvent.setup();
+    await renderApp();
+
+    await user.keyboard('{Alt>}2{/Alt}');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Planos y zonas' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
     });
   });
 

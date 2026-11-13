@@ -28,6 +28,11 @@ import {
   type Scene,
   type Uuid,
   sceneSchema,
+  markerForScene,
+  planBearingDegrees,
+  planForScene,
+  radarCone,
+  radarConePoints,
 } from '@it360/domain';
 import {
   Badge,
@@ -91,13 +96,6 @@ import { useProjectStore, type ProjectStore } from './state/project-store';
 import { collectPackageFiles, pickAndOpenProject, saveProject } from './platform/project-files';
 import { buildDemoProject, type DemoAssets } from './demo/demo-project';
 import { Gauge } from './components/instruments';
-import {
-  coneAperture,
-  conePath,
-  horizontalFovDeg,
-  normalizeDeg,
-  radarBearingDeg,
-} from './components/minimap-math';
 import { useLatestTelemetry } from './telemetry/use-telemetry';
 import {
   CachingTelemetryClient,
@@ -110,6 +108,7 @@ import { TelemetryModule } from './modules/TelemetryModule';
 import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModule';
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
+import { PlansModule } from './modules/PlansModule';
 import { SkinEditor } from './modules/SkinEditor';
 import { ToursModule } from './modules/ToursModule';
 import { HotspotGeometryPanel } from './modules/HotspotGeometry';
@@ -123,6 +122,7 @@ import { ActionEditor } from './modules/ActionEditor';
 
 export type ModuleId =
   | 'scenes'
+  | 'plans'
   | 'assets'
   | 'notes'
   | 'telemetry'
@@ -140,12 +140,13 @@ interface ModuleDescriptor {
 
 const MODULES: readonly ModuleDescriptor[] = [
   { id: 'scenes', label: 'Escenas y marcadores', icon: <IconPanorama size={18} />, shortcut: '1' },
-  { id: 'assets', label: 'Catálogo de activos', icon: <IconEquipment size={18} />, shortcut: '2' },
-  { id: 'notes', label: 'Notas y tareas', icon: <IconNote size={18} />, shortcut: '3' },
-  { id: 'telemetry', label: 'Telemetría', icon: <IconTelemetry size={18} />, shortcut: '4' },
-  { id: 'skin', label: 'Interfaz del recorrido', icon: <IconLayers size={18} />, shortcut: '5' },
-  { id: 'tours', label: 'Recorridos y formación', icon: <IconTour size={18} />, shortcut: '6' },
-  { id: 'publish', label: 'Publicación', icon: <IconPublish size={18} />, shortcut: '7' },
+  { id: 'plans', label: 'Planos y zonas', icon: <IconPlan size={18} />, shortcut: '2' },
+  { id: 'assets', label: 'Catálogo de activos', icon: <IconEquipment size={18} />, shortcut: '3' },
+  { id: 'notes', label: 'Notas y tareas', icon: <IconNote size={18} />, shortcut: '4' },
+  { id: 'telemetry', label: 'Telemetría', icon: <IconTelemetry size={18} />, shortcut: '5' },
+  { id: 'skin', label: 'Interfaz del recorrido', icon: <IconLayers size={18} />, shortcut: '6' },
+  { id: 'tours', label: 'Recorridos y formación', icon: <IconTour size={18} />, shortcut: '7' },
+  { id: 'publish', label: 'Publicación', icon: <IconPublish size={18} />, shortcut: '8' },
 ];
 
 export interface AppProps {
@@ -217,7 +218,22 @@ export function AppRoot({ telemetryClient }: { readonly telemetryClient?: Teleme
 
 export function App({ initialProject, initialMediaUrls, telemetryClient }: AppProps): JSX.Element {
   const store = useProjectStore(initialProject);
-  const mediaUrls = initialMediaUrls ?? EMPTY_MEDIA;
+
+  /**
+   * URLs con las que se muestran los medios.
+   *
+   * Es estado y no una constante porque el editor importa imágenes —los
+   * planos, por ejemplo—: sus bytes viven en memoria hasta que se guarda el
+   * proyecto, y hasta entonces la única forma de mostrarlas es la URL que se
+   * creó al leerlas.
+   */
+  const [mediaUrls, setMediaUrls] = useState<ReadonlyMap<string, string>>(
+    initialMediaUrls ?? EMPTY_MEDIA,
+  );
+
+  const addMediaUrl = useCallback((mediaId: string, url: string): void => {
+    setMediaUrls((previous) => new Map(previous).set(mediaId, url));
+  }, []);
 
   const client = useMemo(
     () => telemetryClient ?? new CachingTelemetryClient(new SimulatedTelemetryClient()),
@@ -476,6 +492,15 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
                     setSceneId(targetSceneId);
                     setModuleId('scenes');
                   }}
+                />
+              )}
+              {moduleId === 'plans' && (
+                <PlansModule
+                  store={store}
+                  mediaUrls={mediaUrls}
+                  onMediaUrl={addMediaUrl}
+                  activeSceneId={sceneId}
+                  onSelectScene={setSceneId}
                 />
               )}
               {moduleId === 'telemetry' && <TelemetryModule store={store} client={client} />}
@@ -1197,27 +1222,41 @@ interface MinimapProps {
  * eso es peor que no tener radar.
  */
 function Minimap({ store, mediaUrls, activeSceneId, view, onSelectScene }: MinimapProps): JSX.Element | null {
-  const plan = store.project.plans[0];
+  const { plans, planMarkers } = store.project;
+
+  /* El plano que se muestra es el de la escena activa, no el primero: con
+     varias zonas, mostrar siempre el primero deja al autor mirando un plano
+     que no contiene la escena que está editando. */
+  const plan =
+    (activeSceneId === null ? null : planForScene(plans, planMarkers, activeSceneId)) ?? plans[0];
   if (plan === undefined) return null;
 
   const planUrl = mediaUrls.get(plan.mediaId);
-  const markers = store.project.planMarkers.filter((m) => m.planId === plan.id);
-  const active = markers.find((m) => m.sceneId === activeSceneId);
+  const markers = planMarkers.filter((m) => m.planId === plan.id);
+  const active = activeSceneId === null ? null : markerForScene(markers, plan.id, activeSceneId);
 
-  const bearing = view === null ? 0 : radarBearingDeg(view.yaw, plan.orientation);
-  // La apertura sigue al campo de visión real: con zoom, el operador ve menos
-  // de lo que un cono fijo sugeriría.
-  const aperture =
-    view === null
-      ? plan.radarApertureDeg
-      : coneAperture(horizontalFovDeg(view.fov, 16 / 9), plan.radarApertureDeg);
+  /* El rumbo y la apertura salen del dominio, los mismos que usa el visor: si
+     el editor los calculase por su cuenta, el autor orientaría el plano con un
+     radar y el visitante vería otro. */
+  const cone = view !== null && active !== null && plan.showRadar ? radarCone(view, plan, active) : null;
+  const conePath =
+    cone === null || active === null
+      ? null
+      : radarConePoints(cone, { x: 0, y: 0 }, 44)
+          .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+          .join(' ') + ' Z';
+
+  const sceneTitleOf = (id: string): string =>
+    store.project.scenes.find((scene) => scene.id === id)?.title ?? 'Escena';
 
   return (
     <div className="minimap">
       <div className="minimap__head">
         <span>{plan.name}</span>
         <span style={{ fontFamily: 'var(--it-font-mono)' }}>
-          {view === null ? '—' : `${Math.round(normalizeDeg(bearing))}°`}
+          {view === null || active === null
+            ? '—'
+            : `${Math.round(planBearingDegrees(view, plan, active))}°`}
         </span>
       </div>
       <div style={{ position: 'relative' }}>
@@ -1227,19 +1266,24 @@ function Minimap({ store, mediaUrls, activeSceneId, view, onSelectScene }: Minim
           <div className="minimap__image" style={{ height: 120, background: 'var(--it-color-surface-sunken)' }} />
         )}
 
-        {markers.map((marker) => (
-          <button
-            key={marker.id}
-            type="button"
-            className={cx('minimap__marker', marker.sceneId === activeSceneId && 'minimap__marker--active')}
-            style={{ left: `${marker.position.x * 100}%`, top: `${marker.position.y * 100}%` }}
-            title={marker.label}
-            aria-label={`Ir a ${marker.label}`}
-            onClick={() => onSelectScene(marker.sceneId)}
-          />
-        ))}
+        {markers.map((marker) => {
+          /* El rótulo del punto manda; vacío, el título de la escena. Sin esta
+             reserva el botón se anunciaría como «Ir a», sin destino. */
+          const name = marker.label !== '' ? marker.label : sceneTitleOf(marker.sceneId);
+          return (
+            <button
+              key={marker.id}
+              type="button"
+              className={cx('minimap__marker', marker.sceneId === activeSceneId && 'minimap__marker--active')}
+              title={name}
+              aria-label={marker.sceneId === activeSceneId ? `${name} (escena actual)` : `Ir a ${name}`}
+              style={{ left: `${marker.position.x * 100}%`, top: `${marker.position.y * 100}%` }}
+              onClick={() => onSelectScene(marker.sceneId)}
+            />
+          );
+        })}
 
-        {plan.showRadar && active !== undefined && view !== null && (
+        {conePath !== null && active !== null && (
           <svg
             className="minimap__radar"
             viewBox="-50 -50 100 100"
@@ -1252,7 +1296,7 @@ function Minimap({ store, mediaUrls, activeSceneId, view, onSelectScene }: Minim
             aria-hidden="true"
           >
             <path
-              d={conePath(bearing, aperture, 44)}
+              d={conePath}
               fill="var(--it-color-canvas-radarCone)"
               stroke="var(--it-color-accent-default)"
               strokeWidth="0.8"

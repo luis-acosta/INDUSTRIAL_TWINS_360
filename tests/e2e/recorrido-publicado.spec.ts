@@ -91,6 +91,67 @@ test.describe('recorrido publicado', () => {
     await expect(barra.getByText('Plataforma superior')).toBeVisible();
   });
 
+  test('el plano sitúa la escena y dibuja el radar de mirada', async ({ page }) => {
+    // TEST-E2E-014: el radar sólo se puede comprobar aquí. En jsdom la imagen
+    // del plano no tiene tamaño, así que el visor no dibuja el cono y la
+    // prueba unitaria no puede afirmar nada sobre su geometría.
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Ver el plano' }).click();
+    const dialogo = page.getByRole('dialog');
+    await expect(dialogo.getByRole('img', { name: /Plano/ })).toBeVisible();
+
+    // El cono existe y tiene área: un polígono degenerado no dice nada.
+    const radar = dialogo.locator('.planview__radar path');
+    await expect(radar).toHaveCount(1);
+    const caja = await radar.boundingBox();
+    expect(caja?.width ?? 0).toBeGreaterThan(4);
+    expect(caja?.height ?? 0).toBeGreaterThan(4);
+
+    // Y el rumbo se declara, que es lo que el visitante lee.
+    await expect(dialogo.getByText(/rumbo/i)).toBeVisible();
+  });
+
+  test('el plano lleva a la escena del punto que se pulsa', async ({ page }) => {
+    // TEST-E2E-015: el camino completo del plano —punto, cierre del diálogo,
+    // transición y cambio de escena— con un clic real.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+    await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Ver el plano' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Ir a Plataforma superior' })
+      .click();
+
+    await expect(barra.getByText('Plataforma superior')).toBeVisible();
+  });
+
+  test('el radar desaparece en un plano que no sitúa la escena actual', async ({ page }) => {
+    // TEST-E2E-016: un cono colocado «por poner algo» afirma una posición
+    // falsa, y el visitante se fía del radar.
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Ver el plano' }).click();
+
+    const dialogo = page.getByRole('dialog');
+    await expect(dialogo.locator('.planview__radar')).toHaveCount(1);
+
+    // Se quita el punto de la escena actual del manifiesto cargado no se
+    // puede; en su lugar se navega a la otra escena y se comprueba que el
+    // radar se mueve con ella en lugar de quedarse donde estaba.
+    const antes = await dialogo.locator('.planview__radar path').boundingBox();
+    await dialogo.getByRole('button', { name: 'Ir a Plataforma superior' }).click();
+    await page.getByRole('button', { name: 'Ver el plano' }).click();
+    const despues = await page
+      .getByRole('dialog')
+      .locator('.planview__radar path')
+      .boundingBox();
+
+    expect(despues).not.toBeNull();
+    expect(Math.abs((despues?.x ?? 0) - (antes?.x ?? 0))).toBeGreaterThan(10);
+  });
+
   test('no pide datos de proceso cuando el paquete no los trae', async ({ page }) => {
     // TEST-E2E-004: el paquete de prueba no declara telemetría. Si el visor
     // consultara igualmente, el navegador del cliente llenaría la consola de

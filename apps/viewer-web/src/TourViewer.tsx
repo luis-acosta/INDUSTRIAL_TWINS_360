@@ -16,7 +16,6 @@ import {
   CONDITION_LABELS,
   DATA_QUALITY_LABELS,
   evaluateCondition,
-  radToDeg,
   worstCondition,
   type ActionConfig,
   type CameraView,
@@ -74,6 +73,7 @@ import { TransitionOverlay } from './TransitionOverlay';
 import { targetForHotspot, tourGate, type SessionResult } from './playback';
 import { buildShareUrl, parseDeepLink, resolveDeepLink } from './deep-link';
 import { ShareDialog } from './ShareDialog';
+import { PlanView } from './PlanView';
 
 export interface TourViewerProps {
   readonly tour: LoadedTour;
@@ -109,6 +109,15 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
   const [openAssetId, setOpenAssetId] = useState<string | null>(null);
   const [info, setInfo] = useState<{ title: string; body: string } | null>(null);
   const [showPlan, setShowPlan] = useState(false);
+  /**
+   * Forma del escenario al abrir el plano.
+   *
+   * El cono del radar se acota a lo que el visitante ve de ancho, y eso
+   * depende de la forma de la ventana: en un móvil vertical se ve mucho menos
+   * a lo ancho que en una pantalla apaisada. Se mide al abrir el plano, que es
+   * cuando hace falta, en lugar de vigilar el tamaño todo el rato.
+   */
+  const [planAspect, setPlanAspect] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [openWindow, setOpenWindow] = useState<TourWindow | null>(null);
   /**
@@ -183,6 +192,15 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
       ? 'El enlace apuntaba a una escena que ya no está en este recorrido. Se abrió la escena de entrada.'
       : null,
   );
+
+  /** Abre el plano midiendo antes la forma del escenario. */
+  const openPlan = useCallback((): void => {
+    const stage = stageRef.current;
+    const aspect =
+      stage === null || stage.clientHeight <= 0 ? null : stage.clientWidth / stage.clientHeight;
+    setPlanAspect(aspect);
+    setShowPlan(true);
+  }, []);
 
   const goToScene = useCallback(
     (targetId: string, config?: Extract<ActionConfig, { type: 'goToScene' }>) => {
@@ -386,7 +404,7 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
       startQuiz: (quizId) => setActiveQuizId(quizId),
       showAsset: (assetId) => setOpenAssetId(assetId),
       createNote: () => undefined,
-      showPlan: () => setShowPlan(true),
+      showPlan: () => openPlan(),
       setVisualEffect: () => undefined,
       playMedia: () => undefined,
       pauseMedia: () => undefined,
@@ -559,7 +577,7 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
               iconOnly
               icon={<IconPlan size={15} />}
               aria-label="Ver el plano"
-              onClick={() => setShowPlan(true)}
+              onClick={() => openPlan()}
             />
           </Tooltip>
         )}
@@ -733,8 +751,13 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           <PlanView
             manifest={manifest}
             mediaUrls={mediaUrls}
+            {...(planAspect !== null ? { aspect: planAspect } : {})}
             activeSceneId={scene?.id ?? null}
-            view={view}
+            /* La vista inicial de la escena cuando el visor todavía no ha
+               informado de la suya: `view` sólo se llena al mover la cámara, y
+               quien abre el plano antes de arrastrar se quedaba sin radar
+               justo cuando más lo necesita —acaba de llegar—. */
+            view={view ?? scene?.camera.initialView ?? null}
             onSelect={(id) => {
               setShowPlan(false);
               goToScene(id);
@@ -1033,65 +1056,4 @@ function AssetCard({
   );
 }
 
-/* ------------------------------------------------------------------ *
- * Plano
- * ------------------------------------------------------------------ */
-
-function PlanView({
-  manifest,
-  mediaUrls,
-  activeSceneId,
-  view,
-  onSelect,
-}: {
-  manifest: Manifest;
-  mediaUrls: ReadonlyMap<string, string>;
-  activeSceneId: string | null;
-  view: CameraView | null;
-  onSelect: (sceneId: string) => void;
-}): JSX.Element {
-  const plan = manifest.plans[0];
-  if (plan === undefined) return <EmptyState title="El recorrido no incluye planos" />;
-
-  const markers = manifest.planMarkers.filter((m) => m.planId === plan.id);
-  const url = mediaUrls.get(plan.mediaId);
-
-  return (
-    <div className="planview">
-      {url === undefined ? (
-        <EmptyState title="Falta la imagen del plano en el paquete" />
-      ) : (
-        <div className="planview__frame">
-          <img src={url} alt={`Plano ${plan.name}`} />
-          {markers.map((marker) => (
-            <button
-              key={marker.id}
-              type="button"
-              className={cx(
-                'planview__marker',
-                marker.sceneId === activeSceneId && 'planview__marker--active',
-              )}
-              style={{ left: `${marker.position.x * 100}%`, top: `${marker.position.y * 100}%` }}
-              aria-label={`Ir a ${marker.label}`}
-              title={marker.label}
-              onClick={() => onSelect(marker.sceneId)}
-            />
-          ))}
-        </div>
-      )}
-      {view !== null && (
-        <p className="planview__bearing">
-          Rumbo de la vista actual:{' '}
-          {Math.round(
-            ((radToDeg(view.yaw + plan.orientation.sceneNorthOffsetRad - plan.orientation.northRad) %
-              360) +
-              360) %
-              360,
-          )}
-          °
-        </p>
-      )}
-    </div>
-  );
-}
 
