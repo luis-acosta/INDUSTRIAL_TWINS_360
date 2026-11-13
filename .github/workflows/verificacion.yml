@@ -113,6 +113,12 @@ jobs:
 
       - run: npm ci
 
+      # Las pruebas de Rust antes del empaquetado: cuestan segundos y, cuando
+      # algo falla en el contenedor, dicen qué, mientras que el empaquetado
+      # tarda varios minutos en llegar al mismo sitio con menos detalle.
+      - name: Pruebas de Rust
+        run: cargo test --lib --manifest-path apps/desktop/src-tauri/Cargo.toml
+
       - name: Compilar instaladores
         run: npm run tauri:build
 
