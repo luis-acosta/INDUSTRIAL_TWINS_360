@@ -56,13 +56,13 @@ jobs:
           python-version: '3.11'
 
       - name: Dependencias del servidor
-        run: pip install -e apps/server
+        run: pip install -e "apps/server[dev]"
 
       - name: Pruebas del servidor
         run: python -m pytest apps/server
 
       - name: Dependencias del cosido
-        run: pip install -e "services/stitcher[cv]"
+        run: pip install -e "services/stitcher[cv,dev]"
 
       - name: Pruebas del cosido
         run: python -m pytest services/stitcher
@@ -83,7 +83,7 @@ jobs:
       # El navegador se instala aquí y no en el trabajo anterior: las pruebas
       # unitarias no lo necesitan y descargarlo costaría un minuto en cada
       # ejecución sin aportar nada.
-      - run: npx playwright install chromium --with-deps
+      - run: npx playwright install chrome --with-deps
 
       - name: Pruebas de extremo a extremo
         run: npm run test:e2e

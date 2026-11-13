@@ -19,11 +19,25 @@ export async function sha256(data: Uint8Array): Promise<string> {
   if (subtle === undefined) {
     throw new Error('Web Crypto no está disponible en este entorno');
   }
-  const buffer = data.buffer.slice(
-    data.byteOffset,
-    data.byteOffset + data.byteLength,
-  ) as ArrayBuffer;
-  const digest = await subtle.digest('SHA-256', buffer);
+
+  /**
+   * Se entrega una vista propia, no el `ArrayBuffer` del origen.
+   *
+   * Pasar `data.buffer.slice(...)` funcionaba en Node 22 y fallaba en Node
+   * 20.11 con «2nd argument is not instance of ArrayBuffer»: bajo jsdom los
+   * objetos nacen en otro reino de JavaScript, y la comprobación de Node 20
+   * sobre un `ArrayBuffer` desnudo es sensible al reino. Una vista con tipo la
+   * acepta en ambos.
+   *
+   * La copia respeta el tramo de la vista, igual que hacía el recorte
+   * anterior, y además sirve cuando el origen está respaldado por un buffer
+   * compartido, que `digest` rechaza. El coste es una copia del contenido:
+   * para un panorama de 20 MB es aceptable.
+   */
+  const view = new Uint8Array(data.byteLength);
+  view.set(data);
+
+  const digest = await subtle.digest('SHA-256', view);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 

@@ -38,10 +38,25 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         channel: 'chrome',
         launchOptions: {
-          // El contenedor no tiene espacio de nombres de usuario; sin estos
-          // indicadores Chrome no arranca. Son los habituales en integración
-          // continua y no afectan a lo que se prueba.
-          args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=swiftshader'],
+          /*
+           * El contenedor no tiene espacio de nombres de usuario; sin los dos
+           * primeros indicadores Chrome no arranca. Son los habituales en
+           * integración continua y no afectan a lo que se prueba.
+           *
+           * Los dos de SwiftShader sí importan para el producto: sin tarjeta
+           * gráfica, Chrome dibuja WebGL por software, pero desde hace unas
+           * versiones lo bloquea salvo que se le autorice de forma explícita.
+           * Con WebGL bloqueado el visor entra —correctamente— en su estado de
+           * «equipo no compatible» y deja de dibujar marcadores, así que las
+           * pruebas que pulsan un marcador fallan por falta de dibujo y no por
+           * un fallo del visor. Pedir sólo `--use-gl=swiftshader` no basta.
+           */
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--use-gl=swiftshader',
+            '--enable-unsafe-swiftshader',
+          ],
         },
       },
     },
