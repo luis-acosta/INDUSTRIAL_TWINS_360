@@ -266,3 +266,31 @@ async function sha256Hex(data: Buffer): Promise<string> {
   const { createHash } = await import('node:crypto');
   return createHash('sha256').update(data).digest('hex');
 }
+
+test('la transición entre escenas se dibuja con la escena de la que se sale', async ({ page }) => {
+  // TEST-E2E-013: es lo único que no puede comprobar una prueba unitaria.
+  // La capa de transición necesita una fotografía real del lienzo WebGL, y eso
+  // exige un navegador de verdad: en jsdom no hay lienzo que fotografiar, así
+  // que allí sólo se puede comprobar que la ausencia de fotografía no impide
+  // navegar. Aquí se comprueba lo contrario: que cuando sí hay lienzo, la capa
+  // se monta con la imagen de la escena de origen.
+  await page.goto('/');
+  const barra = page.getByRole('banner');
+  await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+  await page.getByRole('button', { name: 'A la plataforma' }).click();
+
+  const capa = page.locator('.transition-overlay');
+  await expect(capa).toBeAttached({ timeout: 2000 });
+
+  // La fotografía es una imagen de verdad, no un rectángulo vacío.
+  const fondo = await capa.evaluate((el) => getComputedStyle(el).backgroundImage);
+  expect(fondo).toContain('data:image');
+  expect(fondo.length).toBeGreaterThan(2000);
+
+  // Y la escena ya cambió: la transición no retrasa la navegación.
+  await expect(barra.getByText('Plataforma superior')).toBeVisible();
+
+  // Al terminar, la capa desaparece y deja de tapar la escena nueva.
+  await expect(capa).toHaveCount(0, { timeout: 4000 });
+});

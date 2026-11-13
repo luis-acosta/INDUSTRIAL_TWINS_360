@@ -304,7 +304,7 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
               type: 'goToScene',
               sceneId: second.id,
               entryMode: 'smart',
-              transition: { kind: 'fade', durationMs: 300, useGeometry: false },
+              transition: { kind: 'zoomThrough', durationMs: 600, useGeometry: false },
             },
             order: 0,
             delayMs: 0,

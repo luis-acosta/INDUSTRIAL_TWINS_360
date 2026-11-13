@@ -67,7 +67,9 @@ import {
 import { PublishedTelemetry } from './telemetry';
 import { QuizPlayer } from './QuizPlayer';
 import { TourPlayerBar } from './TourPlayerBar';
+import { useSceneTransition } from './useSceneTransition';
 import { useTourPlayback } from './useTourPlayback';
+import { TransitionOverlay } from './TransitionOverlay';
 import { targetForHotspot, tourGate, type SessionResult } from './playback';
 
 export interface TourViewerProps {
@@ -124,10 +126,14 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
    * Navegación entre escenas
    * ---------------------------------------------------------------- */
 
+  const transition = useSceneTransition();
+  const stageRef = useRef<HTMLDivElement | null>(null);
+
   const goToScene = useCallback(
     (targetId: string, config?: Extract<ActionConfig, { type: 'goToScene' }>) => {
       const target = manifest.scenes.find((s) => s.id === targetId);
       if (target === undefined) return;
+      if (targetId === sceneId) return;
 
       /**
        * La vista de entrada la resuelve el motor del visor (C11), no esta
@@ -146,18 +152,44 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           ? returnHotspot.anchor.yaw
           : undefined;
 
-      const entry = resolveEntryView(view ?? target.camera.initialView, {
+      const transitionTarget = {
         sceneId: targetId,
         entryMode: config?.entryMode ?? 'smart',
         initialView: target.camera.initialView,
         ...(config?.customView !== undefined ? { customView: config.customView } : {}),
         ...(returnYaw !== undefined ? { returnHotspotYaw: returnYaw } : {}),
-      });
+      };
+
+      /*
+       * De dónde se viene. `view` sólo se rellena cuando la cámara se ha
+       * movido, así que quien pulsa un marcador nada más abrir el recorrido
+       * lo tiene vacío; entonces la vista de partida es la inicial de la
+       * escena en la que está, no la de la escena a la que va.
+       */
+      const departure = view ?? scene?.camera.initialView ?? target.camera.initialView;
+
+      const entry = resolveEntryView(departure, transitionTarget);
+
+      /*
+       * La transición es decoración sobre un cambio que ya ocurre: se arranca
+       * antes de cambiar de escena, con la fotografía del lienzo actual, y la
+       * escena cambia a continuación pase lo que pase. Si no se puede
+       * fotografiar, el visitante navega igual, sin animación.
+       */
+      if (config !== undefined) {
+        transition.begin({
+          canvas: stageRef.current?.querySelector('canvas') ?? null,
+          transition: config.transition,
+          fromView: departure,
+          target: transitionTarget,
+          hasGeometry: target.kind === 'model',
+        });
+      }
 
       setSceneId(targetId);
       setPendingView(entry);
     },
-    [manifest.scenes, view, sceneId],
+    [manifest.scenes, view, sceneId, scene, transition],
   );
 
   /* ---------------------------------------------------------------- *
@@ -481,7 +513,11 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
         )}
       </header>
 
-      <div className="tour__stage">
+      <div className="tour__stage" ref={stageRef}>
+        {transition.run !== null && (
+          <TransitionOverlay snapshot={transition.run.snapshot} state={transition.run.state} />
+        )}
+
         <PanoramaViewer
           scene={viewerScene}
           {...(pendingView !== null ? { view: pendingView } : {})}

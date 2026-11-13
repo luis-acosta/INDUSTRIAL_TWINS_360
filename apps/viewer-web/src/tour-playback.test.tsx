@@ -1015,3 +1015,90 @@ describe('cómo se activa un marcador', () => {
     expect(sceneTitle()).toBe('Nave principal');
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Transición al cambiar de escena (C04)
+ * ------------------------------------------------------------------ */
+
+describe('transición entre escenas', () => {
+  /** Marcador que lleva a la segunda escena con la transición indicada. */
+  const withTransition = (kind: 'cut' | 'fade' | 'zoomThrough'): LoadedTour => {
+    const base = makeProject();
+    const sceneA = makeScene(10, PROJECT, {
+      title: 'Nave principal',
+      hotspots: [
+        makeHotspot(20, testUuid(10), {
+          name: 'Paso al taller',
+          actions: [
+            actionSchema.parse({
+              id: testUuid(70),
+              event: 'click',
+              config: {
+                type: 'goToScene',
+                sceneId: testUuid(11),
+                entryMode: 'initialView',
+                transition: { kind, durationMs: kind === 'cut' ? 0 : 600, useGeometry: false },
+              },
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const manifest = toManifest(
+      { ...base, scenes: [sceneA, makeScene(11, PROJECT, { title: 'Sala de bombas' })] },
+      { publishedAt: ISO_NOW, appVersion: '0.28.0', offlineCapable: true },
+    );
+
+    return { manifest, baseUrl: 'https://ejemplo.invalid/recorrido/' };
+  };
+
+  it('TEST-VPB-045 un corte cambia de escena sin superponer nada', async () => {
+    mount(withTransition('cut'));
+    await click('Paso al taller');
+
+    expect(sceneTitle()).toBe('Sala de bombas');
+    expect(document.querySelector('.transition-overlay')).toBeNull();
+  });
+
+  it('TEST-VPB-046 la escena cambia aunque no se pueda fotografiar el lienzo', async () => {
+    // En jsdom no hay WebGL y el doble del visor no dibuja lienzo alguno, así
+    // que no hay nada que fotografiar. Es exactamente el caso que no debe
+    // impedir moverse por la planta.
+    mount(withTransition('zoomThrough'));
+    await click('Paso al taller');
+
+    expect(sceneTitle()).toBe('Sala de bombas');
+  });
+
+  it('TEST-VPB-047 volver a la escena en la que ya se está no hace nada', async () => {
+    // Sin esta guarda se fotografiaría y se animaría un cambio que no ocurre.
+    const base = makeProject();
+    const sceneA = makeScene(10, PROJECT, {
+      title: 'Nave principal',
+      hotspots: [
+        makeHotspot(20, testUuid(10), {
+          name: 'A esta misma escena',
+          actions: [
+            actionSchema.parse({
+              id: testUuid(71),
+              event: 'click',
+              config: { type: 'goToScene', sceneId: testUuid(10), entryMode: 'initialView' },
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const manifest = toManifest(
+      { ...base, scenes: [sceneA, makeScene(11, PROJECT, { title: 'Sala de bombas' })] },
+      { publishedAt: ISO_NOW, appVersion: '0.28.0', offlineCapable: true },
+    );
+
+    mount({ manifest, baseUrl: 'https://ejemplo.invalid/recorrido/' });
+    await click('A esta misma escena');
+
+    expect(sceneTitle()).toBe('Nave principal');
+    expect(document.querySelector('.transition-overlay')).toBeNull();
+  });
+});

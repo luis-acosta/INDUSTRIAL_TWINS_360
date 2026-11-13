@@ -30,6 +30,7 @@ import {
   Badge,
   Button,
   Callout,
+  Checkbox,
   ConfirmDialog,
   Field,
   IconAdd,
@@ -571,6 +572,32 @@ function ActionConfigFields({
                 />
               )}
             </Field>
+          )}
+
+          {(config.transition.kind === 'zoomThrough' || config.transition.kind === 'dolly3d') && (
+            <>
+              <Checkbox
+                label="Usar la geometría 3D de fondo"
+                checked={config.transition.useGeometry}
+                onChange={(event) =>
+                  onChange(
+                    {
+                      ...config,
+                      transition: {
+                        ...config.transition,
+                        useGeometry: event.currentTarget.checked,
+                      },
+                    },
+                    'Cambiar fondo de la transición',
+                  )
+                }
+              />
+              <p className="inspector__hint">
+                Cuando la escena de destino es un modelo 3D, el desplazamiento se apoya en su
+                geometría. Si no la hay, la transición pasa a fundido sin avisar al visitante:
+                es una mejora visual, no una función que deba poder fallar a la vista.
+              </p>
+            </>
           )}
         </>
       );

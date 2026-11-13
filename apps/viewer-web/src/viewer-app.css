@@ -724,3 +724,32 @@
   color: var(--it-color-text-tertiary);
   line-height: var(--it-leading-relaxed);
 }
+
+/* ------------------------------------------------------------------ *
+ * Transición entre escenas (C04)
+ *
+ * La fotografía de la escena de la que se sale, superpuesta mientras la nueva
+ * carga debajo. No recibe pulsaciones: el visitante debe poder pulsar un
+ * marcador de la escena nueva sin esperar a que la animación termine.
+ * ------------------------------------------------------------------ */
+
+.transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  /* El origen es el centro de la vista: el avance va hacia donde se mira. */
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+/* Con movimiento reducido la transición ni siquiera se arranca, pero si una
+   capa quedara montada al cambiar la preferencia, no debe animarse. */
+@media (prefers-reduced-motion: reduce) {
+  .transition-overlay {
+    display: none;
+  }
+}
