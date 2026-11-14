@@ -9,12 +9,16 @@
 //!    no pase por la vista web;
 //!  - el proxy de telemetría, que es quien usa ese token;
 //!  - la información del contenedor, para que la aplicación sepa si corre
-//!    empaquetada y con qué versión.
+//!    empaquetada y con qué versión;
+//!  - la recodificación de imágenes al publicar, porque una panorámica de 100
+//!    megapíxeles en un lienzo del navegador se queda sin memoria y son
+//!    cuarenta por recorrido.
 //!
 //! Todo lo demás —modelo, validación, persistencia, publicación— está en
 //! TypeScript y cubierto por pruebas que se ejecutan sin compilar Rust. Mover
 //! lógica aquí la haría más difícil de probar sin ganar nada.
 
+mod images;
 mod secrets;
 mod shell;
 mod telemetry;
@@ -34,6 +38,7 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            images::image_encode,
             shell::fsync_path,
             shell::shell_info,
             secrets::secret_set,

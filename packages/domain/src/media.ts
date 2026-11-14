@@ -214,7 +214,16 @@ export const publishImageFormatSchema = z.enum(['jpeg', 'png', 'webp', 'avif']);
 export type PublishImageFormat = z.infer<typeof publishImageFormatSchema>;
 
 export const publishQualitySchema = z.object({
-  format: publishImageFormatSchema.default('webp'),
+  /**
+   * Formato de salida.
+   *
+   * Por omisión JPEG y no WebP, aunque WebP comprima mejor en general: el
+   * codificador WebP del contenedor es **sin pérdida**, así que una fotografía
+   * sale más grande que su JPEG, no más pequeña. WebP aquí significa «exacto»,
+   * no «ligero», y sirve para inspección; para publicar un recorrido grande, el
+   * formato pequeño es JPEG.
+   */
+  format: publishImageFormatSchema.default('jpeg'),
   /** Calidad 1-100. Se ignora en PNG, que es sin pérdida. */
   quality: z.number().int().min(1).max(100).default(82),
   /** Lado mayor máximo en píxeles; 0 = sin reescalar. */
@@ -231,31 +240,40 @@ export type PublishQuality = z.infer<typeof publishQualitySchema>;
 /**
  * Perfiles de publicación.
  *
- * Son los tres puntos de la curva que un usuario distingue sin medir:
- * archivo pequeño, equilibrio, y máxima fidelidad para inspección técnica.
- * Los valores exactos son editables (V01); los perfiles sólo evitan que la
- * decisión por defecto sea mala.
+ * Son los tres puntos de la curva que un usuario distingue sin medir: archivo
+ * pequeño, equilibrio, y máxima fidelidad para inspección técnica.
+ *
+ * Los formatos son los que el contenedor produce de verdad, y eso cambió los
+ * perfiles. Antes decían WebP con calidad 72 y AVIF con calidad 92; el
+ * codificador WebP es sin pérdida —ignora la calidad y pesa más que un JPEG—
+ * y AVIF no se produce. El perfil «compacto» habría publicado paquetes más
+ * grandes que el original: exactamente lo contrario de lo que promete.
+ *
+ * Así que lo pequeño es JPEG, y lo exacto es WebP sin pérdida, que es lo que
+ * de verdad sirve para mirar de cerca un rótulo o la aguja de un manómetro.
+ * Los valores son editables (V01); los perfiles sólo evitan una mala decisión
+ * por omisión.
  */
 export const PUBLISH_PROFILES = {
   compact: {
-    format: 'webp',
+    format: 'jpeg',
     quality: 72,
     maxEdgePx: 4096,
     tiled: true,
     tileSizePx: 512,
-    includeFallback: true,
+    includeFallback: false,
   },
   balanced: {
-    format: 'webp',
-    quality: 82,
+    format: 'jpeg',
+    quality: 85,
     maxEdgePx: 8192,
     tiled: true,
     tileSizePx: 512,
-    includeFallback: true,
+    includeFallback: false,
   },
   fidelity: {
-    format: 'avif',
-    quality: 92,
+    format: 'webp',
+    quality: 100,
     maxEdgePx: 0,
     tiled: true,
     tileSizePx: 1024,

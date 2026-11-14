@@ -1727,6 +1727,34 @@ function Inspector({
                 )}
               </Field>
             )}
+
+            {scene.camera.autoRotate && (
+              <Field
+                label="Velocidad del giro"
+                inline
+                hint="Grados por segundo. Despacio se lee como una invitación; deprisa marea."
+              >
+                {() => (
+                  <NumberInput
+                    value={radToDeg(scene.camera.autoRotateSpeed)}
+                    onValueChange={(value) =>
+                      store.updateScene(
+                        scene.id,
+                        'Ajustar velocidad del giro',
+                        { camera: { ...scene.camera, autoRotateSpeed: (value * Math.PI) / 180 } },
+                        `camera.autoRotateSpeed:${scene.id}`,
+                      )
+                    }
+                    min={0.1}
+                    max={30}
+                    step={0.5}
+                    unit="°/s"
+                    decimals={1}
+                    aria-label="Velocidad del giro automático"
+                  />
+                )}
+              </Field>
+            )}
           </div>
         </TabPanel>
 

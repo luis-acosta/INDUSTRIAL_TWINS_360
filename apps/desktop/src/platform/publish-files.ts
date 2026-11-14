@@ -23,6 +23,7 @@ import {
 } from '@it360/exporter';
 import { APP_VERSION } from '../version';
 import { isTauri, TauriStorage } from './tauri-storage';
+import { prepareMediaForPublish, publishSummary } from './image-publish';
 
 /** Carpeta de recursos donde se empaqueta el visor compilado. */
 const RUNTIME_DIR = 'viewer';
@@ -46,6 +47,8 @@ export interface PublishOutcome {
   readonly fileCount: number;
   readonly totalBytes: number;
   readonly warnings: readonly string[];
+  /** Qué pasó con las imágenes: pesos antes y después. */
+  readonly imageSummary?: string;
   readonly reportPath: string;
 }
 
@@ -114,11 +117,16 @@ export async function publishProject(
   const folder = await openDialog({ directory: true, multiple: false, title: 'Carpeta de destino' });
   if (folder === null || Array.isArray(folder)) return ok(null);
 
+  /* Las imágenes se recodifican antes de armar el paquete, según los ajustes
+     del proyecto (V01, V02). Hasta ahora los ajustes no hacían nada: el
+     paquete llevaba los originales. */
+  const prepared = await prepareMediaForPublish(request.project, request.mediaFiles);
+
   const common = {
     publishedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
     runtime: runtime.value,
-    mediaFiles: request.mediaFiles,
+    mediaFiles: prepared.files,
     ...(request.includeDocuments === true ? { includeDocuments: true } : {}),
     ...(request.includeUnreviewed === true ? { includeUnreviewed: true } : {}),
     ...(request.telemetryEndpoint !== undefined
@@ -129,9 +137,9 @@ export async function publishProject(
   let result: PackageResult;
   try {
     if (request.target === 'web') {
-      result = await exportWebSite(request.project, common);
+      result = await exportWebSite(prepared.project, common);
     } else if (request.target === 'offline') {
-      result = await exportOfflinePackage(request.project, common);
+      result = await exportOfflinePackage(prepared.project, common);
     } else {
       if (request.courseId === undefined || request.courseId.trim().length === 0) {
         return err(
@@ -140,7 +148,7 @@ export async function publishProject(
           }),
         );
       }
-      result = await exportScormPackage(request.project, {
+      result = await exportScormPackage(prepared.project, {
         ...common,
         courseId: request.courseId,
         courseTitle: request.project.title,
@@ -192,7 +200,11 @@ export async function publishProject(
       folder,
       fileCount: written.length,
       totalBytes: result.totalBytes,
-      warnings: result.warnings,
+      // Lo que pasó con las imágenes va con las advertencias del exportador:
+      // es información que el autor necesita antes de entregar el paquete, no
+      // un detalle de registro.
+      warnings: [...result.warnings, ...prepared.notes],
+      imageSummary: publishSummary(prepared),
       reportPath,
     });
   } catch (cause) {

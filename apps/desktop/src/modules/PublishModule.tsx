@@ -12,6 +12,8 @@ import {
   findForbiddenKeys,
   hasBlockingProblems,
   toManifest,
+  estimateBytes,
+  planImage,
   type PublishQuality,
   walkSkin,
 } from '@it360/domain';
@@ -273,24 +275,41 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
     }
     if (result.value === null) return; // Diálogo cancelado.
 
+    const summary = result.value.imageSummary;
     push({
       tone: result.value.warnings.length > 0 ? 'warning' : 'nominal',
       title: `Paquete generado (${(result.value.totalBytes / 1_000_000).toFixed(1)} MB)`,
-      description:
+      description: [
+        summary,
         result.value.warnings.length > 0
-          ? `${result.value.warnings.length} advertencia(s). El informe está en ${result.value.reportPath}.`
-          : `Escrito en ${result.value.folder}, con el informe de publicación al lado.`,
+          ? `${result.value.warnings.length} advertencia(s) en el informe: ${result.value.reportPath}.`
+          : `Escrito en ${result.value.folder}.`,
+      ]
+        .filter((part) => part !== undefined && part !== '')
+        .join(' '),
     });
   }, [blocked, target, project, mediaFiles, courseId, push]);
 
   const estimatedBytes = useMemo(() => {
-    // Estimación, y se presenta como tal. El tamaño real depende del
-    // contenido de cada imagen; prometer una cifra exacta antes de generar
-    // sería inventarla.
-    const publishable = project.scenes.filter((s) => !s.excludedFromPublish);
-    const perScene = Math.round(((quality.maxEdgePx / 1024) ** 2 * quality.quality) / 100) * 180_000;
-    return publishable.length * perScene;
-  }, [project.scenes, quality]);
+    /* Estimación sobre el peso real de cada medio, no sobre una fórmula de
+       resolución por calidad: la anterior daba la misma cifra para una
+       panorámica de 2 MB y otra de 60 MB, porque no miraba los archivos. */
+    let total = 0;
+    for (const entry of project.media) {
+      total += estimateBytes(entry, planImage(entry, quality));
+    }
+    return total;
+  }, [project.media, quality]);
+
+  /** Advertencias del plan que el autor debe leer antes de generar. */
+  const planNotes = useMemo(() => {
+    const notes = new Set<string>();
+    for (const entry of project.media) {
+      const note = planImage(entry, quality).note;
+      if (note !== null && note !== 'no es una imagen') notes.add(note);
+    }
+    return [...notes];
+  }, [project.media, quality]);
 
   return (
     <div className="module">
@@ -417,14 +436,32 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
                     value={quality.format}
                     onChange={(event) => setQuality({ format: event.currentTarget.value as PublishQuality['format'] })}
                   >
-                    <option value="webp">WebP (menor tamaño)</option>
-                    <option value="jpeg">JPEG (máxima compatibilidad)</option>
-                    <option value="avif">AVIF (experimental)</option>
+                    {/* Las etiquetas dicen lo que el codificador hace de
+                        verdad. Antes WebP se anunciaba como «menor tamaño» y
+                        es sin pérdida: pesa más que un JPEG. */}
+                    <option value="jpeg">JPEG (menor tamaño, con pérdida)</option>
+                    <option value="webp">WebP (sin pérdida, exacto y más grande)</option>
+                    <option value="png">PNG (sin pérdida, el más grande)</option>
+                    <option value="avif">AVIF (no disponible: se publica WebP)</option>
                   </Select>
                 )}
               </Field>
 
-              <Field label="Calidad" inline hint="Por encima de 90 el archivo crece sin mejora visible.">
+              {planNotes.length > 0 && (
+                <Callout tone="warning" title="Lo que se publicará no es exactamente lo elegido">
+                  <ul style={{ margin: 0, paddingLeft: 'var(--it-space-4)' }}>
+                    {planNotes.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </Callout>
+              )}
+
+              <Field
+                label="Calidad"
+                inline
+                hint="Sólo se aplica en JPEG: los demás formatos de esta versión son sin pérdida."
+              >
                 {() => (
                   <NumberInput
                     value={quality.quality}
