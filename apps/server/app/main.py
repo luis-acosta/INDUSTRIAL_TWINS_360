@@ -17,10 +17,10 @@ recorrido sin desplegar nada.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -28,13 +28,50 @@ from pydantic import BaseModel, Field
 from .access_model import MODEL_FINGERPRINT, OPERATIONS
 from .audit import AuditEvent, AuditLog
 from .security import AccessError, Grant, Resource, Scope, can_perform, effective_operations
+from .config import load_mappings, load_settings
+from .influx import InfluxReader
 from .telemetry import (
     MappingSpec,
+    TelemetryReader,
     assess_quality,
+    recommended_window_seconds,
     valid_mapping_ids,
 )
 
 API_PREFIX = "/api/v1"
+
+#: Intervalo máximo que se acepta en una consulta de histórico.
+#:
+#: Un año y un día: cubre la comparación interanual, que es el caso más amplio
+#: que un responsable de planta pide, y acota lo que un cliente mal escrito
+#: puede exigirle al historiador.
+MAX_RANGE_SECONDS = 366 * 24 * 3600
+
+#: Ventana de agregación máxima: un día. Más gruesa no es una gráfica.
+MAX_WINDOW_SECONDS = 24 * 3600
+
+
+class HistoryPointOut(BaseModel):
+    """Un punto agregado de la serie."""
+
+    timestamp: str | None
+    value: float | str | None
+
+
+class HistoryOut(BaseModel):
+    """Serie histórica tal como la consume la gráfica del editor.
+
+    ``windowSeconds`` y ``fromCache`` no son adornos: sin el primero el eje de
+    tiempo es ambiguo, y sin el segundo la gráfica presentaría caché como
+    telemetría actual.
+    """
+
+    mappingId: str
+    points: list[HistoryPointOut]
+    windowSeconds: int
+    fromCache: bool = False
+    failed: bool = False
+    errorMessage: str | None = None
 
 
 class SampleOut(BaseModel):
@@ -72,7 +109,7 @@ class HealthOut(BaseModel):
 def create_app(
     *,
     mappings: dict[str, MappingSpec] | None = None,
-    reader: Any | None = None,
+    reader: TelemetryReader | None = None,
     audit: AuditLog | None = None,
     environment: str = "test",
     allowed_origins: tuple[str, ...] = (),
@@ -84,7 +121,29 @@ def create_app(
     No es sólo comodidad de prueba: un servidor cuyas rutas sólo se pueden
     ejercitar con la infraestructura completa termina sin pruebas.
     """
-    known_mappings = mappings or {}
+    """La configuración se lee del entorno cuando no se inyecta nada.
+
+    Hace falta porque la forma documentada de arrancar el servidor es
+    «uvicorn app.main:create_app --factory», que llama a esta función **sin
+    argumentos**: así, en producción no había lector ni variables y los
+    extremos de telemetría contestaban 503 siempre, mientras las pruebas
+    pasaban porque inyectan los suyos.
+    """
+    if mappings is None and reader is None:
+        settings = load_settings()
+        known_mappings = load_mappings()
+        reader = (
+            InfluxReader(settings.influx, cache_max_age_seconds=settings.telemetry_cache_seconds)
+            if settings.influx is not None
+            else None
+        )
+        if not allowed_origins:
+            allowed_origins = settings.allowed_origins
+        if environment == "test":
+            environment = settings.environment
+    else:
+        known_mappings = mappings or {}
+
     audit_log = audit or AuditLog()
 
     app = FastAPI(
@@ -209,6 +268,78 @@ def create_app(
 
         return out
 
+    @app.get(
+        f"{API_PREFIX}/telemetry/{{mapping_id}}/history",
+        response_model=HistoryOut,
+        tags=["telemetría"],
+    )
+    async def telemetry_history(
+        mapping_id: str,
+        from_: str = Query(alias="from"),
+        to: str = Query(...),
+        window: int | None = Query(default=None, ge=1, le=MAX_WINDOW_SECONDS),
+    ) -> HistoryOut:
+        """Serie histórica agregada de una variable mapeada (X13).
+
+        El intervalo lo elige quien mira la gráfica, pero la ventana de
+        agregación la decide el servidor cuando no viene dada: un mes a
+        resolución de segundo son millones de puntos que no caben ni en la red
+        ni en los píxeles del lienzo. La ventana que se usó viaja en la
+        respuesta porque el eje de la gráfica no significa lo mismo con
+        agregados de diez segundos que de una hora, y quien la lee debe
+        saberlo.
+        """
+        if reader is None or not known_mappings:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Este servidor no tiene telemetría configurada",
+            )
+
+        spec = known_mappings.get(mapping_id)
+        if spec is None:
+            # Igual que en «latest», el visor pide por identificador de mapeo y
+            # no por medición: un identificador que no está en el allowlist no
+            # se busca en el historiador.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El servidor no tiene esta variable mapeada",
+            )
+
+        start = _parse_instant(from_, "from")
+        end = _parse_instant(to, "to")
+        if end <= start:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El fin del intervalo debe ser posterior al inicio",
+            )
+        if (end - start) > timedelta(seconds=MAX_RANGE_SECONDS):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El intervalo solicitado excede el máximo de 366 días",
+            )
+
+        # La ventana pedida nunca manda por debajo de la recomendada: un
+        # cliente que pida un año con ventana de un segundo tumbaría el
+        # historiador, y el límite tiene que estar aquí y no en la interfaz.
+        recommended = recommended_window_seconds(start, end)
+        window_seconds = recommended if window is None else max(window, recommended)
+
+        series = await reader.history(spec, start, end, window_seconds)
+        points = [
+            HistoryPointOut(timestamp=point.get("t"), value=point.get("v"))
+            for point in series.get("points", [])
+            if isinstance(point, dict)
+        ]
+
+        return HistoryOut(
+            mappingId=mapping_id,
+            points=points,
+            windowSeconds=window_seconds,
+            fromCache=bool(series.get("fromCache", False)),
+            failed=bool(series.get("failed", False)),
+            errorMessage=series.get("errorMessage"),
+        )
+
     @app.get(f"{API_PREFIX}/telemetry/ping", tags=["telemetría"])
     async def telemetry_ping() -> dict[str, object]:
         """Comprueba que el historiador responde, sin traer datos."""
@@ -324,6 +455,30 @@ def create_app(
     app.state.audit_log = audit_log
     app.state.mappings = known_mappings
     return app
+
+
+def _parse_instant(raw: str, field: str) -> datetime:
+    """Instante ISO-8601 del cliente, siempre con zona.
+
+    Una marca sin zona no es un instante: interpretarla como hora local del
+    servidor desplazaría la gráfica tantas horas como separen al servidor del
+    operador, y el desplazamiento pasaría por un dato raro en lugar de por un
+    error. Así que se rechaza.
+    """
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"«{field}» no es un instante ISO-8601 válido",
+        ) from error
+
+    if parsed.tzinfo is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"«{field}» debe indicar la zona horaria",
+        )
+    return parsed.astimezone(timezone.utc)
 
 
 def _iso(value: Any) -> str | None:

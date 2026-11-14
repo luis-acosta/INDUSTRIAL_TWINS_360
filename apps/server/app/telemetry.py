@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Final
+from typing import Any, Final, Protocol
 
 #: Palabras que descalifican una consulta.
 #:
@@ -49,6 +49,34 @@ FORBIDDEN_FLUX: Final[tuple[str, ...]] = (
 #: Operaciones que el servicio ofrece. No hay más, y no es una lista de
 #: configuración: es la superficie completa de la API de telemetría.
 OPERATIONS: Final[tuple[str, ...]] = ("latest", "history", "ping", "listMeasurements")
+
+
+class TelemetryReader(Protocol):
+    """Lo que la API necesita de un lector de telemetría.
+
+    Es un protocolo y no una clase base porque hay dos implementaciones
+    legítimas —la que habla con InfluxDB y la de las pruebas— y ninguna debe
+    heredar de la otra. Tiparlo así hace que un cambio de forma en el lector
+    rompa la comprobación de tipos en lugar de romper la API en ejecución.
+    """
+
+    async def latest(self, spec: MappingSpec) -> dict[str, Any]:
+        """Última lectura de una variable mapeada."""
+        ...
+
+    async def history(
+        self,
+        spec: MappingSpec,
+        start: datetime,
+        end: datetime,
+        window_seconds: int,
+    ) -> dict[str, Any]:
+        """Serie histórica agregada entre dos instantes."""
+        ...
+
+    async def ping(self) -> dict[str, object]:
+        """Comprueba que el historiador responde."""
+        ...
 
 
 class ReadOnlyViolation(Exception):

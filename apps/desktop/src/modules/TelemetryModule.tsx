@@ -27,6 +27,7 @@ import {
   Callout,
   DataTable,
   EmptyState,
+  Field,
   IconHistory,
   IconLock,
   IconTelemetry,
@@ -37,19 +38,35 @@ import {
   SectionLabel,
   Select,
   Spinner,
+  TextInput,
   Tooltip,
 } from '@it360/ui';
 import type { ProjectStore } from '../state/project-store';
 import type { TelemetryClient, TelemetryHistory } from '../telemetry/telemetry-client';
 import { useLatestTelemetry } from '../telemetry/use-telemetry';
 import { Gauge, Sparkline } from '../components/instruments';
+import { isLoopbackEndpoint, parseServiceEndpoint } from '../telemetry/service-endpoint';
 
 export interface TelemetryModuleProps {
   readonly store: ProjectStore;
   readonly client: TelemetryClient;
+  /** Dirección del servicio local en uso, o `null` si se usa el simulador. */
+  readonly serviceEndpoint?: string | null;
+  /**
+   * Cambia la dirección del servicio. `null` deshabilita el campo, que es lo
+   * que ocurre cuando el cliente viene impuesto desde fuera —las pruebas y la
+   * demostración—: ofrecer un campo que no cambia nada es peor que no
+   * ofrecerlo.
+   */
+  readonly onServiceEndpointChange?: ((endpoint: string | null) => void) | null;
 }
 
-export function TelemetryModule({ store, client }: TelemetryModuleProps): JSX.Element {
+export function TelemetryModule({
+  store,
+  client,
+  serviceEndpoint = null,
+  onServiceEndpointChange = null,
+}: TelemetryModuleProps): JSX.Element {
   const mappings = store.project.telemetryMappings;
   const [selectedId, setSelectedId] = useState<string | null>(mappings[0]?.id ?? null);
   const [ping, setPing] = useState<{ reachable: boolean; latencyMs: number } | null>(null);
@@ -58,6 +75,8 @@ export function TelemetryModule({ store, client }: TelemetryModuleProps): JSX.El
   const [history, setHistory] = useState<TelemetryHistory | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [endpointDraft, setEndpointDraft] = useState(serviceEndpoint ?? '');
+  const [endpointError, setEndpointError] = useState<string | null>(null);
 
   const selected = mappings.find((m) => m.id === selectedId) ?? null;
   const { samples, now, error: latestError } = useLatestTelemetry(client, mappings);
@@ -86,6 +105,25 @@ export function TelemetryModule({ store, client }: TelemetryModuleProps): JSX.El
   }, [client, selected, preset]);
 
   const connection = store.project.telemetryConnections[0] ?? null;
+
+  /**
+   * Aplica la dirección escrita.
+   *
+   * Se valida antes de guardarla: una dirección inservible deja el panel
+   * lleno de errores de red cuyo origen no es evidente, y el motivo concreto
+   * —esquema inadmisible, credencial en la URL— sólo se puede dar aquí.
+   */
+  function applyEndpoint(): void {
+    if (onServiceEndpointChange === null) return;
+    const parsed = parseServiceEndpoint(endpointDraft);
+    if (!parsed.ok) {
+      setEndpointError(parsed.error.message);
+      return;
+    }
+    setEndpointError(null);
+    setEndpointDraft(parsed.value);
+    onServiceEndpointChange(parsed.value);
+  }
 
   const range = useMemo(() => rangeFromPreset(preset, now), [preset, now]);
 
@@ -138,6 +176,94 @@ export function TelemetryModule({ store, client }: TelemetryModuleProps): JSX.El
 
         <div className="module__grid">
           <Panel title="Conexión" level="raised">
+            {/* Dos conexiones distintas, y confundirlas es el malentendido más
+                frecuente de esta pantalla: el editor habla con el servicio
+                local, y es el servicio quien habla con el historiador. El
+                token vive en el servicio; aquí no hay ninguno que escribir. */}
+            <SectionLabel>Servicio local</SectionLabel>
+            {onServiceEndpointChange === null ? (
+              <PropertyList>
+                <PropertyRow
+                  label="Origen de datos"
+                  value={
+                    client.kind === 'simulated' ? (
+                      <Badge tone="warning" dot>
+                        simulado
+                      </Badge>
+                    ) : (
+                      <Badge tone="nominal" dot>
+                        servicio local
+                      </Badge>
+                    )
+                  }
+                />
+              </PropertyList>
+            ) : (
+              <div style={{ display: 'grid', gap: 'var(--it-space-2)' }}>
+                <Field
+                  label="Dirección del servicio"
+                  hint={
+                    serviceEndpoint === null
+                      ? 'Sin dirección, las lecturas son simuladas y se rotulan como tales.'
+                      : isLoopbackEndpoint(serviceEndpoint)
+                        ? 'El servicio corre en este equipo.'
+                        : 'Servicio en red: con http, las lecturas viajan en claro por la red de planta.'
+                  }
+                  error={endpointError ?? undefined}
+                >
+                  {({ id, describedBy, invalid }) => (
+                    <TextInput
+                      id={id}
+                      aria-describedby={describedBy}
+                      invalid={invalid}
+                      size="sm"
+                      inputMode="url"
+                      placeholder="http://127.0.0.1:8787"
+                      value={endpointDraft}
+                      onChange={(event) => setEndpointDraft(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') applyEndpoint();
+                      }}
+                    />
+                  )}
+                </Field>
+                <div style={{ display: 'flex', gap: 'var(--it-space-2)' }}>
+                  <Button size="sm" variant="secondary" onClick={applyEndpoint}>
+                    Conectar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={serviceEndpoint === null}
+                    onClick={() => {
+                      setEndpointDraft('');
+                      setEndpointError(null);
+                      onServiceEndpointChange(null);
+                    }}
+                  >
+                    Usar datos simulados
+                  </Button>
+                </div>
+                <PropertyList>
+                  <PropertyRow
+                    label="Origen de datos"
+                    value={
+                      client.kind === 'simulated' ? (
+                        <Badge tone="warning" dot>
+                          simulado
+                        </Badge>
+                      ) : (
+                        <Badge tone="nominal" dot>
+                          servicio local
+                        </Badge>
+                      )
+                    }
+                  />
+                </PropertyList>
+              </div>
+            )}
+
+            <SectionLabel>Historiador</SectionLabel>
             {connection === null ? (
               <EmptyState
                 title="Sin conexión configurada"

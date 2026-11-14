@@ -48,10 +48,29 @@ class FakeReader:
             "fromCache": False,
         }
         self.calls: list[str] = []
+        self.history_calls: list[tuple[str, datetime, datetime, int]] = []
+        self.series: dict[str, Any] = {
+            "points": [
+                {"t": "2026-03-01T11:00:00+00:00", "v": 1.0},
+                {"t": "2026-03-01T11:30:00+00:00", "v": 2.0},
+            ],
+            "failed": False,
+            "errorMessage": None,
+        }
 
     async def latest(self, spec: MappingSpec) -> dict[str, Any]:
         self.calls.append(spec.mapping_id)
         return self.reading
+
+    async def history(
+        self,
+        spec: MappingSpec,
+        start: datetime,
+        end: datetime,
+        window_seconds: int,
+    ) -> dict[str, Any]:
+        self.history_calls.append((spec.mapping_id, start, end, window_seconds))
+        return self.series
 
     async def ping(self) -> dict[str, object]:
         return {"reachable": True, "latencyMs": 12}
@@ -318,3 +337,136 @@ class TestAuditoria:
                     entity="x",
                 )
             )
+
+
+class TestHistorico:
+    """Serie histórica de una variable mapeada (X13)."""
+
+    @pytest.fixture()
+    def reader(self) -> FakeReader:
+        return FakeReader()
+
+    @pytest.fixture()
+    def app_client(self, reader: FakeReader, audit: AuditLog) -> TestClient:
+        return TestClient(create_app(mappings={MAPPING_ID: SPEC}, reader=reader, audit=audit))
+
+    def test_devuelve_la_serie_con_la_ventana_aplicada(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-018: la gráfica necesita saber con qué agregación se
+        # construyó la serie; sin la ventana, el eje de tiempo es ambiguo.
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2026-03-01T11:00:00Z", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mappingId"] == MAPPING_ID
+        assert len(body["points"]) == 2
+        assert body["points"][0]["value"] == 1.0
+        assert body["windowSeconds"] >= 1
+        assert body["failed"] is False
+        assert reader.history_calls[0][0] == MAPPING_ID
+
+    def test_una_variable_no_mapeada_no_llega_al_historiador(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-019: el visor pide por identificador de mapeo. Si pudiera
+        # pedir cualquiera, el allowlist del operador no serviría para nada.
+        response = app_client.get(
+            "/api/v1/telemetry/00000000-0000-4000-8000-00000000ffff/history",
+            params={"from": "2026-03-01T11:00:00Z", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 404
+        assert reader.history_calls == []
+
+    def test_rechaza_un_intervalo_invertido(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-020: un intervalo al revés produciría una consulta Flux que
+        # el historiador rechaza; vale más rechazarla aquí con un motivo.
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2026-03-01T12:00:00Z", "to": "2026-03-01T11:00:00Z"},
+        )
+
+        assert response.status_code == 400
+        assert reader.history_calls == []
+
+    def test_rechaza_una_marca_sin_zona_horaria(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-021: interpretarla como hora local del servidor desplazaría
+        # la gráfica sin avisar, y el desplazamiento pasaría por un dato raro.
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2026-03-01T11:00:00", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 400
+        assert reader.history_calls == []
+
+    def test_rechaza_un_intervalo_mayor_de_un_ano(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-022: sin tope, un cliente mal escrito puede pedirle al
+        # historiador una década de datos y tumbarlo.
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2020-03-01T11:00:00Z", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 400
+        assert reader.history_calls == []
+
+    def test_la_ventana_pedida_no_baja_de_la_recomendada(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-023: el límite tiene que estar en el servidor. Un cliente
+        # que pida un año con ventana de un segundo pediría treinta millones de
+        # puntos, y la interfaz no es el sitio donde defender al historiador.
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={
+                "from": "2026-01-01T00:00:00Z",
+                "to": "2026-03-01T00:00:00Z",
+                "window": 1,
+            },
+        )
+
+        assert response.status_code == 200
+        applied = response.json()["windowSeconds"]
+        assert applied > 1
+        assert reader.history_calls[0][3] == applied
+
+    def test_un_fallo_del_historiador_viaja_marcado(
+        self, app_client: TestClient, reader: FakeReader
+    ) -> None:
+        # TEST-API-024: una serie vacía y una serie que no se pudo recuperar no
+        # significan lo mismo. Sin la bandera, la gráfica mostraría un lienzo
+        # vacío que se lee como «no hay datos».
+        reader.series = {"points": [], "failed": True, "errorMessage": "sin respuesta"}
+
+        response = app_client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2026-03-01T11:00:00Z", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["failed"] is True
+        assert body["errorMessage"] == "sin respuesta"
+        assert body["points"] == []
+
+    def test_un_servidor_sin_telemetria_contesta_503(self, audit: AuditLog) -> None:
+        # TEST-API-025: un servidor que sólo sirve permisos y auditoría es un
+        # estado legítimo; lo que no vale es que la gráfica crea que hay datos.
+        client = TestClient(create_app(mappings={}, reader=None, audit=audit))
+        response = client.get(
+            f"/api/v1/telemetry/{MAPPING_ID}/history",
+            params={"from": "2026-03-01T11:00:00Z", "to": "2026-03-01T12:00:00Z"},
+        )
+
+        assert response.status_code == 503

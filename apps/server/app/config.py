@@ -13,9 +13,12 @@ le pidan de verdad, y el fallo aparecería en la primera consulta del cliente.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Final
+
+from .telemetry import MappingSpec
 
 #: Prefijo de las variables de entorno. Un prefijo propio evita colisiones en
 #: un servidor que aloja varios servicios.
@@ -169,3 +172,70 @@ def load_settings() -> Settings:
         backup_dir=_get("BACKUP_DIR", "/var/lib/it360/backups") or "/var/lib/it360/backups",
         environment=_get("ENVIRONMENT", "production") or "production",
     )
+
+
+# --------------------------------------------------------------------- #
+# Variables de proceso autorizadas
+# --------------------------------------------------------------------- #
+
+
+def load_mappings(path: str | None = None) -> dict[str, MappingSpec]:
+    """Variables que este servidor permite consultar (X10).
+
+    Se declaran en un archivo del servidor y no llegan en la petición. Es la
+    propiedad de seguridad que sostiene todo lo demás: si el visor pudiera
+    enviar la medición y el campo, cualquiera con el enlace del recorrido
+    podría leer cualquier serie del historiador, no sólo las que el recorrido
+    publica.
+
+    Sin archivo declarado se devuelve vacío, y los extremos de telemetría
+    contestan 503. Es preferible a arrancar permitiendo cualquier consulta.
+    """
+    source = path if path is not None else _get("MAPPINGS_FILE")
+    if source is None or source.strip() == "":
+        return {}
+
+    try:
+        with open(source, encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except FileNotFoundError as error:
+        raise ConfigError(
+            f"No se encontró el archivo de variables «{source}». "
+            "Indique la ruta correcta o quite la variable de entorno."
+        ) from error
+    except json.JSONDecodeError as error:
+        raise ConfigError(f"El archivo de variables «{source}» no es JSON válido: {error}") from error
+
+    if not isinstance(raw, list):
+        raise ConfigError(
+            f"El archivo de variables «{source}» debe contener una lista de variables."
+        )
+
+    out: dict[str, MappingSpec] = {}
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ConfigError(f"La variable {index + 1} del archivo no es un objeto.")
+
+        try:
+            mapping_id = str(entry["mappingId"])
+            spec = MappingSpec(
+                mapping_id=mapping_id,
+                measurement=str(entry["measurement"]),
+                field=str(entry["field"]),
+                tags={str(k): str(v) for k, v in (entry.get("tags") or {}).items()},
+                bucket=str(entry["bucket"]),
+                freshness_seconds=int(entry.get("freshnessSeconds", 120)),
+                aggregation=str(entry.get("aggregation", "last")),
+            )
+        except KeyError as error:
+            raise ConfigError(
+                f"A la variable {index + 1} del archivo le falta el campo {error}."
+            ) from error
+
+        # Un identificador repetido dejaría una de las dos variables sin servir
+        # y el síntoma sería una lectura que nunca llega, sin ningún error.
+        if mapping_id in out:
+            raise ConfigError(f"El identificador de variable «{mapping_id}» está repetido.")
+        out[mapping_id] = spec
+
+    return out

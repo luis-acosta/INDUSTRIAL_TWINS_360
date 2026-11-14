@@ -42,6 +42,23 @@ export interface TelemetryHistory {
   readonly fromCache: boolean;
 }
 
+/**
+ * Serie tal como la devuelve el servicio local.
+ *
+ * Se declara aparte de `TelemetryHistory` porque son contratos distintos: el
+ * del servicio admite puntos sin marca de tiempo y valores no numéricos, y
+ * traduce los fallos del historiador en una bandera en lugar de en un código
+ * HTTP. El cliente es quien normaliza eso a lo que la gráfica puede dibujar.
+ */
+interface BackendHistory {
+  readonly mappingId: string;
+  readonly points: readonly { readonly timestamp: string | null; readonly value: unknown }[];
+  readonly windowSeconds: number;
+  readonly fromCache: boolean;
+  readonly failed: boolean;
+  readonly errorMessage: string | null;
+}
+
 export interface TelemetryClient {
   readonly kind: 'backend' | 'simulated';
   /** Última lectura de cada variable solicitada. */
@@ -127,16 +144,55 @@ export class BackendTelemetryClient implements TelemetryClient {
       to: range.to,
       window: String(windowSeconds),
     });
-    return this.request<TelemetryHistory>(
+    const result = await this.request<BackendHistory>(
       `/api/v1/telemetry/${encodeURIComponent(mapping.id)}/history?${params.toString()}`,
     );
+    if (!result.ok) return result;
+
+    // El servicio contesta 200 con `failed` cuando el historiador falló: la
+    // consulta al servicio funcionó, la consulta al historiador no. Sin esta
+    // rama la gráfica mostraría un lienzo vacío, que se lee como «no hay
+    // datos» y no como «no se pudieron recuperar».
+    if (result.value.failed) {
+      return err(
+        domainError(
+          'TELEMETRY_UNAVAILABLE',
+          result.value.errorMessage ?? 'No se pudo recuperar el histórico de esta variable',
+          {
+            detail: { variable: mapping.variable },
+            recovery: 'Compruebe que el historiador responde y vuelva a pedir el intervalo.',
+          },
+        ),
+      );
+    }
+
+    return ok({
+      mappingId: result.value.mappingId,
+      // La ventana que manda es la que el servicio aplicó, no la que el
+      // editor pidió: el servicio no baja de la recomendada, y el eje de la
+      // gráfica tiene que decir la verdad sobre la agregación.
+      windowSeconds: result.value.windowSeconds,
+      fromCache: result.value.fromCache,
+      points: result.value.points.map((point) => ({
+        timestamp: point.timestamp ?? '',
+        value: typeof point.value === 'number' ? point.value : null,
+      })),
+    });
   }
 
   async ping(): Promise<Result<{ reachable: boolean; latencyMs: number }>> {
     const started = performance.now();
-    const result = await this.request<{ status: string }>('/api/v1/telemetry/health');
+    const result = await this.request<{ reachable?: boolean; latencyMs?: number }>(
+      '/api/v1/telemetry/ping',
+    );
     if (!result.ok) return result;
-    return ok({ reachable: true, latencyMs: Math.round(performance.now() - started) });
+    // El servicio responde 200 aunque el historiador no conteste: lo que se
+    // comprobó entonces es que el servicio está en marcha. Dar por alcanzable
+    // el historiador en ese caso sería afirmar algo que nadie midió.
+    return ok({
+      reachable: result.value.reachable ?? false,
+      latencyMs: Math.round(result.value.latencyMs ?? performance.now() - started),
+    });
   }
 }
 

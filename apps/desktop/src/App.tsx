@@ -100,11 +100,12 @@ import { buildMediaUrls, releaseMediaUrls } from './platform/media-urls';
 import { buildDemoProject, type DemoAssets } from './demo/demo-project';
 import { Gauge } from './components/instruments';
 import { useLatestTelemetry } from './telemetry/use-telemetry';
+import { type TelemetryClient } from './telemetry/telemetry-client';
 import {
-  CachingTelemetryClient,
-  SimulatedTelemetryClient,
-  type TelemetryClient,
-} from './telemetry/telemetry-client';
+  createTelemetryClient,
+  loadServiceEndpoint,
+  saveServiceEndpoint,
+} from './telemetry/service-endpoint';
 import { AssetsModule } from './modules/AssetsModule';
 import { NotesModule } from './modules/NotesModule';
 import { TelemetryModule } from './modules/TelemetryModule';
@@ -252,9 +253,22 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
     setMediaUrls((previous) => new Map(previous).set(mediaId, url));
   }, []);
 
+  /**
+   * Dirección del servicio local de telemetría.
+   *
+   * Vive en el almacén del equipo y no en el proyecto: es una propiedad del
+   * puesto. Sin dirección, el cliente es el simulador y la interfaz lo rotula.
+   */
+  const [serviceEndpoint, setServiceEndpoint] = useState<string | null>(() => loadServiceEndpoint());
+
+  const changeServiceEndpoint = useCallback((endpoint: string | null): void => {
+    saveServiceEndpoint(endpoint);
+    setServiceEndpoint(endpoint);
+  }, []);
+
   const client = useMemo(
-    () => telemetryClient ?? new CachingTelemetryClient(new SimulatedTelemetryClient()),
-    [telemetryClient],
+    () => telemetryClient ?? createTelemetryClient(serviceEndpoint),
+    [telemetryClient, serviceEndpoint],
   );
 
   const [moduleId, setModuleId] = useState<ModuleId>('scenes');
@@ -605,7 +619,14 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
                 />
               )}
               {moduleId === 'windows' && <InfoWindowsModule store={store} />}
-              {moduleId === 'telemetry' && <TelemetryModule store={store} client={client} />}
+              {moduleId === 'telemetry' && (
+                <TelemetryModule
+                  store={store}
+                  client={client}
+                  serviceEndpoint={telemetryClient === undefined ? serviceEndpoint : null}
+                  onServiceEndpointChange={telemetryClient === undefined ? changeServiceEndpoint : null}
+                />
+              )}
               {moduleId === 'tours' && <ToursModule store={store} />}
               {moduleId === 'skin' && <SkinEditor store={store} />}
               {moduleId === 'publish' && <PublishModule store={store} mediaFiles={mediaFiles} />}
