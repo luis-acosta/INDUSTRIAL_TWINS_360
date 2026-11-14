@@ -69,6 +69,7 @@ import {
 } from './windows';
 import { PublishedTelemetry } from './telemetry';
 import { SkinRenderer } from './SkinRenderer';
+import { ModelSceneView } from './ModelSceneView';
 import { classifyDevice, currentDeviceSignals } from './device';
 import {
   applyVisibilityAction,
@@ -857,18 +858,29 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
           <TransitionOverlay snapshot={transition.run.snapshot} state={transition.run.state} />
         )}
 
-        <PanoramaViewer
-          scene={viewerScene}
-          {...(pendingView !== null ? { view: pendingView } : {})}
-          onViewChange={(next) => {
-            setView(next);
-            // Una vez el visor ha adoptado la vista de entrada, se deja de
-            // forzar: mantenerla haría imposible girar la cámara.
-            if (pendingView !== null) setPendingView(null);
-          }}
-          onHotspotActivate={activateHotspot}
-          onHotspotHover={hoverHotspot}
-        />
+        {/* Una escena de modelo se dibuja con su propio visor. Antes caía en
+            el de panorámicas, que sin textura mostraba una esfera negra: la
+            escena parecía no haberse publicado. */}
+        {scene?.kind === 'model' ? (
+          <ModelSceneView
+            scene={scene}
+            mediaUrls={mediaUrls}
+            onHotspot={(hotspot) => activateHotspot(hotspot, 'click')}
+          />
+        ) : (
+          <PanoramaViewer
+            scene={viewerScene}
+            {...(pendingView !== null ? { view: pendingView } : {})}
+            onViewChange={(next) => {
+              setView(next);
+              // Una vez el visor ha adoptado la vista de entrada, se deja de
+              // forzar: mantenerla haría imposible girar la cámara.
+              if (pendingView !== null) setPendingView(null);
+            }}
+            onHotspotActivate={activateHotspot}
+            onHotspotHover={hoverHotspot}
+          />
+        )}
 
         {/* La interfaz del autor, si la hay, sustituye a la navegación propia
             del visor: dos barras de escenas superpuestas es peor que

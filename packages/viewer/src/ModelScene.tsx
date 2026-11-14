@@ -31,6 +31,7 @@ import {
   collectMeshNames,
   ModelCameraController,
   pickMesh,
+  playAnimation,
   setNodeVisibility,
   type ModelCameraState,
   type ModelPick,
@@ -40,6 +41,8 @@ export interface ModelSceneProps {
   /** Modelo ya cargado y normalizado. */
   readonly root: Object3D | null;
   readonly animations?: readonly AnimationClip[];
+  /** Nombres de las animaciones que arrancan al cargar (L10). */
+  readonly autoplay?: readonly string[];
   readonly lighting: ModelLighting;
   readonly bounds: CameraBounds;
   readonly mode: CameraMode;
@@ -52,6 +55,19 @@ export interface ModelSceneProps {
   /** Nombres de las mallas, cuando el modelo termina de prepararse. */
   readonly onMeshNames?: (names: readonly string[]) => void;
   readonly onDegraded?: (degraded: boolean, fps: number) => void;
+  /**
+   * Se llama al final de cada fotograma dibujado.
+   *
+   * Existe para la capa de marcadores, que tiene que reproyectarse cuando la
+   * cámara se mueve. No se usa `onCameraChange` porque también hay que
+   * reproyectar cuando se mueve una pieza animada y la cámara está quieta.
+   */
+  readonly onFrame?: (frame: {
+    readonly scene: Scene;
+    readonly camera: PerspectiveCamera;
+    readonly width: number;
+    readonly height: number;
+  }) => void;
   readonly className?: string;
   readonly ariaLabel?: string;
 }
@@ -67,6 +83,7 @@ const DEFAULT_VIEW: ModelCameraState = {
 export function ModelScene({
   root,
   animations = [],
+  autoplay = [],
   lighting,
   bounds,
   mode,
@@ -76,6 +93,7 @@ export function ModelScene({
   onCameraChange,
   onMeshNames,
   onDegraded,
+  onFrame,
   className,
   ariaLabel = 'Modelo 3D',
 }: ModelSceneProps): JSX.Element {
@@ -88,6 +106,10 @@ export function ModelScene({
   const adaptiveRef = useRef(new AdaptiveResolution(50, 0.6, Math.min(2, globalThis.devicePixelRatio ?? 1)));
   /** Pedir un fotograma: el bucle duerme cuando nada cambia. */
   const dirtyRef = useRef(true);
+  /* En una referencia para que cambiar el callback no reinicie el bucle de
+     dibujado: reiniciarlo en cada render tiraría el reloj y la medida de fps. */
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
   const [failed, setFailed] = useState<string | null>(null);
 
   const requestFrame = useCallback(() => {
@@ -147,11 +169,25 @@ export function ModelScene({
     root.userData['isModel'] = true;
     scene.add(root);
 
-    if (animations.length > 0) mixerRef.current = new AnimationMixer(root);
+    if (animations.length > 0) {
+      const mixer = new AnimationMixer(root);
+      mixerRef.current = mixer;
+
+      /* Las animaciones de arranque (L10). Un modelo cuya animación no
+         arranca nunca se ve como un modelo roto: la pieza que debería girar
+         está quieta y nada explica por qué. */
+      for (const name of autoplay) {
+        if (playAnimation(mixer, animations, name, true) === null) {
+          // Se avisa en consola y se sigue: el autor pudo renombrar el clip al
+          // reexportar, y perder las demás animaciones por una sería peor.
+          console.warn(`[it360] el modelo no trae la animación «${name}»`);
+        }
+      }
+    }
 
     onMeshNames?.(collectMeshNames(root));
     requestFrame();
-  }, [root, animations, onMeshNames, requestFrame]);
+  }, [root, animations, autoplay, onMeshNames, requestFrame]);
 
   /* --- Cámara --- */
 
@@ -374,6 +410,7 @@ export function ModelScene({
       camera.updateProjectionMatrix();
 
       renderer.render(scene, camera);
+      onFrameRef.current?.({ scene, camera, width, height });
     };
 
     raf = requestAnimationFrame(frame);

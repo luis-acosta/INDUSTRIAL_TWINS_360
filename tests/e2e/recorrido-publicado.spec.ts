@@ -91,6 +91,45 @@ test.describe('recorrido publicado', () => {
     await expect(barra.getByText('Plataforma superior')).toBeVisible();
   });
 
+  test('una escena de modelo 3D se dibuja en el recorrido', async ({ page }) => {
+    // TEST-E2E-025: el visor sólo dibujaba panorámicas, así que una escena de
+    // modelo se publicaba y aparecía en negro. Esto sólo se puede comprobar
+    // con WebGL de verdad: en jsdom no hay contexto y el modelo no carga.
+    await page.goto('/');
+
+    await page.locator('.skin-thumbs').getByRole('button', { name: /Modelo de la unidad/ }).click();
+
+    const lienzo = page.locator('.tour__model canvas');
+    await expect(lienzo).toBeVisible();
+
+    const caja = await lienzo.boundingBox();
+    expect(caja?.width ?? 0).toBeGreaterThan(200);
+    expect(caja?.height ?? 0).toBeGreaterThan(200);
+  });
+
+  test('un marcador anclado a una pieza del modelo lleva a su escena', async ({ page }) => {
+    // TEST-E2E-026: L05 y L07 de principio a fin. La posición del marcador se
+    // guarda en el espacio local de la pieza y se proyecta cada fotograma:
+    // ninguna prueba unitaria puede decir si acaba donde el visitante lo ve.
+    await page.goto('/');
+    const barra = page.getByRole('banner');
+
+    await page.locator('.skin-thumbs').getByRole('button', { name: /Modelo de la unidad/ }).click();
+    await expect(page.locator('.tour__model canvas')).toBeVisible();
+
+    const marcador = page.getByRole('button', { name: 'A la sala de bombas' });
+    await expect(marcador).toBeVisible();
+
+    // Y está colocado, no en la esquina: la capa escribe la posición al
+    // dibujar el primer fotograma.
+    const caja = await marcador.boundingBox();
+    expect(caja?.x ?? 0).toBeGreaterThan(10);
+    expect(caja?.y ?? 0).toBeGreaterThan(10);
+
+    await marcador.click();
+    await expect(barra.getByText('Sala de bombas')).toBeVisible();
+  });
+
   test('la interfaz que diseñó el autor se dibuja sobre el recorrido', async ({ page }) => {
     // TEST-E2E-020: el skin no se dibujaba en ninguna parte. Aquí se comprueba
     // con disposición de verdad, que es lo único que jsdom no puede dar.

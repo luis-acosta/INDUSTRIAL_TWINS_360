@@ -234,3 +234,73 @@
     backdrop-filter: none;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Marcadores sobre modelo 3D (L06, L07)
+ *
+ * La capa no recibe el puntero: orbitar el modelo arrastrando por encima de
+ * un marcador tiene que girar la cámara, no quedarse atascado. Lo recuperan
+ * los botones.
+ * ------------------------------------------------------------------ */
+
+.model-hotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.model-hotspot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--it-space-1_5);
+  padding: 3px var(--it-space-2) 3px 4px;
+  border: 1px solid var(--it-color-border-default);
+  border-radius: var(--it-radius-pill);
+  background: color-mix(in srgb, var(--it-color-surface-overlay) 86%, transparent);
+  color: var(--it-color-text-primary);
+  font: inherit;
+  font-size: var(--it-text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  /* El origen de la transformación es el centro, porque la posición que la
+     capa escribe es la del punto de la pieza, no la de la esquina. */
+  transform-origin: center;
+}
+
+.model-hotspot:hover {
+  border-color: var(--it-color-accent-default);
+}
+
+.model-hotspot:focus-visible {
+  outline: var(--it-border-focus) solid var(--it-color-border-focus);
+  outline-offset: 2px;
+}
+
+.model-hotspot--selected {
+  border-color: var(--it-color-canvas-hotspotSelected);
+  color: var(--it-color-canvas-hotspotSelected);
+}
+
+.model-hotspot__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--it-radius-circle);
+  background: var(--it-color-canvas-hotspot);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--it-color-surface-canvas) 70%, transparent);
+  flex: none;
+}
+
+.model-hotspot--selected .model-hotspot__dot {
+  background: var(--it-color-canvas-hotspotSelected);
+}
+
+.model-hotspot__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}

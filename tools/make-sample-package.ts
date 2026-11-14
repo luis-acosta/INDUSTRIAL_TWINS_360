@@ -139,6 +139,80 @@ function zlibStored(data: Uint8Array): Uint8Array {
   return new Uint8Array(blocks);
 }
 
+/**
+ * Un .glb mínimo y válido: un cuadrilátero con nombre de pieza.
+ *
+ * Se genera en lugar de meter un archivo binario en el repositorio porque el
+ * paquete de muestra tiene que poder reconstruirse entero desde el código, y
+ * porque lo único que hace falta para comprobar el camino del modelo es una
+ * malla con nombre: el visor la carga, la normaliza y le ancla un marcador
+ * igual que a un CAD de cuarenta mil piezas.
+ */
+function minimalGlb(nodeName: string): Uint8Array {
+  const positions = new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]);
+  const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+  // El buffer binario: posiciones y luego índices, alineados a cuatro bytes.
+  const positionBytes = new Uint8Array(positions.buffer);
+  const indexBytes = new Uint8Array(indices.buffer);
+  const indexOffset = positionBytes.byteLength;
+  const binLength = indexOffset + indexBytes.byteLength;
+  const binPadded = Math.ceil(binLength / 4) * 4;
+
+  const bin = new Uint8Array(binPadded);
+  bin.set(positionBytes, 0);
+  bin.set(indexBytes, indexOffset);
+
+  const gltf = {
+    asset: { version: '2.0', generator: 'INDUSTRIAL TWINS 360 — paquete de prueba' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0, name: nodeName }],
+    meshes: [{ name: nodeName, primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 4,
+        type: 'VEC3',
+        min: [-1, -1, 0],
+        max: [1, 1, 0],
+      },
+      { bufferView: 1, componentType: 5123, count: 6, type: 'SCALAR' },
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: positionBytes.byteLength, target: 34_962 },
+      { buffer: 0, byteOffset: indexOffset, byteLength: indexBytes.byteLength, target: 34_963 },
+    ],
+    buffers: [{ byteLength: binPadded }],
+  };
+
+  // El trozo JSON se rellena con espacios y el binario con ceros: lo pide el
+  // formato, y un relleno equivocado hace que el cargador rechace el archivo.
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(gltf));
+  const jsonPadded = Math.ceil(jsonBytes.byteLength / 4) * 4;
+  const json = new Uint8Array(jsonPadded).fill(0x20);
+  json.set(jsonBytes, 0);
+
+  const total = 12 + 8 + jsonPadded + 8 + binPadded;
+  const out = new Uint8Array(total);
+  const view = new DataView(out.buffer);
+
+  view.setUint32(0, 0x46546c67, true); // «glTF»
+  view.setUint32(4, 2, true);
+  view.setUint32(8, total, true);
+  view.setUint32(12, jsonPadded, true);
+  view.setUint32(16, 0x4e4f534a, true); // «JSON»
+  out.set(json, 20);
+
+  const binHeader = 20 + jsonPadded;
+  view.setUint32(binHeader, binPadded, true);
+  view.setUint32(binHeader + 4, 0x004e4942, true); // «BIN»
+  out.set(bin, binHeader + 8);
+
+  return out;
+}
+
 async function buildProject(): Promise<{ project: Project; files: Map<string, Uint8Array> }> {
   const now = new Date('2026-03-01T10:00:00.000Z').toISOString();
   const base = createProject({
@@ -365,6 +439,109 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
     ];
   }
 
+  /* Una escena de modelo 3D con un marcador anclado a su pieza, que lleva a
+     la panorámica (L05). Va en el paquete porque el camino del modelo —bajar
+     el archivo, cargarlo, normalizarlo, proyectar el marcador y comprobar la
+     oclusión— sólo se puede comprobar con WebGL de verdad. */
+  const glb = minimalGlb('valvula_01');
+  const glbPath = 'media/modelos/unidad.glb';
+  files.set(glbPath, glb);
+
+  const glbMediaId = newUuid();
+  media.push({
+    id: glbMediaId,
+    sha256: await sha256(glb),
+    mime: 'model/gltf-binary' as const,
+    kind: 'model' as const,
+    relativePath: glbPath,
+    originalName: 'Unidad U-200.glb',
+    byteSize: glb.byteLength,
+    width: null,
+    height: null,
+    durationS: null,
+    thumbnailPath: null,
+    panorama: null,
+    tiles: [],
+    quarantined: false,
+    quarantineReason: null,
+    createdAt: now,
+  });
+
+  const modelSceneId = newUuid();
+  scenes.push({
+    ...(scenes[0] as (typeof scenes)[number]),
+    id: modelSceneId,
+    kind: 'model' as const,
+    title: 'Modelo de la unidad',
+    mediaId: glbMediaId,
+    model: {
+      defaultMode: 'orbit' as const,
+      allowedModes: ['orbit' as const, 'flyOver' as const, 'firstPerson' as const],
+      bounds: {
+        minDistance: 0.5,
+        maxDistance: 500,
+        minPolarAngle: 0.05,
+        maxPolarAngle: Math.PI - 0.05,
+        eyeHeight: 1.7,
+        moveSpeed: 3,
+        collide: true,
+      },
+      lighting: {
+        ambientIntensity: 0.6,
+        directionalIntensity: 1.2,
+        directionalYaw: 0.8,
+        directionalPitch: 0.9,
+        shadows: true,
+        background: { kind: 'token' as const, surfaceToken: 'sunken' as const },
+        exposure: 1,
+      },
+      savedViews: [],
+      adaptiveResolution: true,
+      targetFps: 50,
+      minPixelRatio: 0.6,
+      autoplayAnimations: [],
+      coordinateSpaceId: null,
+    },
+    hotspots: [
+      {
+        ...(first?.hotspots[0] as NonNullable<typeof first>['hotspots'][number]),
+        id: newUuid(),
+        sceneId: modelSceneId,
+        name: 'A la sala de bombas',
+        anchor: {
+          space: 'modelSurface' as const,
+          nodeName: 'valvula_01',
+          localPosition: { x: 0, y: 0, z: 0 },
+          normal: { x: 0, y: 0, z: 1 },
+        },
+        style: {
+          ...(first?.hotspots[0]?.style as NonNullable<typeof first>['hotspots'][0]['style']),
+          labelTemplate: 'A la sala de bombas',
+        },
+        actions: [
+          {
+            id: newUuid(),
+            event: 'click' as const,
+            config: {
+              type: 'goToScene' as const,
+              sceneId: (first?.id ?? modelSceneId) as Uuid,
+              entryMode: 'smart' as const,
+              transition: { kind: 'fade' as const, durationMs: 600, useGeometry: true },
+            },
+            order: 0,
+            delayMs: 0,
+            focusDwellMs: 1200,
+            once: false,
+            requiresScore: null,
+            enabled: true,
+          },
+        ],
+        order: 0,
+      },
+    ],
+    order: scenes.length,
+  } as (typeof scenes)[number]);
+
   /* Un plano con las dos escenas situadas.
    *
    * El paquete lo lleva porque el plano y el radar sólo se pueden comprobar en
@@ -410,13 +587,22 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
     },
   ];
 
+  /* Una posición distinta por escena. Dos puntos en el mismo sitio se tapan y
+     el de abajo deja de poderse pulsar, que es un fallo del paquete de prueba
+     difícil de reconocer: parece un fallo del plano. */
+  const markerSpots = [
+    { x: 0.3, y: 0.7 },
+    { x: 0.72, y: 0.28 },
+    { x: 0.52, y: 0.5 },
+  ] as const;
+
   const planMarkers = scenes.map((scene, index) => ({
     id: newUuid(),
     planId,
     sceneId: scene.id,
-    position: index === 0 ? { x: 0.3, y: 0.7 } : { x: 0.72, y: 0.28 },
+    position: markerSpots[index % markerSpots.length] ?? { x: 0.5, y: 0.5 },
     label: '',
-    headingRad: index === 0 ? 0 : Math.PI / 2,
+    headingRad: (index * Math.PI) / 2,
   }));
 
   /* Una ventana con dos pestañas: texto con variables y formato, una imagen

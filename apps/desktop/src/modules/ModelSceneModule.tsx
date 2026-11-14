@@ -16,11 +16,15 @@
  *   llegan en milímetros, en pulgadas o con el origen a kilómetros; tal cual,
  *   el modelo aparece microscópico o fuera de cámara y parece que no cargó.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  actionSchema,
+  createHotspot,
+  createModelSurfaceAnchor,
   newUuid,
   type CameraMode,
   type ModelLighting,
+  type ModelSurfaceAnchor,
   type Scene as DomainScene,
   type Uuid,
 } from '@it360/domain';
@@ -30,6 +34,8 @@ import {
   modelSizeWarning,
   ModelScene,
   normalizeModel,
+  useModelHotspotLayer,
+  worldToLocal,
   type ModelCameraState,
   type ModelPick,
 } from '@it360/viewer';
@@ -81,6 +87,15 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
   const [loading, setLoading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [pick, setPick] = useState<ModelPick | null>(null);
+  /**
+   * Modo de colocación de marcadores (L06, L07).
+   *
+   * Es un modo y no un clic con tecla modificadora porque colocar varios
+   * marcadores seguidos es la tarea normal: con modificador habría que
+   * mantenerla pulsada durante toda la sesión de colocado.
+   */
+  const [placing, setPlacing] = useState(false);
+  const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<readonly string[]>([]);
   const [degraded, setDegraded] = useState<{ on: boolean; fps: number }>({ on: false, fps: 0 });
 
@@ -214,6 +229,113 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
     );
   }
 
+  /* Marcadores pegados a una pieza de este modelo. Los de pantalla o de plano
+     de la misma escena no se dibujan aquí: no tienen posición en el modelo. */
+  const surfaceHotspots = useMemo(
+    () =>
+      scene.hotspots.filter(
+        (hotspot): hotspot is typeof hotspot & { anchor: ModelSurfaceAnchor } =>
+          hotspot.anchor.space === 'modelSurface',
+      ),
+    [scene.hotspots],
+  );
+
+  const layer = useModelHotspotLayer({
+    hotspots: surfaceHotspots.map((hotspot) => ({
+      id: hotspot.id,
+      label: hotspot.name,
+      anchor: hotspot.anchor,
+      selected: hotspot.id === selectedHotspotId,
+    })),
+    root: loaded?.root ?? null,
+    onActivate: (id) => setSelectedHotspotId(id),
+    // En el editor no se comprueba la oclusión: el autor quiere ver lo que ha
+    // colocado aunque esté detrás de un depósito.
+    testOcclusion: false,
+  });
+
+  const selectedHotspot = useMemo(
+    () => surfaceHotspots.find((hotspot) => hotspot.id === selectedHotspotId) ?? null,
+    [surfaceHotspots, selectedHotspotId],
+  );
+
+  /** Escena a la que lleva el marcador, si tiene una acción de navegación. */
+  const linkTargetOf = (hotspot: DomainScene['hotspots'][number]): string | null => {
+    for (const action of hotspot.actions) {
+      if (action.config.type === 'goToScene') return action.config.sceneId;
+    }
+    return null;
+  };
+
+  /**
+   * Enlaza el marcador con una escena, o le quita el enlace (L05).
+   *
+   * Se usa la acción de navegación que ya existe en lugar de un campo nuevo:
+   * un segundo mecanismo de navegación sería un segundo sitio donde arreglar
+   * cada defecto de las transiciones.
+   */
+  const onLinkScene = (hotspot: DomainScene['hotspots'][number], sceneId: string): void => {
+    const rest = hotspot.actions.filter((action) => action.config.type !== 'goToScene');
+
+    if (sceneId === '') {
+      store.updateHotspot(scene.id, hotspot.id, 'Quitar enlace del marcador', { actions: rest });
+      return;
+    }
+
+    const action = actionSchema.parse({
+      id: newUuid(),
+      event: 'click',
+      config: {
+        type: 'goToScene',
+        sceneId,
+        entryMode: 'smart',
+        transition: { kind: 'fade', durationMs: 600, useGeometry: true },
+      },
+      order: rest.length,
+    });
+
+    store.updateHotspot(scene.id, hotspot.id, 'Enlazar marcador con una escena', {
+      actions: [...rest, action],
+    });
+  };
+
+  /**
+   * Coloca un marcador donde se ha pulsado.
+   *
+   * La posición se guarda en el espacio local de la pieza, no del modelo: así
+   * el marcador sigue a una válvula animada en lugar de quedarse flotando.
+   */
+  const onPlaceAt = (hit: ModelPick): void => {
+    const root = loaded?.root;
+    if (root === undefined) return;
+
+    const node = root.getObjectByName(hit.nodeName);
+    if (node === undefined) {
+      push({
+        tone: 'warning',
+        title: 'Esa pieza no tiene nombre en el modelo',
+        description: 'Exporte el CAD conservando los nombres para poder anclarle marcadores.',
+      });
+      return;
+    }
+
+    const local = worldToLocal(node, hit.point);
+    const created = createHotspot({
+      sceneId: scene.id,
+      name: `Marcador ${scene.hotspots.length + 1}`,
+      anchor: createModelSurfaceAnchor(
+        hit.nodeName,
+        { x: local.x, y: local.y, z: local.z },
+        { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z },
+      ),
+      order: scene.hotspots.length,
+      now: new Date().toISOString(),
+    });
+
+    store.addHotspot(scene.id, created);
+    setSelectedHotspotId(created.id);
+  };
+
   return (
     <div className="model-module">
       <div className="model-module__main">
@@ -257,19 +379,32 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
                 bounds={settings.bounds}
                 mode={settings.defaultMode}
                 hiddenNodes={hidden}
-                onPick={setPick}
+                onPick={(hit) => {
+                  setPick(hit);
+                  if (placing && hit !== null) onPlaceAt(hit);
+                }}
                 onCameraChange={onCameraChange}
                 onMeshNames={onMeshNames}
                 onDegraded={(on, fps) => setDegraded({ on, fps })}
+                onFrame={layer.handle.onFrame}
                 className="model-module__scene"
                 ariaLabel={`Modelo de ${scene.title}`}
               />
+              {layer.element}
             </div>
 
             <p className="model-module__hint">
-              Arrastre para girar, con Mayús para desplazar, rueda para acercar.
-              {settings.defaultMode !== 'orbit' && ' Use W A S D o las flechas para moverse.'}{' '}
-              Pulse sobre una pieza para identificarla.
+              {placing ? (
+                <strong>
+                  Pulse sobre una pieza para anclarle un marcador. Pulse «Terminar» al acabar.
+                </strong>
+              ) : (
+                <>
+                  Arrastre para girar, con Mayús para desplazar, rueda para acercar.
+                  {settings.defaultMode !== 'orbit' && ' Use W A S D o las flechas para moverse.'}{' '}
+                  Pulse sobre una pieza para identificarla.
+                </>
+              )}
               {degraded.on && (
                 <>
                   {' '}
@@ -510,6 +645,109 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
             />
           )}
         </Field>
+
+        {/* ---------------- Marcadores sobre el modelo (L06, L07) ---------------- */}
+
+        <SectionLabel
+          actions={
+            <Button
+              size="sm"
+              variant={placing ? 'primary' : 'ghost'}
+              disabled={loaded === null}
+              onClick={() => setPlacing((current) => !current)}
+            >
+              {placing ? 'Terminar' : 'Anclar marcador'}
+            </Button>
+          }
+        >
+          Marcadores {surfaceHotspots.length > 0 && <Badge tone="neutral">{surfaceHotspots.length}</Badge>}
+        </SectionLabel>
+
+        {surfaceHotspots.length === 0 ? (
+          <p className="model-module__hint">
+            Ningún marcador anclado a una pieza. Un marcador sobre el modelo puede abrir la ficha
+            del equipo o llevar a la panorámica tomada en ese punto.
+          </p>
+        ) : (
+          <ul className="model-module__meshes">
+            {surfaceHotspots.map((hotspot) => {
+              const missing =
+                loaded !== null && !loaded.meshNames.includes(hotspot.anchor.nodeName);
+
+              return (
+                <li key={hotspot.id}>
+                  <button
+                    type="button"
+                    className={`model-module__hotspot${hotspot.id === selectedHotspotId ? ' model-module__hotspot--active' : ''}`}
+                    onClick={() => setSelectedHotspotId(hotspot.id)}
+                  >
+                    <span>{hotspot.name}</span>
+                    {missing ? (
+                      <Badge tone="alarm" title="El modelo ya no tiene esta pieza">
+                        pieza ausente
+                      </Badge>
+                    ) : (
+                      <span className="model-module__hotspot-node">{hotspot.anchor.nodeName}</span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {selectedHotspot !== null && (
+          <>
+            <Field label="Nombre del marcador">
+              {({ id }) => (
+                <TextInput
+                  id={id}
+                  size="sm"
+                  value={selectedHotspot.name}
+                  onChange={(event) =>
+                    store.updateHotspot(
+                      scene.id,
+                      selectedHotspot.id,
+                      'Renombrar marcador',
+                      { name: event.currentTarget.value },
+                      `hotspot.name:${selectedHotspot.id}`,
+                    )
+                  }
+                />
+              )}
+            </Field>
+
+            <Field label="Lleva a" hint="Una panorámica tomada en este punto (L05).">
+              {({ id }) => (
+                <Select
+                  id={id}
+                  value={linkTargetOf(selectedHotspot) ?? ''}
+                  onChange={(event) => onLinkScene(selectedHotspot, event.currentTarget.value)}
+                >
+                  <option value="">Sin enlace</option>
+                  {store.project.scenes
+                    .filter((candidate) => candidate.id !== scene.id)
+                    .map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.title}
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </Field>
+
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                store.removeHotspots(scene.id, [selectedHotspot.id]);
+                setSelectedHotspotId(null);
+              }}
+            >
+              Quitar marcador
+            </Button>
+          </>
+        )}
 
         {/* ---------------- Piezas (L12) ---------------- */}
 

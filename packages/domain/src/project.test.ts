@@ -16,6 +16,7 @@ import {
 import { actionSchema, type Action } from './action';
 import { modelSettingsSchema, validateSceneConsistency } from './scene';
 import { createNode } from './skin-editing';
+import { createModelSurfaceAnchor } from './model-hotspot';
 
 /** Acción que abre una ventana, para armar los casos de publicación. */
 const openWindowAction = (id: string, windowId: string): Action =>
@@ -166,6 +167,46 @@ describe('integridad referencial', () => {
       { severity: 'warning' as const, entity: 'note', entityId: 'x', message: 'aviso' },
     ];
     expect(hasBlockingProblems(problems)).toBe(false);
+  });
+});
+
+describe('marcadores sobre modelo', () => {
+  it('TEST-PRJ-017b: un marcador pegado a una pieza fuera de una escena de modelo es un error', () => {
+    // Se dibujaría en ninguna parte, y el autor lo descubriría abriendo el
+    // paquete publicado.
+    const base = makeProject();
+    const scene = makeScene(10, base.id, {
+      kind: 'panorama',
+      hotspots: [
+        {
+          ...makeHotspot(20, testUuid(10)),
+          anchor: createModelSurfaceAnchor('valvula', { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }),
+        },
+      ],
+    });
+
+    const problems = checkIntegrity({ ...base, scenes: [scene] });
+    const found = problems.filter((problem) => problem.message.includes('no es de modelo'));
+
+    expect(found).toHaveLength(1);
+    expect(found[0]?.severity).toBe('error');
+  });
+
+  it('TEST-PRJ-017c: en una escena de modelo no se denuncia', () => {
+    const base = makeProject();
+    const scene = makeScene(10, base.id, {
+      kind: 'model',
+      mediaId: null,
+      hotspots: [
+        {
+          ...makeHotspot(20, testUuid(10)),
+          anchor: createModelSurfaceAnchor('valvula', { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }),
+        },
+      ],
+    });
+
+    const problems = checkIntegrity({ ...base, scenes: [scene] });
+    expect(problems.filter((problem) => problem.message.includes('no es de modelo'))).toEqual([]);
   });
 });
 

@@ -2522,3 +2522,43 @@ body {
   margin: 0;
   color: var(--it-color-text-secondary);
 }
+
+/* Marcadores anclados a una pieza del modelo (L06, L07). */
+.model-module__hotspot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--it-space-2);
+  text-align: left;
+  padding: var(--it-space-1_5) var(--it-space-2);
+  border: 0;
+  border-radius: var(--it-radius-sm);
+  background: none;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+  cursor: pointer;
+}
+
+.model-module__hotspot:hover {
+  background: var(--it-color-surface-raised);
+  color: var(--it-color-text-primary);
+}
+
+.model-module__hotspot--active {
+  background: var(--it-color-accent-muted);
+  color: var(--it-color-accent-onSurface);
+}
+
+.model-module__hotspot-node {
+  font-family: var(--it-font-mono);
+  font-size: var(--it-text-2xs);
+  color: var(--it-color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* El lienzo del modelo necesita contexto de posición para la capa. */
+.model-module__canvas {
+  position: relative;
+}

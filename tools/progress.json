@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.34.0",
-  "updatedAt": "2026-11-13T20:10:00Z",
+  "version": "0.35.0",
+  "updatedAt": "2026-11-13T21:30:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -162,6 +162,11 @@
       "at": "2026-11-13T20:10:00Z",
       "title": "La interfaz del autor se dibuja en el recorrido publicado",
       "detail": "Etapa 03 casi cerrada: dieciocho tipos de componente, con los paneles pesados reutilizados del visor y los que aún no se dibujan declarados en su sitio. Por el camino salió un defecto que impedía publicar cualquier proyecto con un fondo del sistema de diseño."
+    },
+    {
+      "at": "2026-11-13T21:30:00Z",
+      "title": "Modelos 3D en el recorrido publicado (L05, L06)",
+      "detail": "El visor ya dibuja las escenas de modelo, con marcadores anclados a las piezas que siguen a la pieza, se esconden tras la geometría y llevan a la panorámica del punto. El paquete de prueba genera un .glb mínimo para poder comprobarlo con WebGL de verdad."
     }
   ],
   "status": {
@@ -274,9 +279,9 @@
     "L02": "done",
     "L03": "done",
     "L04": "done",
-    "L05": "pending",
-    "L06": "modeled",
-    "L07": "modeled",
+    "L05": "done",
+    "L06": "done",
+    "L07": "partial",
     "L08": "done",
     "L09": "done",
     "L10": "partial",
@@ -324,12 +329,8 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "F07": "Menús desplegables con entradas y acciones propias, autoría y dibujado (TEST-SCP-001..004, TEST-SKR-012)",
-      "F08": "Pestañas en la interfaz y en las ventanas, con la pestaña por omisión del autor respetada (TEST-SKL-026b..027b, TEST-SKR-013..014, TEST-SCP-005..008)",
-      "F09": "Un único vocabulario de variables para editor y visor, con aviso de las que no se rellenan (TEST-INF-008..014, TEST-SKR-006)",
-      "F13": "Listas de miniaturas que navegan y carruseles con flechas y puntos (TEST-SKR-017..018, TEST-SCP-014, TEST-E2E-022)",
-      "J05": "Mostrar, ocultar y alternar componentes desde una acción, comprobado de principio a fin en navegador real (TEST-SKR-004..005, TEST-E2E-024)",
-      "J10": "Título, puntuación y tiempo disponibles como variables en los textos del autor (TEST-SKR-006, TEST-INF-010)"
+      "L05": "Un marcador anclado a una pieza lleva a la panorámica tomada en ese punto, con la acción de navegación que ya existía; comprobado en navegador real (TEST-MHS-018..020, TEST-E2E-026)",
+      "L06": "Marcadores colocados pulsando sobre el modelo, guardados en el espacio local de la pieza y proyectados cada fotograma, con oclusión en el visor publicado (TEST-MHS-001..017, TEST-MHP-001..021, TEST-MPL-001..004)"
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -356,19 +357,19 @@
     "pruebas": "1546 pruebas TypeScript, 76 del servidor, 46 del cosido, 13 de extremo a extremo y 12 de Rust: 1693 en verde.",
     "reproduccion": "El visor publicado ejecuta recorridos y evaluaciones. El motor de estados sigue siendo la función pura del dominio; el visor aporta los temporizadores, el audio y la cámara. Dos cosas que no son detalles: la espera por narración tiene plazo máximo, porque el navegador bloquea la reproducción automática con sonido y una parada que esperase el final de un audio que nunca suena dejaría el recorrido congelado delante del visitante; y pausar cancela el temporizador, porque un recorrido «pausado» que salta de escena a los pocos segundos desmiente el botón. La búsqueda de marcadores se responde en la escena, no en un cuadro de diálogo: una lista de marcadores para pulsar anularía lo que esa pregunta evalúa. La condición de acceso se comprueba en memoria y se dice al visitante que el resultado vale sólo para esta visita, porque el paquete publicado no escribe nada.",
     "defectosCorregidos": [
-      "La interfaz que diseñaba el autor no se dibujaba en ninguna parte del visor publicado: existía el cálculo de distribución y nada que lo usara.",
-      "El manifiesto rechaza cualquier clave llamada «token» —la guarda contra credenciales— y los fondos del sistema de diseño usaban ese nombre: ningún proyecto con un contenedor de interfaz o una escena de modelo se podía publicar. Renombrado a «surfaceToken», con migración 3 para lo ya guardado.",
-      "El editor anunciaba variables ({{scene.title}}, {{time.elapsed}}) que el visor no rellenaba, y el visor entendía otras: un texto correcto salía en blanco. Ahora hay un solo vocabulario, en el dominio.",
-      "El panel de propiedades decía «no tiene más ajustes propios» de once tipos de componente, y era falso: dejaba pestañas sin pestañas y menús sin entradas.",
-      "El campo de claves del marcador de puntuación se reformateaba en cada tecla y borraba la coma: no se podía escribir más de una clave.",
-      "El visor declaraba siempre «escritorio», así que las reglas de visibilidad por dispositivo del autor no se aplicaban nunca.",
-      "La prueba de credenciales del paquete buscaba la subcadena «token» en lugar de la clave: habría llevado a relajar la comprobación entera por un nombre de campo inocuo."
+      "El visor publicado no dibujaba las escenas de modelo 3D: caían en el visor de panorámicas y, sin textura, aparecían en negro. La escena parecía no haberse publicado.",
+      "Cada sitio que creaba un marcador escribía sus veintitantos campos a mano y los afirmaba con un «as»: dos copias que se separan en cuanto el esquema gana un campo. Ahora hay una fábrica en el dominio.",
+      "El paquete de prueba colocaba dos puntos de plano en la misma posición al añadir una escena, y el de abajo dejaba de poderse pulsar."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",
     "rust": "12 pruebas de Rust en verde, dos nuevas: que la información del contenedor no llega con campos vacíos a la pantalla «Acerca de», y que el error se serializa como texto legible, porque acaba en un aviso que lee una persona. El flujo las ejecuta antes del empaquetado: cuestan segundos y dicen qué ha fallado, mientras que el empaquetado tarda varios minutos en llegar al mismo sitio con menos detalle. `Cargo.lock` pasa a estar versionado: el proyecto fija versiones exactas para que dos compilaciones separadas por meses produzcan el mismo binario, y sin el fichero de bloqueo las dependencias indirectas seguían flotando.",
     "transiciones": "El motor de transiciones existía con 41 pruebas y nadie lo llamaba: el cambio de escena era instantáneo. Ya está conectado. El recurso que lo permite sin un segundo contexto WebGL es que el renderizador conserva su búfer de dibujo —se puso para exportar fotogramas—, así que se puede fotografiar el lienzo justo antes de cambiar de escena y superponer esa imagen mientras la nueva carga debajo. Dos contextos WebGL costarían memoria de vídeo y en equipos modestos el segundo ni se crearía. La escena cambia de inmediato y la animación es decoración encima: si la fotografía falla, el visitante navega igual. Eso está probado, porque una decoración que impide moverse por la planta es peor que no tenerla. Límite declarado: la fotografía es plana y no se reproyecta, así que el giro de cámara hacia el destino no se reproduce; lo que traslada la sensación de avance es la escala. Fingir el giro desplazando la imagen produciría un deslizamiento que no coincide con ninguna geometría y se percibe como un defecto.",
     "etiquetas": "El esquema admitía etiquetas en escenas y marcadores y nada en el editor las ponía. El problema de las etiquetas libres no es guardarlas: es que se multipliquen sin que el autor se entere. En una planta con cuarenta escenas, «Crítico», «critico» y «crítico » serían tres etiquetas, el filtro devolvería un tercio de lo que debería y nadie sabría por qué. Se normaliza lo que no cambia el significado —mayúsculas, espacios y separadores—, pero las tildes se conservan al guardar y sólo se funden al buscar: guardar «critico» por «crítico» estropearía la etiqueta que el autor lee en pantalla, mientras que al buscar conviene que #critico encuentre «crítico» porque quien escribe deprisa omite la tilde. Cuando el autor va a crear una que sólo se diferencia en la tilde, se le avisa de la existente y se le ofrece usarla, pero no se funden solas: puede que quiera las dos, y deshacer una fusión que nadie pidió cuesta más que confirmarla. El organizador muestra el uso de cada etiqueta y permite renombrar, fundir y quitar en todo el proyecto, diciendo antes a cuántos elementos afecta; renombrar sobre una existente es fundir y se avisa con las dos cifras. Atención al nombre: el «TAG» de un activo es otra cosa —el identificador de un equipo, como P-101— y por eso las funciones de etiquetas llevan `TagLabel` en el nombre.",
-    "enlaces": "El visor ignoraba por completo la dirección: todos los enlaces abrían la escena de entrada. Ahora un enlace abre la escena y la orientación que indique. Tres decisiones que vienen de cómo se usan estos enlaces: van en el fragmento y no en la consulta, porque el fragmento no viaja al servidor y la escena que alguien mira no tiene por qué quedar anotada en el registro de accesos del cliente —y así el enlace funciona igual abierto como archivo local—; la escena va por identificador y no por título, porque un título se cambia y el enlace guardado en un correo dejaría de funcionar; y un enlace roto abre la escena de entrada diciéndolo, para que quien lo recibió no crea que le mandaron mal la dirección. La dirección se actualiza con `replaceState` y no `pushState`: cada parada de un recorrido automático añadiría una entrada al historial y el botón de atrás dejaría de servir para salir del recorrido."
+    "enlaces": "El visor ignoraba por completo la dirección: todos los enlaces abrían la escena de entrada. Ahora un enlace abre la escena y la orientación que indique. Tres decisiones que vienen de cómo se usan estos enlaces: van en el fragmento y no en la consulta, porque el fragmento no viaja al servidor y la escena que alguien mira no tiene por qué quedar anotada en el registro de accesos del cliente —y así el enlace funciona igual abierto como archivo local—; la escena va por identificador y no por título, porque un título se cambia y el enlace guardado en un correo dejaría de funcionar; y un enlace roto abre la escena de entrada diciéndolo, para que quien lo recibió no crea que le mandaron mal la dirección. La dirección se actualiza con `replaceState` y no `pushState`: cada parada de un recorrido automático añadiría una entrada al historial y el botón de atrás dejaría de servir para salir del recorrido.",
+    "parcialesExplicados": {
+      "L07": "El marcador sigue a su pieza, gira con ella y se esconde cuando queda detrás de la geometría, pero se dibuja de pie frente a la cámara, no tumbado sobre la superficie como una calcomanía. Para eso hay que dibujarlo dentro de la escena y se perdería el texto legible y el acceso por teclado; queda pendiente de decidir.",
+      "L10": "Las animaciones de arranque ya se reproducen en el visor publicado; las acciones que las lanzan desde un marcador siguen sin efecto allí."
+    }
   }
 }
