@@ -15,6 +15,7 @@
     "packages/persistence",
     "packages/ui",
     "packages/viewer",
+    "packages/tour",
     "packages/editor",
     "packages/exporter",
     "apps/desktop",

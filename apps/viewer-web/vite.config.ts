@@ -30,6 +30,8 @@ export default defineConfig({
       '@it360/ui': resolvePath('../../packages/ui/src/index.ts'),
       '@it360/viewer/viewer.css': resolvePath('../../packages/viewer/src/viewer.css'),
       '@it360/viewer': resolvePath('../../packages/viewer/src/index.ts'),
+      '@it360/tour/tour.css': resolvePath('../../packages/tour/src/tour.css'),
+      '@it360/tour': resolvePath('../../packages/tour/src/index.ts'),
     },
   },
   build: {

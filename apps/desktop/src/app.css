@@ -2562,3 +2562,22 @@ body {
 .model-module__canvas {
   position: relative;
 }
+
+/* Previsualización del recorrido (Y07): el visor ocupa la ventana entera
+   porque es lo que el autor viene a mirar. */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--it-space-2);
+  height: 70vh;
+  min-height: 0;
+}
+
+.preview__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--it-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--it-color-border-subtle);
+}

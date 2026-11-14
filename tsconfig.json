@@ -50,6 +50,12 @@
       ],
       "@it360/exporter": [
         "packages/exporter/src/index.ts"
+      ],
+      "@it360/tour": [
+        "packages/tour/src/index.ts"
+      ],
+      "@it360/tour/tour.css": [
+        "packages/tour/src/tour.css"
       ]
     }
   },

@@ -13,9 +13,8 @@ import type { DomainError } from '@it360/domain';
 import '@it360/tokens/tokens.css';
 import '@it360/ui/styles.css';
 import '@it360/viewer/viewer.css';
-import './viewer-app.css';
-import { loadTour, type LoadedTour } from './manifest';
-import { TourViewer } from './TourViewer';
+import '@it360/tour/tour.css';
+import { loadTour, TourViewer, type LoadedTour } from '@it360/tour';
 
 function Root(): JSX.Element {
   const [tour, setTour] = useState<LoadedTour | null>(null);

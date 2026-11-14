@@ -10,7 +10,7 @@
  * lienzo entero en lugar de comprimir todo. Una herramienta con cinco paneles
  * de 200 px y un lienzo de 300 no sirve para inspeccionar nada.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CONDITION_LABELS,
   evaluateCondition,
@@ -62,6 +62,7 @@ import {
   IconPlan,
   IconPublish,
   IconRedo,
+  IconPlay,
   IconSave,
   IconSearch,
   IconTag,
@@ -94,7 +95,8 @@ import {
 } from '@it360/ui';
 import { PanoramaViewer, type ViewerScene } from '@it360/viewer';
 import { useProjectStore, type ProjectStore } from './state/project-store';
-import { collectPackageFiles, pickAndOpenProject, saveProject } from './platform/project-files';
+import { collectPackageFiles, pickAndOpenProject, saveProject, saveProjectAs } from './platform/project-files';
+import { buildMediaUrls, releaseMediaUrls } from './platform/media-urls';
 import { buildDemoProject, type DemoAssets } from './demo/demo-project';
 import { Gauge } from './components/instruments';
 import { useLatestTelemetry } from './telemetry/use-telemetry';
@@ -111,6 +113,8 @@ import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
 import { PlansModule } from './modules/PlansModule';
 import { InfoWindowsModule } from './modules/InfoWindowsModule';
+import { PreviewDialog } from './modules/PreviewDialog';
+import { APP_VERSION } from './version';
 import { SkinEditor } from './modules/SkinEditor';
 import { ToursModule } from './modules/ToursModule';
 import { HotspotGeometryPanel } from './modules/HotspotGeometry';
@@ -144,6 +148,12 @@ interface ModuleDescriptor {
 /* Se exporta para que las pruebas lean el atajo de cada módulo en lugar de
    repetir el dígito: así añadir un módulo en medio no rompe una prueba que no
    tiene nada que ver con él. */
+/** Nombre del archivo dentro de una ruta, con separador de cualquier sistema. */
+function fileNameOf(path: string): string {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return cut < 0 ? path : path.slice(cut + 1);
+}
+
 export const MODULES: readonly ModuleDescriptor[] = [
   { id: 'scenes', label: 'Escenas y marcadores', icon: <IconPanorama size={18} />, shortcut: '1' },
   { id: 'plans', label: 'Planos y zonas', icon: <IconPlan size={18} />, shortcut: '2' },
@@ -302,6 +312,16 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
         return;
       }
 
+      /* Previsualizar con F5 (Y07). Se atiende aunque el foco esté en un campo
+         de texto, porque F5 no produce texto y quien acaba de escribir un
+         rótulo quiere verlo sin sacar antes el foco. Y se intercepta: en una
+         vista web F5 recargaría la aplicación y se perdería el trabajo. */
+      if (event.key === 'F5') {
+        event.preventDefault();
+        previewRef.current();
+        return;
+      }
+
       if (typing) return;
     };
 
@@ -374,6 +394,67 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
     [errors.length, store, mediaFiles, push],
   );
 
+  /**
+   * Guardar una copia con otro nombre (Y03).
+   *
+   * Después de guardar, el proyecto abierto es la copia nueva, no el original.
+   * Es lo que hace cualquier editor y lo que el usuario espera cuando crea una
+   * variante: seguir trabajando sobre el original dejaría los siguientes
+   * guardados en el archivo equivocado sin que nada lo indicase.
+   */
+  const onSaveAs = useCallback(async () => {
+    setBusy('saving');
+    const result = await saveProjectAs(store.project, mediaFiles);
+    setBusy(null);
+
+    if (!result.ok) {
+      push({
+        tone: 'alarm',
+        title: 'No se pudo guardar la copia',
+        description: `${result.error.message}${result.error.recovery !== undefined ? ` ${result.error.recovery}` : ''}`,
+      });
+      return;
+    }
+    if (result.value === null) return;
+
+    store.markSaved(result.value.path);
+    push({
+      tone: 'nominal',
+      title: 'Copia guardada',
+      description: `Ahora está trabajando sobre «${fileNameOf(result.value.path)}».`,
+    });
+  }, [store, mediaFiles, push]);
+
+  /**
+   * Previsualización (Y07).
+   *
+   * Se abre la ventana con el proyecto en memoria. No se escribe ningún
+   * paquete temporal: el visor pide su manifiesto con `fetch`, y desde
+   * `file://` el navegador lo bloquea, así que un paquete en disco exigiría
+   * además un servidor local.
+   */
+  const [previewing, setPreviewing] = useState(false);
+  /** Última orientación conocida del lienzo, para entrar por ella. */
+  const [canvasView, setCanvasView] = useState<CameraView | null>(null);
+
+  /* En una referencia para que el atajo no tenga que volver a registrarse
+     cada vez que cambia el número de escenas. */
+  const previewRef = useRef<() => void>(() => undefined);
+
+  const onPreview = useCallback(() => {
+    if (store.project.scenes.length === 0) {
+      push({
+        tone: 'warning',
+        title: 'Todavía no hay nada que previsualizar',
+        description: 'Añada una escena al proyecto.',
+      });
+      return;
+    }
+    setPreviewing(true);
+  }, [store.project.scenes.length, push]);
+
+  previewRef.current = onPreview;
+
   const onOpen = useCallback(async () => {
     if (store.dirty) {
       // No se abre encima de trabajo sin guardar sin preguntar: el historial
@@ -395,6 +476,16 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
     if (result.value === null) return;
 
     setOpenedFiles(result.value.files);
+
+    /* Las direcciones de los medios se construyen aquí. Sin esto, abrir un
+       proyecto guardado daba todas las escenas en blanco: el ciclo básico
+       —crear, guardar, seguir mañana— no se cerraba. */
+    const nextUrls = buildMediaUrls(result.value.project.media, result.value.files);
+    setMediaUrls((previous) => {
+      releaseMediaUrls(previous, nextUrls);
+      return nextUrls;
+    });
+
     store.load(result.value.project, result.value.path);
     setSceneId(result.value.project.scenes[0]?.id ?? null);
     setHotspotId(null);
@@ -416,8 +507,10 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
         warnings={warnings.length}
         busy={busy}
         onSave={() => void onSave(false)}
+        onSaveAs={() => void onSaveAs()}
         onForceSave={() => void onSave(true)}
         onOpen={() => void onOpen()}
+        onPreview={() => void onPreview()}
         onPublish={() => setModuleId('publish')}
         onSettings={() => setModuleId('settings')}
       />
@@ -471,6 +564,7 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
             }}
             clipboard={clipboard}
             onCopy={setClipboard}
+            onCanvasView={setCanvasView}
             onRequestDelete={setConfirmDelete}
             onAutoConnect={() => setAutoConnect(true)}
           />
@@ -533,6 +627,17 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
 
       <StatusBar store={store} scene={scene} client={client} />
 
+      {previewing && (
+        <PreviewDialog
+          project={store.project}
+          mediaUrls={mediaUrls}
+          sceneId={sceneId}
+          view={canvasView}
+          appVersion={APP_VERSION}
+          onClose={() => setPreviewing(false)}
+        />
+      )}
+
       <AutoConnectDialog open={autoConnect} onClose={() => setAutoConnect(false)} store={store} />
 
       <ConfirmDialog
@@ -576,8 +681,10 @@ interface CommandBarProps {
   readonly warnings: number;
   readonly busy: 'saving' | 'opening' | null;
   readonly onSave: () => void;
+  readonly onSaveAs: () => void;
   readonly onForceSave: () => void;
   readonly onOpen: () => void;
+  readonly onPreview: () => void;
   readonly onPublish: () => void;
   readonly onSettings: () => void;
 }
@@ -588,8 +695,10 @@ function CommandBar({
   warnings,
   busy,
   onSave,
+  onSaveAs,
   onForceSave,
   onOpen,
+  onPreview,
   onPublish,
   onSettings,
 }: CommandBarProps): JSX.Element {
@@ -658,6 +767,12 @@ function CommandBar({
             { id: 'open', label: 'Abrir proyecto…', icon: <IconFolder size={13} />, onSelect: onOpen },
             { id: 'save', label: 'Guardar', icon: <IconSave size={13} />, onSelect: onSave },
             {
+              id: 'saveAs',
+              label: 'Guardar una copia como…',
+              icon: <IconSave size={13} />,
+              onSelect: onSaveAs,
+            },
+            {
               id: 'force',
               label: 'Guardar de todas formas',
               icon: <IconExperimental size={13} />,
@@ -667,6 +782,19 @@ function CommandBar({
             },
           ]}
         />
+      </div>
+
+      <div className="commandbar__group">
+        <Tooltip content="Ver el recorrido desde la escena que está editando · F5">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<IconPlay size={15} />}
+            onClick={onPreview}
+          >
+            Previsualizar
+          </Button>
+        </Tooltip>
       </div>
 
       <div className="commandbar__group">
@@ -715,6 +843,15 @@ interface ScenesModuleProps {
   readonly onCopy: (hotspots: readonly Hotspot[]) => void;
   readonly onRequestDelete: (target: { kind: 'scene' | 'hotspot'; id: string }) => void;
   readonly onAutoConnect: () => void;
+  /**
+   * Orientación del lienzo, hacia arriba.
+   *
+   * La necesita la previsualización para entrar mirando a lo mismo que el
+   * autor tiene delante (Y07). Es el único dato del lienzo que sale de este
+   * módulo, y sale como aviso y no como estado compartido para que el lienzo
+   * siga siendo el dueño de su cámara.
+   */
+  readonly onCanvasView?: (view: CameraView | null) => void;
 }
 
 function ScenesModule({
@@ -730,6 +867,7 @@ function ScenesModule({
   onCopy,
   onRequestDelete,
   onAutoConnect,
+  onCanvasView,
 }: ScenesModuleProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -1102,7 +1240,11 @@ function ScenesModule({
                     iconOnly
                     icon={<IconCheck size={15} />}
                     aria-label="Vista inicial"
-                    onClick={() => setView(scene?.camera.initialView ?? null)}
+                    onClick={() => {
+                      const initial = scene?.camera.initialView ?? null;
+                      setView(initial);
+                      onCanvasView?.(initial);
+                    }}
                   />
                 </Tooltip>
                 <Tooltip content="Fijar la vista actual como vista inicial">
@@ -1130,7 +1272,10 @@ function ScenesModule({
               <PanoramaViewer
                 scene={viewerScene}
                 selectedHotspotId={hotspot?.id ?? null}
-                onViewChange={setView}
+                onViewChange={(next) => {
+                  setView(next);
+                  onCanvasView?.(next);
+                }}
                 {...(view !== null && placing === false ? {} : {})}
                 onHotspotActivate={(activated) => onSelectHotspot(activated.id)}
                 onCanvasPick={(yaw, pitch) => {

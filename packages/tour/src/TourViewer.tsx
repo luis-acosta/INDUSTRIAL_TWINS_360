@@ -89,9 +89,18 @@ import { PlanView } from './PlanView';
 
 export interface TourViewerProps {
   readonly tour: LoadedTour;
+  /**
+   * Punto de entrada explícito, en lugar de la dirección del navegador.
+   *
+   * Lo usa la previsualización del editor, que monta este mismo componente sin
+   * ser la página: leer la dirección del editor daría la escena equivocada, y
+   * escribirla cambiaría la del editor. Cuando se pasa, el visor no toca el
+   * historial.
+   */
+  readonly initialHash?: string;
 }
 
-export function TourViewer({ tour }: TourViewerProps): JSX.Element {
+export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element {
   const manifest = tour.manifest;
   const mediaUrls = useMemo(() => mediaUrlIndex(tour), [tour]);
 
@@ -102,8 +111,10 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
    * después haría que el visitante viese primero la escena de entrada y luego
    * un salto a la del enlace.
    */
+  const embedded = initialHash !== undefined;
+
   const initialLink = useMemo(() => {
-    const link = parseDeepLink(globalThis.location?.hash ?? '');
+    const link = parseDeepLink(initialHash ?? globalThis.location?.hash ?? '');
     return resolveDeepLink(link, new Set(manifest.scenes.map((s) => s.id)));
     // Sólo al montar: después manda la navegación del visitante.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,13 +306,15 @@ export function TourViewer({ tour }: TourViewerProps): JSX.Element {
    * se obtiene al compartir.
    */
   useEffect(() => {
-    if (sceneId === null || globalThis.history === undefined) return;
+    // Embebido —la previsualización del editor— el visor no es la página: la
+    // dirección pertenece al editor y reescribirla lo descolocaría.
+    if (embedded || sceneId === null || globalThis.history === undefined) return;
 
     const next = buildShareUrl(globalThis.location.href, sceneId);
     if (next !== globalThis.location.href) {
       globalThis.history.replaceState(null, '', next);
     }
-  }, [sceneId]);
+  }, [embedded, sceneId]);
 
   /* ---------------------------------------------------------------- *
    * Navegación entre escenas

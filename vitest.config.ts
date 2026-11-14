@@ -18,6 +18,8 @@ export default defineConfig({
       '@it360/viewer': r('./packages/viewer/src/index.ts'),
       '@it360/editor': r('./packages/editor/src/index.ts'),
       '@it360/exporter': r('./packages/exporter/src/index.ts'),
+      '@it360/tour/tour.css': r('./packages/tour/src/tour.css'),
+      '@it360/tour': r('./packages/tour/src/index.ts'),
     },
   },
   test: {
@@ -27,6 +29,7 @@ export default defineConfig({
       ['packages/ui/**', 'jsdom'],
       ['packages/editor/**', 'jsdom'],
       ['packages/viewer/**', 'jsdom'],
+      ['packages/tour/**', 'jsdom'],
       ['apps/**', 'jsdom'],
     ],
     environment: 'node',

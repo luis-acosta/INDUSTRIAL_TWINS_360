@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.35.0",
-  "updatedAt": "2026-11-13T21:30:00Z",
+  "version": "0.36.0",
+  "updatedAt": "2026-11-14T04:20:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -167,16 +167,21 @@
       "at": "2026-11-13T21:30:00Z",
       "title": "Modelos 3D en el recorrido publicado (L05, L06)",
       "detail": "El visor ya dibuja las escenas de modelo, con marcadores anclados a las piezas que siguen a la pieza, se esconden tras la geometría y llevan a la panorámica del punto. El paquete de prueba genera un .glb mínimo para poder comprobarlo con WebGL de verdad."
+    },
+    {
+      "at": "2026-11-14T04:20:00Z",
+      "title": "El ciclo de vida del proyecto se cierra (Y01, Y03, Y07)",
+      "detail": "Abrir un proyecto guardado ya muestra sus imágenes; se puede guardar una copia; y se previsualiza el recorrido desde la escena que se está editando con el visor de verdad, no con una imitación."
     }
   ],
   "status": {
-    "Y01": "partial",
+    "Y01": "done",
     "Y02": "done",
-    "Y03": "partial",
+    "Y03": "done",
     "Y04": "done",
     "Y05": "done",
     "Y06": "done",
-    "Y07": "pending",
+    "Y07": "done",
     "Y08": "done",
     "C01": "done",
     "C02": "partial",
@@ -329,8 +334,9 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "L05": "Un marcador anclado a una pieza lleva a la panorámica tomada en ese punto, con la acción de navegación que ya existía; comprobado en navegador real (TEST-MHS-018..020, TEST-E2E-026)",
-      "L06": "Marcadores colocados pulsando sobre el modelo, guardados en el espacio local de la pieza y proyectados cada fotograma, con oclusión en el visor publicado (TEST-MHS-001..017, TEST-MHP-001..021, TEST-MPL-001..004)"
+      "Y01": "Crear, guardar y reabrir se cierra de verdad: al abrir un proyecto se construyen las direcciones de sus medios, que es lo que faltaba (TEST-MUR-001..009, TEST-PLC-001..003)",
+      "Y03": "Guardar una copia con otro nombre, y seguir trabajando sobre la copia (TEST-PLC-004..006)",
+      "Y07": "Previsualizar desde la escena que se edita, con el mismo componente que ejecuta el visitante, y con F5 (TEST-PLC-007..009)"
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -357,9 +363,9 @@
     "pruebas": "1546 pruebas TypeScript, 76 del servidor, 46 del cosido, 13 de extremo a extremo y 12 de Rust: 1693 en verde.",
     "reproduccion": "El visor publicado ejecuta recorridos y evaluaciones. El motor de estados sigue siendo la función pura del dominio; el visor aporta los temporizadores, el audio y la cámara. Dos cosas que no son detalles: la espera por narración tiene plazo máximo, porque el navegador bloquea la reproducción automática con sonido y una parada que esperase el final de un audio que nunca suena dejaría el recorrido congelado delante del visitante; y pausar cancela el temporizador, porque un recorrido «pausado» que salta de escena a los pocos segundos desmiente el botón. La búsqueda de marcadores se responde en la escena, no en un cuadro de diálogo: una lista de marcadores para pulsar anularía lo que esa pregunta evalúa. La condición de acceso se comprueba en memoria y se dice al visitante que el resultado vale sólo para esta visita, porque el paquete publicado no escribe nada.",
     "defectosCorregidos": [
-      "El visor publicado no dibujaba las escenas de modelo 3D: caían en el visor de panorámicas y, sin textura, aparecían en negro. La escena parecía no haberse publicado.",
-      "Cada sitio que creaba un marcador escribía sus veintitantos campos a mano y los afirmaba con un «as»: dos copias que se separan en cuanto el esquema gana un campo. Ahora hay una fábrica en el dominio.",
-      "El paquete de prueba colocaba dos puntos de plano en la misma posición al añadir una escena, y el de abajo dejaba de poderse pulsar."
+      "Al abrir un proyecto guardado se cargaban el modelo y los bytes de los archivos, pero nadie construía las direcciones con las que mostrarlos: el proyecto se abría con todas sus escenas en blanco. El ciclo básico del producto —crear, guardar, seguir mañana— no se cerraba. No lo vio ninguna prueba porque las de la aplicación arrancaban con las direcciones ya dadas, como si el proyecto viniera del demo y no del disco.",
+      "«Guardar una copia como» existía en la capa de persistencia y no estaba en ninguna parte de la interfaz.",
+      "F5 en una vista web recargaba la aplicación y se perdía el trabajo sin guardar; ahora se intercepta y previsualiza."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",
@@ -370,6 +376,7 @@
     "parcialesExplicados": {
       "L07": "El marcador sigue a su pieza, gira con ella y se esconde cuando queda detrás de la geometría, pero se dibuja de pie frente a la cámara, no tumbado sobre la superficie como una calcomanía. Para eso hay que dibujarlo dentro de la escena y se perdería el texto legible y el acceso por teclado; queda pendiente de decidir.",
       "L10": "Las animaciones de arranque ya se reproducen en el visor publicado; las acciones que las lanzan desde un marcador siguen sin efecto allí."
-    }
+    },
+    "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }
 }

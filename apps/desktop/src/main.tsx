@@ -11,6 +11,7 @@ import { applyTheme, readStoredTheme, ToastProvider } from '@it360/ui';
 import '@it360/tokens/tokens.css';
 import '@it360/ui/styles.css';
 import '@it360/viewer/viewer.css';
+import '@it360/tour/tour.css';
 import './app.css';
 import { AppRoot } from './App';
 
