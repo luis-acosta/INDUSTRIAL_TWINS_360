@@ -109,6 +109,8 @@ import {
 import { AssetsModule } from './modules/AssetsModule';
 import { NotesModule } from './modules/NotesModule';
 import { TelemetryModule } from './modules/TelemetryModule';
+import { ReviewModule } from './modules/ReviewModule';
+import { HttpReviewClient } from './review/review-client';
 import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModule';
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
@@ -137,6 +139,7 @@ export type ModuleId =
   | 'skin'
   | 'tours'
   | 'publish'
+  | 'review'
   | 'settings';
 
 interface ModuleDescriptor {
@@ -165,6 +168,7 @@ export const MODULES: readonly ModuleDescriptor[] = [
   { id: 'skin', label: 'Interfaz del recorrido', icon: <IconLayers size={18} />, shortcut: '7' },
   { id: 'tours', label: 'Recorridos y formación', icon: <IconTour size={18} />, shortcut: '8' },
   { id: 'publish', label: 'Publicación', icon: <IconPublish size={18} />, shortcut: '9' },
+  { id: 'review', label: 'Revisión y aprobación', icon: <IconCheck size={18} />, shortcut: '0' },
 ];
 
 export interface AppProps {
@@ -260,6 +264,25 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
    * puesto. Sin dirección, el cliente es el simulador y la interfaz lo rotula.
    */
   const [serviceEndpoint, setServiceEndpoint] = useState<string | null>(() => loadServiceEndpoint());
+
+  /**
+   * Identidad con la que se actúa contra el servicio.
+   *
+   * En esta versión la fija el propio equipo y el servicio la acepta por
+   * cabeceras: **no es autenticación**, y así lo documenta el servicio. La
+   * integración con el directorio del cliente es la parte pendiente de la
+   * etapa 11, y hasta entonces el flujo de revisión sirve para organizar el
+   * trabajo de un equipo que ya se conoce, no para impedir una suplantación.
+   */
+  const reviewIdentity = useMemo(
+    () => ({ userId: store.project.users[0]?.id ?? 'editor-local', role: 'editor' }),
+    [store.project.users],
+  );
+
+  const reviewClient = useMemo(
+    () => (serviceEndpoint === null ? null : new HttpReviewClient(serviceEndpoint, reviewIdentity)),
+    [serviceEndpoint, reviewIdentity],
+  );
 
   const changeServiceEndpoint = useCallback((endpoint: string | null): void => {
     saveServiceEndpoint(endpoint);
@@ -619,6 +642,13 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
                 />
               )}
               {moduleId === 'windows' && <InfoWindowsModule store={store} />}
+              {moduleId === 'review' && (
+                <ReviewModule
+                  project={store.project}
+                  client={reviewClient}
+                  currentUserId={reviewIdentity.userId}
+                />
+              )}
               {moduleId === 'telemetry' && (
                 <TelemetryModule
                   store={store}

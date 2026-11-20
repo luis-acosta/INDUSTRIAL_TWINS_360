@@ -38,3 +38,4 @@ export * from './history';
 export * from './scripting';
 export * from './access';
 export * from './project';
+export * from './revision';

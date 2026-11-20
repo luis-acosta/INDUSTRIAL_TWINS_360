@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.39.0",
-  "updatedAt": "2026-11-20T12:10:00Z",
+  "version": "0.40.0",
+  "updatedAt": "2026-11-20T12:40:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -271,8 +271,8 @@
     "X13": "done",
     "X14": "done",
     "X15": "done",
-    "X16": "partial",
-    "X17": "partial",
+    "X16": "done",
+    "X17": "done",
     "X18": "done",
     "X19": "partial",
     "X20": "pending",
@@ -339,12 +339,8 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "N03": "Interfaz dentro del visor: la piel del recorrido se maqueta como pila vertical sobre una textura y se pulsa con el rayo del mando (xr-skin-panel, xr-panel-paint, 30 pruebas). Las acciones las ejecuta el mismo ActionRunner que la versión plana, de modo que un botón hace lo mismo en el visor y en la pantalla.",
-      "N04": "Tamaño, distancia, orientación y desplazamiento angular del panel aplicados de verdad en la colocación (TEST-XRP-001..005).",
-      "N05": "Los cuatro modos se comportan distinto y probado: fijo al mundo, recentrable con cono de 40°, arrastrable con el agarre y modal que bloquea la entrada de lo que hay detrás (TEST-XRP-006..010, TEST-XRR-004, TEST-XRR-011..012).",
-      "N08": "Tarjeta de pregunta en VR: enunciado y una zona pulsable por respuesta, dimensionada según cuántas haya y sin solapes, con la respuesta elegida marcada (TEST-XRK-006..007, TEST-XRD-004..005).",
-      "N09": "Puntuación, avance y cronómetro pintados con sus valores reales, tomados de los mismos ayudantes que alimentan la interfaz plana (TEST-XRD-006..009).",
-      "N11": "Mandos leídos de verdad: flanco de subida por botón y mano, zona muerta de palanca, giro por pasos una vez por cruce, y rayo extraído de la matriz de pose (xr-input, 11 pruebas; TEST-XRR-006)."
+      "X16": "Borradores, revisión y publicación controlada de punta a punta: máquina de estados declarada en tabla en el servicio (review.py), separación de funciones —quien redacta no aprueba ni publica lo que redactó, aunque tenga el permiso—, API de tres rutas y módulo «Revisión y aprobación» en el editor que ofrece sólo las acciones del estado actual y explica los rechazos. 40 pruebas de servidor y 12 de interfaz.",
+      "X17": "Auditoría de cada transición en la cadena existente (quién aprobó y cuándo) y resolución de ediciones simultáneas por sección: el proyecto se resume en secciones reconocibles —una escena, un activo, un plano— y el conflicto se nombra por su título («ambos tocasteis la sala de bombas»). Publicar sobre una base que ya se movió se rechaza. 14 pruebas de dominio."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -381,7 +377,11 @@
       "apps/server/app no era un paquete explícito: las importaciones relativas funcionaban en ejecución pero mypy no las resolvía, de modo que los errores de tipo del servidor pasaban inadvertidos.",
       "El editor construía siempre el simulador: el cliente contra el servicio local existía pero no era alcanzable desde ninguna parte de la interfaz, y un cliente que no se puede elegir no está integrado.",
       "El botón «Entrar en VR» no podía existir: la etapa 13 tenía detección de capacidades, listas de compatibilidad y constantes de colocación, pero ninguna llamada a requestSession. Nada en el recorrido publicado podía entrar en modo inmersivo.",
-      "Pulsar «Entrar en VR» antes de que la escena creara su contexto gráfico dejaba el botón mudo: ahora dice por qué no puede entrar todavía."
+      "Pulsar «Entrar en VR» antes de que la escena creara su contexto gráfico dejaba el botón mudo: ahora dice por qué no puede entrar todavía.",
+      "can_perform sin recurso comparaba el ámbito de la concesión con un recurso vacío, de modo que toda concesión con ámbito quedaba fuera: un revisor con permiso sobre una planta —el caso normal con varias plantas— no podía listar nada, y el motivo que recibía hablaba de un recurso que la petición no tenía.",
+      "El registro de auditoría se servía entero a cualquiera con el permiso, incluido quien sólo tiene una planta concedida: sus eventos no llevan planta y no se puede recortar, así que ahora se deniega con el motivo en lugar de mostrar lo que ocurre en las demás plantas.",
+      "En la pantalla de revisión, una acción rechazada ponía el motivo y la recarga posterior lo borraba antes de que se pudiera leer: el problema de la consulta y el de la última acción son distintos y ahora se guardan por separado.",
+      "La prueba de la sección de medios salía antes de comprobar nada porque el proyecto de prueba nace sin medios: la guarda se ha quitado y el medio se añade en la propia prueba."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",
