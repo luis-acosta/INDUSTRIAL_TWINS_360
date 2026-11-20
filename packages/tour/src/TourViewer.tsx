@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useVrSession } from './useVrSession';
+import type { ModelSceneControls } from '@it360/viewer';
 import { prefersReducedMotion } from './useSceneTransition';
 import { useTriggers } from './useTriggers';
 import {
@@ -465,6 +466,15 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     actions: [],
   });
 
+  /**
+   * Mando del modelo de la escena actual, o `null` si no hay modelo (L10).
+   *
+   * Va en una referencia y no en el estado porque lo consulta el anfitrión de
+   * acciones, que se construye una vez: guardarlo en el estado volvería a
+   * crear el anfitrión en cada cambio y cancelaría los retardos pendientes.
+   */
+  const modelControlsRef = useRef<ModelSceneControls | null>(null);
+
   const triggers = useTriggers({
     sceneId: scene?.id ?? null,
     sceneActions: scene?.actions ?? [],
@@ -722,10 +732,54 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
       pauseMedia: () => undefined,
       enterVr: () => undefined,
       exitVr: () => undefined,
-      modelPlayAnimation: () => undefined,
-      modelSetVisibility: () => undefined,
+      /**
+       * Animaciones y visibilidad del modelo desde una acción (L10).
+       *
+       * Hasta ahora eran dos funciones vacías: el editor ofrecía las acciones,
+       * el ejecutor las recibía y aquí se descartaban, de modo que pulsar el
+       * marcador no movía nada y nada explicaba por qué.
+       *
+       * Los fallos se registran con `log` y no se le muestran al visitante: un
+       * nombre de animación equivocado es un error de autoría, y quien ve el
+       * recorrido publicado no puede arreglarlo. A quien tiene que avisarle es
+       * al autor, y eso lo hace la validación del proyecto en el editor, que
+       * compara la acción con las animaciones que el archivo trae de verdad.
+       */
+      modelPlayAnimation: (modelSceneId, animationName, loop) => {
+        const controls = modelControlsRef.current;
+        if (scene?.id !== modelSceneId || controls === null) {
+          console.warn(
+            `[it360] la acción de animación apunta a la escena de modelo ${modelSceneId}, que no es la que se está viendo`,
+          );
+          return;
+        }
+        if (!controls.playAnimation(animationName, loop)) {
+          console.warn(
+            `[it360] el modelo no trae la animación «${animationName}». Disponibles: ${
+              controls.animationNames().join(', ') || '(ninguna)'
+            }`,
+          );
+        }
+      },
+      modelSetVisibility: (modelSceneId, nodeNames, visible) => {
+        const controls = modelControlsRef.current;
+        if (scene?.id !== modelSceneId || controls === null) {
+          console.warn(
+            `[it360] la acción de visibilidad apunta a la escena de modelo ${modelSceneId}, que no es la que se está viendo`,
+          );
+          return;
+        }
+        // La acción admite varias piezas: ocultar un conjunto —«todas las
+        // tuberías»— es el caso normal, y hacerlo en una sola acción evita que
+        // el autor tenga que encadenar diez.
+        for (const nodeName of nodeNames) {
+          if (!controls.setVisibility(nodeName, visible)) {
+            console.warn(`[it360] el modelo no trae la pieza «${nodeName}»`);
+          }
+        }
+      },
       runScript: () => {
-        /**
+        /*
          * El plan de publicación retira estas acciones del paquete cuando la
          * política no permite guiones. Si una llega hasta aquí, el visor no la
          * ejecuta: es la segunda barrera, y la que no depende de que el
@@ -1029,6 +1083,9 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
             escena parecía no haberse publicado. */}
         {scene?.kind === 'model' ? (
           <ModelSceneView
+            onControls={(controls) => {
+              modelControlsRef.current = controls;
+            }}
             scene={scene}
             mediaUrls={mediaUrls}
             onHotspot={(hotspot) => activateHotspot(hotspot, 'click')}

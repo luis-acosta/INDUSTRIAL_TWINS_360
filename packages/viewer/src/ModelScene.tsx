@@ -37,6 +37,25 @@ import {
   type ModelPick,
 } from './model-viewer';
 
+/**
+ * Mando imperativo del modelo (L10).
+ *
+ * Se llama «controls» y no «handle» porque `model-viewer.ts` ya usa
+ * `ModelSceneHandle` para otra cosa —las piezas de Three de una escena de
+ * modelo— y dos nombres iguales con contenidos distintos es cómo se acaba
+ * importando el que no era.
+ */
+export interface ModelSceneControls {
+  /** Reproduce una animación por nombre. `false` si el modelo no la tiene. */
+  playAnimation(name: string, loop: boolean): boolean;
+  /** Detiene todas las animaciones en curso. */
+  stopAnimations(): void;
+  /** Muestra u oculta una pieza por nombre. `false` si no existe. */
+  setVisibility(nodeName: string, visible: boolean): boolean;
+  /** Nombres de las animaciones disponibles, para poder explicar un fallo. */
+  animationNames(): readonly string[];
+}
+
 export interface ModelSceneProps {
   /** Modelo ya cargado y normalizado. */
   readonly root: Object3D | null;
@@ -62,6 +81,20 @@ export interface ModelSceneProps {
    * cámara se mueve. No se usa `onCameraChange` porque también hay que
    * reproyectar cuando se mueve una pieza animada y la cámara está quieta.
    */
+  /**
+   * Mando imperativo del modelo, para las acciones del recorrido (L10).
+   *
+   * Es imperativo y no declarativo a propósito: «reproduce la animación de
+   * apertura» es un suceso, no un estado. Expresarlo como propiedad obligaría
+   * a inventar un contador de disparos para distinguir «reprodúcela otra vez»
+   * de «sigues con la misma», que es la clase de estado que acaba
+   * desincronizado.
+   *
+   * Devuelve `false` cuando el modelo no tiene esa animación o esa pieza, para
+   * que quien llama pueda decirlo en lugar de quedarse callado: una acción que
+   * no hace nada y no explica por qué es lo que había hasta ahora.
+   */
+  readonly onControls?: (controls: ModelSceneControls | null) => void;
   readonly onFrame?: (frame: {
     readonly scene: Scene;
     readonly camera: PerspectiveCamera;
@@ -93,6 +126,7 @@ export function ModelScene({
   onCameraChange,
   onMeshNames,
   onDegraded,
+  onControls,
   onFrame,
   className,
   ariaLabel = 'Modelo 3D',
@@ -188,6 +222,43 @@ export function ModelScene({
     onMeshNames?.(collectMeshNames(root));
     requestFrame();
   }, [root, animations, autoplay, onMeshNames, requestFrame]);
+
+  /* --- Mando imperativo (L10) --- */
+
+  useEffect(() => {
+    if (root === null || onControls === undefined) return undefined;
+
+    const controls: ModelSceneControls = {
+      playAnimation: (name, loop) => {
+        const mixer = mixerRef.current;
+        if (mixer === null) return false;
+        const played = playAnimation(mixer, animations, name, loop) !== null;
+        // Se pide un fotograma aunque la animación no exista: no cuesta nada y
+        // evita que un fallo de nombre deje la escena sin redibujar cuando
+        // alguna otra cosa sí cambió.
+        requestFrame();
+        return played;
+      },
+      stopAnimations: () => {
+        mixerRef.current?.stopAllAction();
+        requestFrame();
+      },
+      setVisibility: (nodeName, visible) => {
+        const target = root.getObjectByName(nodeName);
+        if (target === undefined) return false;
+        target.visible = visible;
+        requestFrame();
+        return true;
+      },
+      animationNames: () => animations.map((clip) => clip.name),
+    };
+
+    onControls(controls);
+    // Al desmontar o cambiar de modelo se entrega `null`: un mando que apunta
+    // a un modelo que ya no está en la escena haría que una acción pareciera
+    // funcionar sin que nada se moviera.
+    return () => onControls(null);
+  }, [root, animations, onControls, requestFrame]);
 
   /* --- Cámara --- */
 

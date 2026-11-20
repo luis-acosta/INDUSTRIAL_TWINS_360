@@ -165,6 +165,22 @@ export const modelSettingsSchema = z.object({
   /** Nombres de animación a reproducir al entrar (L10). */
   autoplayAnimations: z.array(z.string().min(1)).default([]),
   /**
+   * Animaciones que trae el archivo, tal como se leyeron al importarlo (L10).
+   *
+   * Se guardan porque son la diferencia entre prevenir el error y contarlo:
+   * con la lista, el editor ofrece las animaciones existentes y la validación
+   * del proyecto avisa de una acción que nombra una que no está. Sin ella, el
+   * autor escribe el nombre a mano y sólo descubre la errata probando el
+   * recorrido publicado, donde la acción no hace nada.
+   *
+   * Puede quedar vacía en un proyecto anterior a este campo o si el archivo se
+   * reemplazó por fuera; entonces no se valida, que es mejor que rechazar algo
+   * correcto.
+   */
+  availableAnimations: z.array(z.string().min(1)).max(500).default([]),
+  /** Nombres de las piezas del modelo, para las acciones de visibilidad (L12). */
+  componentNames: z.array(z.string().min(1)).max(5000).default([]),
+  /**
    * Preserva la vista al cambiar entre modelos compatibles (L11). Dos modelos
    * son compatibles cuando declaran el mismo `coordinateSpaceId`.
    */

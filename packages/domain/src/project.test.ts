@@ -13,8 +13,8 @@ import {
   toManifest,
   type Project,
 } from './project';
-import { actionSchema, type Action } from './action';
-import { modelSettingsSchema, validateSceneConsistency } from './scene';
+import { actionSchema, type Action, type ActionConfig } from './action';
+import { modelSettingsSchema, validateSceneConsistency, type Scene } from './scene';
 import { createNode } from './skin-editing';
 import { createModelSurfaceAnchor } from './model-hotspot';
 
@@ -508,5 +508,186 @@ describe('estadísticas del proyecto', () => {
     });
     expect(stats.unreviewedHotspots).toBe(1);
     expect(stats.hotspots).toBe(3);
+  });
+});
+
+describe('checkIntegrity: acciones sobre el modelo (L10)', () => {
+  /** Escena de modelo con las animaciones y piezas que trae el archivo. */
+  function modelScene(overrides: Partial<NonNullable<Scene['model']>> = {}): Scene {
+    const base = makeScene(40, testUuid(1), { title: 'Unidad U-200', kind: 'model' });
+    return {
+      ...base,
+      kind: 'model',
+      model: {
+        // Los valores por omisión salen del propio esquema: copiarlos a mano
+        // haría que la prueba dejara de reflejar el contrato en cuanto se
+        // añadiera un campo.
+        ...modelSettingsSchema.parse({}),
+        availableAnimations: ['abrir-valvula', 'girar-bomba'],
+        componentNames: ['valvula-v12', 'bomba-p101'],
+        ...overrides,
+      },
+    };
+  }
+
+  function withAction(scene: Scene, config: ActionConfig): Scene {
+    return {
+      ...scene,
+      actions: [
+        actionSchema.parse({ id: testUuid(300), event: 'click', config }),
+      ],
+    };
+  }
+
+  it('avisa de una animación que el archivo no trae', () => {
+    // TEST-PRJ-033: una acción que nombra una animación inexistente no falla:
+    // no hace nada. Es el peor modo de fallo, porque el autor configura,
+    // prueba —donde tampoco pasa nada— y publica un marcador muerto.
+    const scene = modelScene();
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(scene, {
+          type: 'modelPlayAnimation',
+          modelSceneId: scene.id,
+          animationName: 'abrir-valbula',
+          loop: false,
+        }),
+      ],
+    };
+
+    const problems = checkIntegrity(project);
+    const aviso = problems.find((p) => p.message.includes('abrir-valbula'));
+    expect(aviso?.severity).toBe('warning');
+    expect(aviso?.recovery).toContain('abrir-valvula');
+  });
+
+  it('no avisa de una animación que sí existe', () => {
+    // TEST-PRJ-034: un aviso falso sobre una acción correcta entrena a
+    // ignorar los avisos.
+    const scene = modelScene();
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(scene, {
+          type: 'modelPlayAnimation',
+          modelSceneId: scene.id,
+          animationName: 'girar-bomba',
+          loop: true,
+        }),
+      ],
+    };
+
+    expect(checkIntegrity(project).filter((p) => p.message.includes('animación'))).toEqual([]);
+  });
+
+  it('no valida cuando la escena no tiene registrado qué trae el archivo', () => {
+    // TEST-PRJ-035: en un proyecto anterior a ese registro, o si el archivo se
+    // reemplazó por fuera, la lista está vacía: validar daría avisos falsos
+    // sobre acciones correctas.
+    const scene = modelScene({ availableAnimations: [] });
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(scene, {
+          type: 'modelPlayAnimation',
+          modelSceneId: scene.id,
+          animationName: 'cualquiera',
+          loop: false,
+        }),
+      ],
+    };
+
+    expect(checkIntegrity(project).filter((p) => p.message.includes('animación'))).toEqual([]);
+  });
+
+  it('avisa si la acción apunta al modelo de otra escena', () => {
+    // TEST-PRJ-036: el modelo de otra escena no está cargado mientras se ve
+    // ésta, de modo que la acción no puede aplicarse. En el visor publicado
+    // eso se traducía en un marcador que no hacía nada.
+    const first = modelScene();
+    const second = { ...modelScene(), id: testUuid(41), title: 'Unidad U-300' };
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(first, {
+          type: 'modelPlayAnimation',
+          modelSceneId: second.id,
+          animationName: 'girar-bomba',
+          loop: false,
+        }),
+        second,
+      ],
+    };
+
+    const aviso = checkIntegrity(project).find((p) => p.message.includes('otra escena'));
+    expect(aviso?.severity).toBe('warning');
+  });
+
+  it('rechaza una acción de animación sobre una escena panorámica', () => {
+    // TEST-PRJ-037: las animaciones sólo existen en escenas de modelo; esto es
+    // un error de autoría y no una advertencia.
+    const panorama = makeScene(42, testUuid(1), { title: 'Sala de bombas' });
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(panorama, {
+          type: 'modelPlayAnimation',
+          modelSceneId: panorama.id,
+          animationName: 'girar-bomba',
+          loop: false,
+        }),
+      ],
+    };
+
+    const problema = checkIntegrity(project).find((p) => p.message.includes('no es de modelo'));
+    expect(problema?.severity).toBe('error');
+  });
+
+  it('avisa de una pieza que el modelo no trae', () => {
+    // TEST-PRJ-038: igual que con las animaciones, y con el mismo modo de
+    // fallo silencioso.
+    const scene = modelScene();
+    const project: Project = {
+      ...makeProject(),
+      scenes: [
+        withAction(scene, {
+          type: 'modelSetVisibility',
+          modelSceneId: scene.id,
+          nodeNames: ['bomba-p101', 'tuberia-t9'],
+          visible: false,
+        }),
+      ],
+    };
+
+    const avisos = checkIntegrity(project).filter((p) => p.message.includes('pieza'));
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]!.message).toContain('tuberia-t9');
+  });
+
+  it('también valida las acciones declaradas en un marcador', () => {
+    // TEST-PRJ-039: es donde el autor las pone casi siempre —pulsar la válvula
+    // la abre— y validar sólo las de la escena dejaría fuera el caso normal.
+    const scene = modelScene();
+    const hotspot = makeHotspot(50, scene.id, {
+      actions: [
+        actionSchema.parse({
+          id: testUuid(301),
+          event: 'click',
+          config: {
+            type: 'modelPlayAnimation',
+            modelSceneId: scene.id,
+            animationName: 'no-existe',
+            loop: false,
+          },
+        }),
+      ],
+    });
+    const project: Project = {
+      ...makeProject(),
+      scenes: [{ ...scene, hotspots: [hotspot] }],
+    };
+
+    expect(checkIntegrity(project).some((p) => p.message.includes('no-existe'))).toBe(true);
   });
 });

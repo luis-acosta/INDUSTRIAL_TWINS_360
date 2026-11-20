@@ -23,6 +23,7 @@ import {
   normalizeModel,
   useModelHotspotLayer,
   type ModelCameraState,
+  type ModelSceneControls,
 } from '@it360/viewer';
 import { EmptyState, ErrorState, LoadingState } from '@it360/ui';
 import type { AnimationClip, Object3D } from 'three';
@@ -34,6 +35,14 @@ export interface ModelSceneViewProps {
   readonly onHotspot: (hotspot: Hotspot) => void;
   /** Vista guardada a la que entrar, si el recorrido la indicó. */
   readonly initialView?: ModelCameraState;
+  /**
+   * Mando del modelo, para que las acciones del recorrido lo alcancen (L10).
+   *
+   * Sin esto, una acción «reproduce la animación de apertura» configurada en
+   * un marcador no tenía a quién dirigirse en el recorrido publicado: el
+   * ejecutor la recibía y su anfitrión la descartaba.
+   */
+  readonly onControls?: (controls: ModelSceneControls | null) => void;
 }
 
 interface Prepared {
@@ -46,6 +55,7 @@ export function ModelSceneView({
   mediaUrls,
   onHotspot,
   initialView,
+  onControls,
 }: ModelSceneViewProps): JSX.Element {
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -152,6 +162,7 @@ export function ModelSceneView({
         mode={scene.model.defaultMode}
         {...(initialView !== undefined ? { initialView } : {})}
         onFrame={layer.handle.onFrame}
+        {...(onControls !== undefined ? { onControls } : {})}
         className="tour__model-canvas"
         ariaLabel={`Modelo de ${scene.title}`}
       />

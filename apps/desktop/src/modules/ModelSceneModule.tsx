@@ -77,6 +77,8 @@ export interface ModelSceneModuleProps {
 interface LoadedState {
   readonly root: Object3D;
   readonly meshNames: readonly string[];
+  /** Animaciones que trae el archivo. */
+  readonly animationNames: readonly string[];
   readonly sizeWarning: string | null;
   readonly fileName: string;
 }
@@ -163,9 +165,29 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
       setLoaded({
         root: result.model.root,
         meshNames: [],
+        animationNames: result.model.animations.map((clip) => clip.name),
         sizeWarning: modelSizeWarning(buffer.byteLength),
         fileName: file.name,
       });
+
+      // Se anotan en la escena las animaciones que el archivo trae de verdad
+      // (L10). Con esta lista, el editor puede ofrecer las existentes y la
+      // validación avisa de una acción que nombre una que no está; sin ella,
+      // el autor escribe el nombre a mano y sólo descubre la errata probando
+      // el recorrido publicado, donde la acción no hace nada.
+      if (settings !== null) {
+        store.updateScene(
+          scene.id,
+          'Registrar animaciones del modelo',
+          {
+            model: {
+              ...settings,
+              availableAnimations: result.model.animations.map((clip) => clip.name),
+            },
+          },
+          `model.animations:${scene.id}`,
+        );
+      }
 
       push({
         tone: 'info',
@@ -182,9 +204,25 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
 
   const lighting: ModelLighting | null = settings?.lighting ?? null;
 
-  const onMeshNames = useCallback((names: readonly string[]): void => {
-    setLoaded((current) => (current === null ? current : { ...current, meshNames: names }));
-  }, []);
+  const onMeshNames = useCallback(
+    (names: readonly string[]): void => {
+      setLoaded((current) => (current === null ? current : { ...current, meshNames: names }));
+
+      // Las piezas se anotan igual que las animaciones, y por el mismo motivo:
+      // una acción de visibilidad que nombra una pieza inexistente no hace
+      // nada, y el autor sólo lo descubre probando el paquete publicado.
+      const current = scene.model;
+      if (current !== null && !sameNames(current.componentNames, names)) {
+        store.updateScene(
+          scene.id,
+          'Registrar piezas del modelo',
+          { model: { ...current, componentNames: [...names] } },
+          `model.components:${scene.id}`,
+        );
+      }
+    },
+    [scene.id, scene.model, store],
+  );
 
   /**
    * La cámara no se guarda en cada arrastre.
@@ -835,6 +873,20 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
   );
 }
 
+/**
+ * Compara dos listas de nombres sin importar el orden.
+ *
+ * Existe para no escribir en el proyecto cuando nada cambió: el visor informa
+ * de las piezas en cada preparación del modelo, y escribir en cada una
+ * llenaría el historial de pasos idénticos que nadie quiere deshacer.
+ */
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((name, index) => name === sortedB[index]);
+}
+
 /** Crea los ajustes de una escena de modelo con valores razonables. */
 export function defaultModelSettings(): NonNullable<DomainScene['model']> {
   return {
@@ -863,6 +915,10 @@ export function defaultModelSettings(): NonNullable<DomainScene['model']> {
     targetFps: 50,
     minPixelRatio: 0.6,
     autoplayAnimations: [],
+    // Se rellenan al preparar el modelo: hasta entonces no se sabe qué trae el
+    // archivo, y poner nombres inventados sería peor que dejarlo vacío.
+    availableAnimations: [],
+    componentNames: [],
     coordinateSpaceId: null,
   };
 }

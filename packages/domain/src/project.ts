@@ -638,6 +638,88 @@ export function checkIntegrity(project: Project): IntegrityProblem[] {
     }
   }
 
+  /* --- Acciones sobre el modelo (L10) --- */
+  //
+  // Una acción que nombra una animación o una pieza que el archivo no trae no
+  // falla: no hace nada. Es el peor modo de fallo posible, porque el autor
+  // configura, prueba en el editor —donde tampoco pasa nada— y publica un
+  // recorrido con un marcador muerto. Esto lo convierte en un aviso antes de
+  // publicar.
+  //
+  // Sólo se valida cuando la escena tiene registrado qué trae el archivo: en
+  // un proyecto anterior a ese registro, o si el archivo se reemplazó por
+  // fuera, la lista está vacía y validar daría avisos falsos sobre acciones
+  // correctas.
+  for (const scene of project.scenes) {
+    const model = scene.model;
+    const actions = [...scene.actions, ...scene.hotspots.flatMap((hotspot) => hotspot.actions)];
+
+    for (const action of actions) {
+      const config = action.config;
+
+      if (config.type === 'modelPlayAnimation') {
+        if (!sceneIds.has(config.modelSceneId)) {
+          problems.push({
+            severity: 'error',
+            entity: 'scene',
+            entityId: scene.id,
+            message: `Una acción de animación en «${scene.title}» apunta a una escena que no existe`,
+          });
+          continue;
+        }
+        const target = project.scenes.find((candidate) => candidate.id === config.modelSceneId);
+        if (target?.kind !== 'model') {
+          problems.push({
+            severity: 'error',
+            entity: 'scene',
+            entityId: scene.id,
+            message: `Una acción de animación en «${scene.title}» apunta a una escena que no es de modelo`,
+            recovery: 'Las animaciones sólo existen en escenas de modelo 3D.',
+          });
+          continue;
+        }
+        if (config.modelSceneId !== scene.id) {
+          problems.push({
+            severity: 'warning',
+            entity: 'scene',
+            entityId: scene.id,
+            message:
+              `Una acción de animación en «${scene.title}» apunta al modelo de otra escena ` +
+              `(«${target.title}»), que no está cargado mientras se ve esta`,
+            recovery: 'Lleve la acción a la escena del modelo, o navegue a ella antes de animar.',
+          });
+          continue;
+        }
+        const available = target.model?.availableAnimations ?? [];
+        if (available.length > 0 && !available.includes(config.animationName)) {
+          problems.push({
+            severity: 'warning',
+            entity: 'scene',
+            entityId: scene.id,
+            message: `El modelo de «${scene.title}» no trae la animación «${config.animationName}»`,
+            recovery: `Animaciones del archivo: ${available.join(', ')}.`,
+          });
+        }
+      }
+
+      if (config.type === 'modelSetVisibility' && model !== null) {
+        const known = model.componentNames;
+        if (known.length === 0) continue;
+        for (const nodeName of config.nodeNames) {
+          if (!known.includes(nodeName)) {
+            problems.push({
+              severity: 'warning',
+              entity: 'scene',
+              entityId: scene.id,
+              message: `El modelo de «${scene.title}» no trae la pieza «${nodeName}»`,
+              recovery: 'Compruebe el nombre en la lista de componentes del modelo.',
+            });
+          }
+        }
+      }
+    }
+  }
+
   return problems;
 }
 
