@@ -22,7 +22,14 @@
  *    guion inyectado lo haga.
  */
 import { collectFrameOrigins, frameSrcDirective } from './frame-origins';
-import { toManifest, type Manifest, type Media, type Project, type Uuid } from '@it360/domain';
+import {
+  textOnAccent,
+  toManifest,
+  type Manifest,
+  type Media,
+  type Project,
+  type Uuid,
+} from '@it360/domain';
 import { auditForSecrets, planPublication, type PlanOptions, type PublishPlan } from './plan';
 
 /** Archivo del paquete: ruta relativa y contenido. */
@@ -167,7 +174,16 @@ ${
           // visita: un error inventado que alguien tendrá que investigar.
           '    <link rel="icon" href="data:," />\n'
         : `    <link rel="icon" href="${escapeHtml(faviconPath)}" />\n`
-    }${accentColor === null ? '' : `    <style>:root { --it-color-accent-default: ${escapeHtml(accentColor)}; }</style>\n`}${styles.map((href) => `    <link rel="stylesheet" href="${escapeHtml(href)}" />`).join('\n')}
+    }${
+      accentColor === null
+        ? ''
+        : /* Con el acento se escribe también el color de su texto (S10). El
+             sistema de diseño trae un texto sobre acento fijo por tema, y el
+             acento lo trae el cliente: con un amarillo corporativo, la etiqueta
+             del botón quedaba a 1,4:1 de contraste, que es un botón en blanco.
+             Se calcula el que sí se lee y se escribe junto al color. */
+          `    <style>:root { --it-color-accent-default: ${escapeHtml(accentColor)}; --it-color-text-onAccent: ${escapeHtml(textOnAccent(accentColor))}; }</style>\n`
+    }${styles.map((href) => `    <link rel="stylesheet" href="${escapeHtml(href)}" />`).join('\n')}
   </head>
   <body>
     <div id="recorrido"></div>

@@ -51,6 +51,18 @@
   max-width: 40ch;
 }
 
+/* Logotipo del cliente en la cabecera (S10).
+   Se limita por altura y no por anchura: un logotipo apaisado y uno cuadrado
+   tienen que ocupar el mismo alto de barra, y limitar la anchura dejaría el
+   apaisado ilegible. El tope de anchura existe sólo para que un logotipo
+   desproporcionado no empuje el nombre de la escena fuera de la barra. */
+.tour__logo {
+  height: 20px;
+  max-width: 180px;
+  object-fit: contain;
+  display: block;
+}
+
 .tour__scene {
   font-size: var(--it-text-xs);
   color: var(--it-color-text-secondary);

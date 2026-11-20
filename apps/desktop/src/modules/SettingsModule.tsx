@@ -8,6 +8,7 @@
  * y quien la cambia debe saber a cambio de qué.
  */
 import {
+  accentWarning,
   DEFAULT_SCRIPTING_POLICY,
   SCRIPTING_MODE_LABELS,
   TAG_SCOPE_LABELS,
@@ -50,6 +51,30 @@ export function SettingsModule({ store }: SettingsModuleProps): JSX.Element {
   const setScripting = (patch: Partial<ScriptingPolicy>): void => {
     setSettings('Cambiar política de guiones', { scripting: { ...settings.scripting, ...patch } });
   };
+
+  const branding = settings.branding;
+
+  const setBranding = (label: string, patch: Partial<typeof branding>, key?: string): void => {
+    setSettings(label, { branding: { ...branding, ...patch } }, key);
+  };
+
+  /**
+   * Imágenes del proyecto que pueden servir de logotipo o de icono (S10).
+   *
+   * Se eligen de la biblioteca en lugar de importarse aquí: el logotipo del
+   * cliente suele estar ya en el proyecto —en una ventana de información, en
+   * una portada— y pedirlo otra vez duplicaría el archivo en el paquete.
+   */
+  const brandImages = project.media.filter(
+    (entry) => entry.kind === 'image' && !entry.quarantined,
+  );
+
+  /* Aviso de contraste del acento (S10). No se impide el color: viene de la
+     identidad corporativa del cliente y no es nuestro para rechazarlo. Lo que
+     sí se puede decir es que sus botones no se van a leer en una tableta a
+     plena luz, que es donde se usa el recorrido. */
+  const accentProblem =
+    branding.accentColor === null ? null : accentWarning(branding.accentColor);
 
   return (
     <div className="module">
@@ -111,6 +136,128 @@ export function SettingsModule({ store }: SettingsModuleProps): JSX.Element {
                   />
                 )}
               </Field>
+            </div>
+          </Panel>
+
+          {/* Marca propia (S10). El contrato llevaba este bloque desde la
+              etapa 00 y el exportador ya lo escribía en el paquete; lo que no
+              había era forma de ponerlo desde el editor, así que sólo llegaba
+              en un proyecto importado. */}
+          <Panel title="Marca propia" level="raised">
+            <div style={{ display: 'grid', gap: 'var(--it-space-3)' }}>
+              <Field
+                label="Título del recorrido"
+                hint="Lo que lee el visitante en la barra. Vacío: el nombre del proyecto."
+              >
+                {({ id }) => (
+                  <TextInput
+                    id={id}
+                    value={branding.title}
+                    placeholder={project.title}
+                    onChange={(event) =>
+                      setBranding(
+                        'Editar título de marca',
+                        { title: event.currentTarget.value },
+                        'brand.title',
+                      )
+                    }
+                  />
+                )}
+              </Field>
+
+              <Field label="Logotipo" inline hint="Se dibuja en la barra del recorrido publicado.">
+                {({ id }) => (
+                  <Select
+                    id={id}
+                    size="sm"
+                    value={branding.logoMediaId ?? ''}
+                    disabled={brandImages.length === 0}
+                    onChange={(event) =>
+                      setBranding('Cambiar logotipo', {
+                        logoMediaId:
+                          event.currentTarget.value === ''
+                            ? null
+                            : (event.currentTarget.value as typeof branding.logoMediaId),
+                      })
+                    }
+                  >
+                    <option value="">Sin logotipo</option>
+                    {brandImages.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.originalName}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Icono de pestaña" inline hint="El favicon del recorrido publicado.">
+                {({ id }) => (
+                  <Select
+                    id={id}
+                    size="sm"
+                    value={branding.faviconMediaId ?? ''}
+                    disabled={brandImages.length === 0}
+                    onChange={(event) =>
+                      setBranding('Cambiar icono', {
+                        faviconMediaId:
+                          event.currentTarget.value === ''
+                            ? null
+                            : (event.currentTarget.value as typeof branding.faviconMediaId),
+                      })
+                    }
+                  >
+                    <option value="">Sin icono</option>
+                    {brandImages.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.originalName}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Color de acento" inline hint="Hexadecimal, como «#1b5e20». Vacío: el del sistema.">
+                {({ id }) => (
+                  <TextInput
+                    id={id}
+                    size="sm"
+                    value={branding.accentColor ?? ''}
+                    placeholder="#1b5e20"
+                    onChange={(event) =>
+                      setBranding(
+                        'Cambiar color de acento',
+                        {
+                          accentColor:
+                            event.currentTarget.value.trim() === ''
+                              ? null
+                              : event.currentTarget.value,
+                        },
+                        'brand.accent',
+                      )
+                    }
+                  />
+                )}
+              </Field>
+
+              {accentProblem !== null && (
+                <Callout tone="warning" title="Ese acento no se va a leer bien">
+                  {accentProblem}
+                </Callout>
+              )}
+
+              {brandImages.length === 0 && (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--it-text-xs)',
+                    color: 'var(--it-color-text-tertiary)',
+                  }}
+                >
+                  El proyecto no tiene imágenes todavía: importe el logotipo como medio y vuelva
+                  aquí para elegirlo.
+                </p>
+              )}
             </div>
           </Panel>
 

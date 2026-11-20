@@ -27,6 +27,7 @@ export * from './scene';
 export * from './tags';
 export * from './asset';
 export * from './asset-draft';
+export * from './branding';
 export * from './catalog-csv';
 export * from './class-draft';
 export * from './note';

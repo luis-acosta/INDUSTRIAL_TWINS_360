@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.52.1",
-  "updatedAt": "2026-11-21T00:40:00Z",
+  "version": "0.53.0",
+  "updatedAt": "2026-11-21T01:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -315,7 +315,7 @@
     "S07": "pending",
     "S08": "pending",
     "S09": "done",
-    "S10": "partial",
+    "S10": "done",
     "N01": "experimental",
     "N02": "experimental",
     "N03": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "V04": "Entrega de vídeo optimizada por dispositivo. El proyecto podía llevar varias versiones del mismo vídeo y la ventana entregaba siempre la principal, así que tenerlas no servía de nada: un vídeo de proceso en 4K llegaba igual a una tableta de planta con red compartida y se quedaba cargando hasta que el visitante lo abandonaba. Ahora la escalera se ordena en el dominio, el visor elige la versión más pequeña que no se vea peor que la pantalla, y el ahorro de datos y una red lenta mandan por delante de cualquier criterio de calidad —son una petición explícita del visitante y una condición medida, y pasar por encima de ellas es decidir por él—. No saber la red no cuenta como tenerla lenta: suponer lo peor daría un vídeo borroso a quien tiene fibra. La plataforma no transcodifica y no finge hacerlo: las versiones las exporta quien hace el vídeo, y aquí se validan —la comprobación de duración es la que más vale, porque una versión que no es el mismo vídeo cambia lo que se ve según el dispositivo—, se publican y se eligen. Está escrito en LIMITACIONES, que es donde lo busca quien prepara el material. Migración 4 para la columna nueva, con valor por omisión: un proyecto anterior se abre sin tocar sus datos. La pantalla de autor va en Publicación, que es donde el autor piensa en el peso de la entrega y donde aparece el aviso: lista los vídeos con su altura y permite añadir y quitar versiones. La altura se toma de la medición real del archivo y no se pregunta —un número escrito a mano que no coincidiera haría que el visor eligiera mal sin que nada lo delatara— y quitar una versión no borra el archivo de la biblioteca, porque puede estar en uso en otro sitio."
+      "S10": "Marca propia del cliente, de punta a punta. El contrato llevaba el bloque desde la etapa 00 y el exportador ya escribía el icono en el HTML, el color en una variable del sistema de diseño y copiaba el logotipo al paquete: lo que no había era forma de ponerlo desde el editor —sólo llegaba en un proyecto importado— ni sitio donde se viera el logotipo, que era un archivo que el paquete llevaba y nadie leía. Ahora hay panel de marca en Ajustes —título, logotipo, icono y acento, eligiendo imágenes que ya están en el proyecto para no duplicarlas en el paquete— y el recorrido dibuja el logotipo en su barra, con el título como texto alternativo: quien usa un lector de pantalla necesita saber de quién es el recorrido, y si el logotipo no carga es lo único que queda escrito. El arreglo que importa es otro: el sistema de diseño trae un color de texto sobre acento fijo por tema, y el acento lo trae el cliente, así que con un amarillo corporativo la etiqueta de un botón quedaba a 1,4:1 de contraste —un botón en blanco—. El exportador calcula ahora el texto que sí se lee y lo escribe junto al acento. El módulo llevaba además un aviso de contraste que se quitó al medirlo: con el texto elegido, el peor acento posible de todo el espacio de color da 4,58:1, por encima del mínimo de 4,5:1, de modo que el aviso no podía saltar nunca. Queda escrito en el código por qué no está, para que no vuelva: un aviso que no puede saltar aparenta una comprobación que no existe."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

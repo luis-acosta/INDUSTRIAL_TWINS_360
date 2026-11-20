@@ -35,6 +35,7 @@ import {
   type Scene,
   type DeviceKind,
   type TelemetrySample,
+  brandingView,
   findSkinNode,
   readSelectionContext,
   viewForEntering,
@@ -124,6 +125,12 @@ export interface TourViewerProps {
 export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element {
   const manifest = tour.manifest;
   const mediaUrls = useMemo(() => mediaUrlIndex(tour), [tour]);
+
+  /** Marca propia: título, logotipo y acento ya resueltos (S10). */
+  const brand = useMemo(
+    () => brandingView(manifest.branding, manifest.title),
+    [manifest.branding, manifest.title],
+  );
 
   /**
    * Enlace recibido, leído una sola vez (S09).
@@ -1195,7 +1202,21 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
   return (
     <div className="tour">
       <header className="tour__bar">
-        <span className="tour__title">{manifest.branding.title || manifest.title}</span>
+        {/* Marca propia del cliente (S10). El logotipo se copiaba al paquete
+            y no se dibujaba en ninguna parte: un archivo que el recorrido
+            llevaba y nadie leía. El título sigue estando como texto
+            alternativo, porque un logotipo que no carga —algo frecuente en un
+            paquete servido desde una carpeta compartida— dejaría la cabecera
+            muda. */}
+        {brand.logoPath === null ? (
+          <span className="tour__title">{brand.title}</span>
+        ) : (
+          <img
+            className="tour__logo"
+            src={mediaUrl(tour.baseUrl, brand.logoPath)}
+            alt={brand.logoAlt}
+          />
+        )}
         <span className="tour__scene">{scene?.title}</span>
         <span className="tour__spacer" />
         <SceneCondition manifest={manifest} telemetry={telemetry} />

@@ -609,3 +609,61 @@ describe('panorámicas de visor inmersivo en el manifiesto (N12)', () => {
     expect(site.manifest.vrPanoramas).toEqual({});
   });
 });
+
+describe('marca propia en el paquete (S10)', () => {
+  it('escribe el acento y el color de texto que se lee encima', () => {
+    // TEST-PUB-S10-001: el sistema de diseño trae un texto sobre acento fijo
+    // por tema y el acento lo trae el cliente. Con un amarillo corporativo y
+    // el texto claro del tema, la etiqueta de un botón principal quedaba a
+    // 1,4:1 de contraste: un botón en blanco. Escribir los dos juntos es el
+    // arreglo, y sin esta prueba volvería a escribirse sólo uno.
+    const base = projectFixture();
+    const project: Project = {
+      ...base,
+      settings: {
+        ...base.settings,
+        branding: { ...base.settings.branding, accentColor: '#ffd600' },
+      },
+    };
+
+    const site = buildSite(project, SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+
+    expect(html).toContain('--it-color-accent-default: #ffd600');
+    expect(html).toContain('--it-color-text-onAccent: #000000');
+  });
+
+  it('sin acento no escribe estilos de marca', () => {
+    // TEST-PUB-S10-002: un bloque de estilos vacío no rompe nada, pero
+    // escribir variables con el valor del sistema haría imposible saber,
+    // mirando el paquete, si el cliente pidió marca propia.
+    const site = buildSite(projectFixture(), SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+
+    expect(html).not.toContain('--it-color-accent-default');
+  });
+
+  it('el logotipo del proyecto entra en el paquete y en el manifiesto', () => {
+    // TEST-PUB-S10-003: hasta ahora el logotipo se copiaba y nada lo dibujaba.
+    // La prueba fija las dos mitades de la ruta —archivo y declaración—, que
+    // es lo que el visor necesita para poder mostrarlo.
+    const base = projectFixture();
+    const logo = base.media[0]!;
+    const project: Project = {
+      ...base,
+      settings: {
+        ...base.settings,
+        branding: { ...base.settings.branding, logoMediaId: logo.id },
+      },
+    };
+
+    const site = buildSite(project, SITE_OPTIONS);
+
+    expect(site.manifest.branding.logoPath).toBe(logo.relativePath);
+    expect(site.files.some((file) => file.path === logo.relativePath)).toBe(true);
+  });
+});

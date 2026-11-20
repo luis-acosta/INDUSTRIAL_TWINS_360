@@ -326,3 +326,65 @@ describe('panorámica reducida en la sesión inmersiva (N12)', () => {
     );
   });
 });
+
+describe('marca propia en la cabecera (S10)', () => {
+  /* El logotipo se copiaba al paquete y el manifiesto lo declaraba, y nada lo
+     dibujaba: un archivo que el recorrido llevaba y nadie leía. */
+
+  function brandedTour(logoPath: string | null): LoadedTour {
+    const base = makeProject();
+    const media = makeMedia(80, { relativePath: 'media/logo.png', mime: 'image/png' });
+    const scene = makeScene(10, PROJECT, { title: 'Sala de bombas' });
+    const manifest: Manifest = toManifest(
+      {
+        ...base,
+        media: [media],
+        scenes: [scene],
+        title: 'Proyecto 12',
+        settings: {
+          ...base.settings,
+          branding: {
+            ...base.settings.branding,
+            title: 'Planta Norte',
+            logoMediaId: logoPath === null ? null : media.id,
+          },
+        },
+      },
+      {
+        publishedAt: ISO_NOW,
+        appVersion: '0.53.0',
+        offlineCapable: true,
+        ...(logoPath === null ? {} : { logoPath }),
+      },
+    );
+    return { manifest, baseUrl: 'https://ejemplo.invalid/recorrido/' };
+  }
+
+  it('dibuja el logotipo del cliente cuando el paquete lo trae', async () => {
+    // TEST-VRE-010
+    renderTour(brandedTour('media/logo.png'));
+
+    const logo = (await screen.findByRole('img', { name: 'Planta Norte' })) as HTMLImageElement;
+    expect(logo.getAttribute('src')).toBe('https://ejemplo.invalid/recorrido/media/logo.png');
+  });
+
+  it('el texto alternativo es el título y no «logotipo»', async () => {
+    // TEST-VRE-011: quien usa un lector de pantalla necesita saber de quién es
+    // el recorrido, no que ahí hay una imagen. Y si el logotipo no carga —algo
+    // frecuente en un paquete servido desde una carpeta compartida—, es lo
+    // único que queda escrito en la barra.
+    renderTour(brandedTour('media/logo.png'));
+
+    expect(await screen.findByAltText('Planta Norte')).toBeTruthy();
+  });
+
+  it('sin logotipo escribe el título de marca', async () => {
+    // TEST-VRE-012: y el del proyecto como reserva, que se prueba en el
+    // dominio. Un recorrido sin marca propia tiene que seguir diciendo cómo se
+    // llama.
+    renderTour(brandedTour(null));
+
+    expect(await screen.findByText('Planta Norte')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Planta Norte' })).toBeNull();
+  });
+});
