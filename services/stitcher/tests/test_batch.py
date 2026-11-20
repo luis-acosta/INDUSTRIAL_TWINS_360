@@ -218,3 +218,52 @@ class TestClasificacion:
                 assert outcome.usable is True
             elif outcome.verdict is Verdict.REJECTED:
                 assert outcome.usable is False
+
+
+class TestProyeccionEnElInforme:
+    """La proyección entregada se dice en el informe (B04)."""
+
+    def test_el_informe_nombra_la_proyeccion_cuando_no_es_la_esferica(self) -> None:
+        # TEST-BTC-021: una panorámica parcial se entrega siempre en
+        # equirectangular aunque se pidiera cúbica. Si el informe no lo dijera,
+        # alguien buscaría en el archivo una cúbica que no está.
+        from datetime import datetime, timezone
+
+        from stitcher.batch import BatchItemOutcome, BatchReport
+        from stitcher.lens import LensProfile, LensType
+        from stitcher.pipeline import StitchResult
+        from stitcher.quality import QualityReport, StitchMetrics
+
+        lens = LensProfile(
+            lens_type=LensType.STANDARD,
+            horizontal_fov_deg=65.0,
+            source="declarada en la prueba",
+        )
+        now = datetime(2026, 3, 1, 9, 0, tzinfo=timezone.utc)
+
+        metrics = StitchMetrics(
+            images_submitted=2,
+            images_used=2,
+            matches_per_pair=(120,),
+            exposure_ev=(0.0, 0.1),
+            reprojection_error_px=0.5,
+            empty_ratio=0.01,
+            horizontal_coverage_deg=360.0,
+            vertical_coverage_deg=180.0,
+            width_px=4096,
+            height_px=2048,
+        )
+        quality = QualityReport(verdict=Verdict.ACCEPTED, metrics=metrics, is_full_panorama=True)
+        outcome = BatchItemOutcome(
+            name="unidad-200",
+            verdict=Verdict.ACCEPTED,
+            summary="Cosido aceptable",
+            result=StitchResult(report=quality, lens=lens, image=object(), projection="cubemap"),
+        )
+
+        text = format_report(
+            BatchReport(outcomes=(outcome,), started_at=now, finished_at=now)
+        )
+
+        assert "Proyección entregada" in text
+        assert "Cúbica" in text

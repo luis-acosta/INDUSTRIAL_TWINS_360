@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.41.0",
-  "updatedAt": "2026-11-20T13:10:00Z",
+  "version": "0.42.0",
+  "updatedAt": "2026-11-20T13:45:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -331,16 +331,16 @@
     "B01": "experimental",
     "B02": "experimental",
     "B03": "experimental",
-    "B04": "partial",
+    "B04": "done",
     "B05": "experimental",
     "B06": "pending",
-    "B07": "pending",
+    "B07": "experimental",
     "B08": "experimental"
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "V06": "Efectos ambientales dibujados de verdad: lluvia, polvo en suspensión y nieve, con simulación independiente de la cadencia de fotogramas, reaparición por los bordes sin formar columnas y número de partículas acotado para no competir con el propio recorrido. Control en el inspector, publicado en el manifiesto y comprobado en navegador real (TEST-E2E-015). El contrato existía desde la etapa 01 y no lo dibujaba nada: se podía elegir lluvia y la escena se publicaba igual de seca.",
-      "V08": "Nieve con bamboleo —lo que distingue un copo de una gota— y destello de lente con la fuente de luz declarada por el autor: el destello aparece donde está la luz y desaparece al girar hacia otro lado, que es lo que hace un objetivo. Sin declararla cae a la vista inicial de la escena y la interfaz lo dice. 42 pruebas entre simulación y pintado."
+      "B04": "Las proyecciones se aplican de verdad: esférica, cúbica (seis caras y atlas 3×2), cilíndrica, Mercator y estereográfica, cada una con su geometría y con una frase que dice para qué sirve. Antes el servicio validaba la elección contra una lista y cosía en esférica siempre, de modo que el campo no cambiaba nada. 20 pruebas con panorámicas sintéticas donde la respuesta correcta se conoce de antemano.",
+      "B07": "Puntos de control implementados y marcados experimental: homografía por par estimada a partir de las marcas, composición con lienzo que abarca las dos imágenes y detección del punto mal marcado por exclusión. El campo existía en la petición desde el primer día y no se usaba en ninguna parte: marcar veinte puntos daba el mismo fallo que no marcar ninguno. 17 pruebas."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -383,7 +383,11 @@
       "En la pantalla de revisión, una acción rechazada ponía el motivo y la recarga posterior lo borraba antes de que se pudiera leer: el problema de la consulta y el de la última acción son distintos y ahora se guardan por separado.",
       "La prueba de la sección de medios salía antes de comprobar nada porque el proyecto de prueba nace sin medios: la guarda se ha quitado y el medio se añade en la propia prueba.",
       "La capa ambiental está por encima de los marcadores: sin «pointer-events: none» una escena con lluvia habría dejado de responder a los clics, que es peor defecto que no tener lluvia. Comprobado en navegador real.",
-      "Con la preferencia de movimiento reducido el efecto no se atenúa: se apaga. Un efecto ambiental es movimiento periférico constante, que es exactamente lo que molesta a quien pide esa preferencia, y «menos lluvia» sigue siendo lluvia. El editor aplica la misma regla y avisa de que no se previsualiza, para que nadie ajuste un efecto que su público no verá."
+      "Con la preferencia de movimiento reducido el efecto no se atenúa: se apaga. Un efecto ambiental es movimiento periférico constante, que es exactamente lo que molesta a quien pide esa preferencia, y «menos lluvia» sigue siendo lluvia. El editor aplica la misma regla y avisa de que no se previsualiza, para que nadie ajuste un efecto que su público no verá.",
+      "El servicio de cosido validaba la proyección pedida contra una lista y la ignoraba: cv2.Stitcher de alto nivel no expone el deformador, así que cosía en esférica siempre. Ahora se cose en esférica —donde converge el ajuste— y se reproyecta el resultado, que para una panorámica completa es equivalente.",
+      "Las métricas de cobertura se calculaban sobre la imagen entregada: con una cúbica (3:2) o una estereográfica (1:1) habrían dicho que una panorámica completa cubre 270° o 180°. Ahora se miden sobre la equirectangular, antes de reproyectar.",
+      "Con exactamente cuatro puntos de control la homografía encaja de forma exacta sea cual sea su posición, de modo que una marca mal puesta no se puede detectar: el servicio pide cinco para poder avisar de cuál revisar.",
+      "Identificar la marca equivocada por su residuo no funciona —el ajuste por mínimos cuadrados reparte el error y el residuo mayor suele caer en un punto correcto—: se reestima dejando cada punto fuera, que sí lo encuentra."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",
@@ -398,7 +402,8 @@
       "N01": "Experimental, no terminado: la sesión inmersiva está implementada de punta a punta —petición de sesión, espacio de referencia con reserva, bucle de fotogramas del visor, recogida al quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la especificación de WebXR (10 pruebas). Lo que NO se ha podido verificar es lo único que importa de verdad en VR: que se vea bien y no produzca malestar. Eso exige un visor físico. Se deja marcado experimental en lugar de completo porque la plataforma no debe afirmar que algo funciona en un dispositivo donde nadie lo ha ejecutado.",
       "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
       "N10": "Parcial: las acciones compatibles se ejecutan a través del ActionRunner común, pero la multimedia emergente —vídeo y audio dentro de la sesión— necesita una capa de reproducción en textura que no está hecha. Un vídeo en DOM no se compone sobre la imagen del visor.",
-      "N12": "Parcial: los perfiles por clase de dispositivo existen y avisan en el editor, pero la publicación todavía no genera un juego de panorámicas reducido por perfil; el visor usa el mismo paquete que la versión plana."
+      "N12": "Parcial: los perfiles por clase de dispositivo existen y avisan en el editor, pero la publicación todavía no genera un juego de panorámicas reducido por perfil; el visor usa el mismo paquete que la versión plana.",
+      "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }

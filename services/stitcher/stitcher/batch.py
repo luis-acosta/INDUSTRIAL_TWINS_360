@@ -28,6 +28,7 @@ from pathlib import Path
 
 from .lens import LensType
 from .pipeline import StitchRequest, StitchResult, StitcherUnavailable, stitch
+from .reproject import describe as describe_projection
 from .quality import Thresholds, Verdict, describe
 
 
@@ -39,6 +40,12 @@ class BatchItem:
     images: tuple[Path, ...]
     declared_lens: LensType | None = None
     declared_fov_deg: float | None = None
+    #: Puntos de control de este trabajo (B07).
+    #:
+    #: Van por trabajo y no por lote porque las marcas son de unas fotografías
+    #: concretas: un lote procesa grupos distintos, y unos puntos aplicados al
+    #: grupo equivocado producirían una geometría absurda.
+    control_points: tuple[tuple[int, int, float, float, float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +131,7 @@ def run_batch(
                     projection=projection,
                     max_edge_px=max_edge_px,
                     thresholds=thresholds,
+                    control_points=item.control_points,
                 )
             )
         except StitcherUnavailable as error:
@@ -216,6 +224,17 @@ def format_report(report: BatchReport) -> str:
         lines += ["Aceptables", "----------"]
         for outcome in report.accepted:
             lines.append(f"- {outcome.name}: {outcome.summary}")
+            # La proyección entregada puede no ser la pedida: una panorámica
+            # parcial se entrega siempre en equirectangular. Decirlo aquí evita
+            # que alguien busque en el archivo una cúbica que no está.
+            if outcome.result is not None and outcome.result.projection != "spherical":
+                lines.append(
+                    f"    Proyección entregada: {describe_projection(outcome.result.projection)}"
+                )
+            if outcome.result is not None:
+                for note in outcome.result.report.notes:
+                    if "puntos de control" in note.lower() or "proyección" in note.lower():
+                        lines.append(f"    {note}")
         lines.append("")
 
     lines += [

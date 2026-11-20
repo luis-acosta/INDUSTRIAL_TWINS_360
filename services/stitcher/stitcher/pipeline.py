@@ -33,6 +33,19 @@ from pathlib import Path
 from typing import Any
 
 from .lens import LensProfile, LensType, resolve_profile
+from .control_points import (
+    MAX_POINT_ERROR_PX,
+    MIN_POINTS_PER_PAIR,
+    ControlPointError,
+    PairEstimate,
+    compose_pair,
+    describe_estimate,
+    estimate_pair,
+    group_by_pair,
+    parse_control_points,
+    worst_point,
+)
+from .reproject import PROJECTIONS as REPROJECTIONS, reproject
 from .quality import (
     EXPERIMENTAL_NOTICE,
     QualityReport,
@@ -84,6 +97,11 @@ class StitchResult:
     lens: LensProfile
     #: Imagen resultante, o `None` si se rechazó.
     image: Any | None
+    #: Proyección en la que está `image`.
+    #:
+    #: Puede no coincidir con la pedida: una panorámica parcial se entrega
+    #: siempre en esférica, y el informe explica por qué.
+    projection: str = "spherical"
     #: Aviso que acompaña a todo resultado entregado.
     notice: str = EXPERIMENTAL_NOTICE
 
@@ -94,10 +112,12 @@ class StitchResult:
 
 #: Proyecciones admitidas (B04).
 #:
-#: La lista es la de OpenCV menos las que no tienen sentido para un recorrido:
-#: una panorámica que el visor no sabe proyectar en una esfera no sirve de nada
-#: aunque el cosido salga perfecto.
-PROJECTIONS: tuple[str, ...] = ("spherical", "cylindrical", "mercator", "stereographic", "plane")
+#: La lista la define `reproject.py`, que es quien sabe aplicarlas. Antes se
+#: declaraba aquí una lista propia que se validaba y no se usaba: el cosido era
+#: siempre esférico y el campo `projection` no cambiaba nada del resultado.
+#: Declararla en un sitio y aplicarla en otro es justamente lo que permitió que
+#: la discrepancia pasara inadvertida.
+PROJECTIONS = REPROJECTIONS
 
 
 def _resize_to_max_edge(cv2: Any, image: Any, max_edge_px: int) -> Any:
@@ -204,8 +224,22 @@ def stitch(request: StitchRequest) -> StitchResult:
     # del resultado con el obtenido: una estimación conservadora que detecta el
     # caso grave —geometría descuadrada— sin inventar un número preciso.
 
-    stitcher = cv2.Stitcher.create(cv2.Stitcher_PANORAMA)
-    status, panorama = stitcher.stitch(loaded)
+    # --- Puntos de control (B07) ---
+    #
+    # Si el operador marcó puntos, manda su geometría: los marcó precisamente
+    # porque el automático no servía. El campo existía en la petición desde el
+    # primer día y no se usaba en ninguna parte, de modo que marcar veinte
+    # puntos daba exactamente el mismo fallo que no marcar ninguno.
+    manual_notes: list[str] = []
+    manual_panorama: Any | None = None
+    if request.control_points:
+        manual_panorama, manual_notes = _stitch_with_control_points(cv2, np, loaded, request)
+
+    if manual_panorama is not None:
+        status, panorama = cv2.Stitcher_OK, manual_panorama
+    else:
+        stitcher = cv2.Stitcher.create(cv2.Stitcher_PANORAMA)
+        status, panorama = stitcher.stitch(loaded)
 
     if status != cv2.Stitcher_OK or panorama is None:
         reason = {
@@ -242,6 +276,10 @@ def stitch(request: StitchRequest) -> StitchResult:
                 verdict=Verdict.REJECTED,
                 metrics=metrics,
                 problems=(reason,),
+                # Los avisos de los puntos de control se conservan aunque el
+                # cosido falle: si el operador marcó puntos y aun así falló,
+                # saber que dos de ellos no cuadraban es justo lo que necesita.
+                notes=tuple(manual_notes),
             ),
             lens=lens,
             image=None,
@@ -289,7 +327,16 @@ def stitch(request: StitchRequest) -> StitchResult:
 
 
     panorama = _resize_to_max_edge(cv2, panorama, request.max_edge_px)
-    height, width = panorama.shape[:2]
+
+    # --- Métricas sobre la equirectangular ---
+    #
+    # Las métricas se calculan ANTES de reproyectar, y no es indiferente: la
+    # cobertura se estima por la relación de aspecto, y una cúbica es 3:2 y una
+    # estereográfica 1:1 por construcción. Medir sobre ellas diría que una
+    # panorámica completa cubre 270° o 180°, que es falso y además haría que el
+    # juicio de calidad dependiera de la proyección elegida.
+    equirect = panorama
+    height, width = equirect.shape[:2]
 
     # --- Métricas ---
 
@@ -332,6 +379,7 @@ def stitch(request: StitchRequest) -> StitchResult:
     report = evaluate(metrics, request.thresholds)
 
     notes = list(report.notes)
+    notes.extend(manual_notes)
     if unreadable:
         notes.append(f"Imágenes ilegibles que no entraron: {', '.join(unreadable)}.")
     if lens.needs_review:
@@ -348,11 +396,134 @@ def stitch(request: StitchRequest) -> StitchResult:
         is_full_panorama=report.is_full_panorama,
     )
 
+    # --- Reproyección (B04) ---
+    #
+    # El cosido trabaja en esférica porque es donde converge el ajuste; la
+    # proyección que pidió el autor se aplica aquí, sobre el resultado. Para
+    # una panorámica completa las dos cosas son equivalentes: la
+    # equirectangular contiene todas las direcciones.
+    #
+    # Si la panorámica NO es completa, reproyectar daría una imagen con
+    # grandes zonas vacías —la proyección asume la esfera entera— que se leería
+    # como un fallo de cosido. En ese caso se entrega la esférica y se dice por
+    # qué: es más útil que una imagen con aspecto de error.
+    delivered = equirect if report.usable else None
+    if delivered is not None and request.projection != "spherical":
+        if not report.is_full_panorama:
+            notes.append(
+                f"La proyección «{request.projection}» no se aplicó: la panorámica es parcial "
+                f"({metrics.horizontal_coverage_deg:.0f}° de 360°) y reproyectarla dejaría la "
+                "mayor parte de la imagen vacía. Se entrega equirectangular."
+            )
+            report = QualityReport(
+                verdict=report.verdict,
+                metrics=report.metrics,
+                problems=report.problems,
+                notes=tuple(notes),
+                is_full_panorama=report.is_full_panorama,
+            )
+        else:
+            delivered = reproject(equirect, request.projection, cv2=cv2, np=np)
+
     return StitchResult(
         report=report,
         lens=lens,
-        image=panorama if report.usable else None,
+        image=delivered,
+        projection=request.projection if delivered is not None else "spherical",
     )
+
+
+def _stitch_with_control_points(
+    cv2: Any, np: Any, loaded: list[Any], request: StitchRequest
+) -> tuple[Any | None, list[str]]:
+    """Cose con la geometría que marcó el operador (B07).
+
+    Devuelve `(None, avisos)` cuando los puntos no sirven, para que el cosido
+    automático siga intentándolo: los puntos son una ayuda y no una orden de
+    fallar. Lo que no hace es callarse el motivo.
+
+    Con tres o más imágenes se encadenan homografías por pares consecutivos.
+    Eso acumula error —no es un ajuste de haces global— y el aviso lo dice:
+    es la diferencia entre entregar algo utilizable y prometer precisión.
+    """
+    notes: list[str] = []
+    try:
+        points = parse_control_points(request.control_points, len(loaded))
+    except ControlPointError as error:
+        notes.append(f"Puntos de control no utilizados: {error.reason}")
+        return None, notes
+
+    groups = group_by_pair(points)
+    estimates: dict[tuple[int, int], PairEstimate] = {}
+
+    for pair, pair_points in sorted(groups.items()):
+        try:
+            estimate = estimate_pair(pair_points, cv2=cv2, np=np)
+        except ControlPointError as error:
+            notes.append(f"Puntos de control no utilizados: {error.reason}")
+            return None, notes
+
+        if estimate.error_px > MAX_POINT_ERROR_PX:
+            worst = worst_point(estimate, pair_points, cv2=cv2, np=np)
+            notes.append(
+                f"Puntos de control no utilizados: en el par {pair[0] + 1}–{pair[1] + 1} el error "
+                f"medio es de {estimate.error_px:.1f} px. Lo más probable es que el punto "
+                f"{worst + 1} de ese par no señale el mismo sitio en las dos fotografías."
+            )
+            return None, notes
+
+        estimates[pair] = estimate
+        notes.append(describe_estimate(estimate))
+
+    # Sólo se compone la cadena de pares consecutivos desde la primera imagen:
+    # un conjunto de pares sueltos —(0,1) y (2,3)— no define una panorámica, y
+    # pretender lo contrario daría dos trozos pegados al azar.
+    chain: list[PairEstimate] = []
+    for index in range(len(loaded) - 1):
+        link = estimates.get((index, index + 1))
+        if link is None:
+            notes.append(
+                f"Puntos de control no utilizados: falta el par {index + 1}–{index + 2}. "
+                f"Marque al menos {MIN_POINTS_PER_PAIR} puntos entre cada fotografía y la siguiente."
+            )
+            return None, notes
+        chain.append(link)
+
+    if not chain:
+        return None, notes
+
+    try:
+        result = loaded[0]
+        accumulated = np.eye(3, dtype=np.float64)
+        for index, estimate in enumerate(chain):
+            # La homografía de cada par lleva de la imagen i+1 a la i; para
+            # llevarla al marco de la primera hay que acumular las anteriores.
+            accumulated = accumulated @ estimate.homography
+            step = PairEstimate(
+                image_a=0,
+                image_b=index + 1,
+                homography=accumulated,
+                error_px=estimate.error_px,
+                points_used=estimate.points_used,
+            )
+            result = compose_pair(
+                result, loaded[index + 1], step, cv2=cv2, np=np, max_edge_px=request.max_edge_px
+            )
+    except ControlPointError as error:
+        notes.append(f"Puntos de control no utilizados: {error.reason}")
+        return None, notes
+
+    if len(chain) > 1:
+        notes.append(
+            "La geometría se encadenó por pares consecutivos y no con un ajuste global: el "
+            "error se acumula a lo largo de la cadena, de modo que la última fotografía puede "
+            "quedar desplazada. Revise el resultado antes de publicarlo."
+        )
+    notes.append(
+        "Cosido guiado por puntos de control: la mezcla es un promedio en la zona común y la "
+        "costura puede verse. Es el modo para recuperar un cosido que el automático no logra."
+    )
+    return result, notes
 
 
 def _count_matches(cv2: Any, np: Any, images: list[Any], max_pairs: int = 12) -> tuple[int, ...]:
