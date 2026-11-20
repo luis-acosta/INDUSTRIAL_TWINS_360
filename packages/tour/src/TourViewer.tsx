@@ -92,6 +92,12 @@ import { TourPlayerBar } from './TourPlayerBar';
 import { useSceneTransition } from './useSceneTransition';
 import { useTourPlayback } from './useTourPlayback';
 import { useMediaPlayback } from './useMediaPlayback';
+import {
+  XR_MEDIA_CLOSE_ID,
+  XR_MEDIA_PANEL_ID,
+  xrMediaFromWindow,
+  xrMediaPanelNodes,
+} from './xr-media-panel';
 import { TransitionOverlay } from './TransitionOverlay';
 import { formatElapsed, targetForHotspot, tourGate, type SessionResult } from './playback';
 import { buildShareUrl, parseDeepLink, resolveDeepLink } from './deep-link';
@@ -154,6 +160,15 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
   const [planAspect, setPlanAspect] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [openWindow, setOpenWindow] = useState<TourWindow | null>(null);
+  /**
+   * Elemento del vídeo que se está reproduciendo en una ventana (N10).
+   *
+   * Hace falta porque un vídeo en DOM no se compone sobre la imagen del visor:
+   * la sesión inmersiva lleva este mismo elemento a una textura. Se guarda en
+   * estado y no en una referencia porque el gancho de VR tiene que volver a
+   * ejecutarse cuando aparece o desaparece.
+   */
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   /**
    * Puntuaciones de la sesión.
    *
@@ -1025,15 +1040,47 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     scene?.ambientEffect.lightPitch,
   ]);
 
+  /**
+   * Paneles de la sesión: la piel del recorrido y, si hay una ventana de
+   * multimedia abierta, su panel (N10).
+   *
+   * El panel de multimedia va **después** del de la piel para que quede
+   * delante en la pila vertical: es lo que el visitante acaba de abrir. Los dos
+   * se maquetan, se pintan y se apuntan con el mismo código.
+   */
+  const vrMediaPanels = useMemo(() => {
+    const media = xrMediaFromWindow(openWindow);
+    if (media === null) return vrPanels;
+    return [
+      ...vrPanels,
+      {
+        id: XR_MEDIA_PANEL_ID,
+        nodes: xrMediaPanelNodes(media),
+        paint: {} as const,
+      },
+    ];
+  }, [vrPanels, openWindow]);
+
   const vr = useVrSession({
     renderer: panoramaRenderer,
-    panels: vrPanels,
+    panels: vrMediaPanels,
+    video: videoElement,
     skinState,
     sceneId: scene?.id ?? null,
     onActivate: (targetId) => {
       // El identificador es el del nodo de piel, o «nodo:opción» en una
       // tarjeta de pregunta. Se resuelve contra la misma piel que se pinta.
       const nodeId = targetId.split(':')[0] ?? targetId;
+
+      /* El panel de multimedia no viene de la piel del proyecto, así que su
+         botón no tiene acciones de autor: cerrar es su única función, y dentro
+         del visor es la única forma de salir de la ventana —no hay una tecla
+         de escape que pulsar— (N10). */
+      if (nodeId === XR_MEDIA_CLOSE_ID) {
+        closeWindow();
+        return;
+      }
+
       const node = findSkinNode(skin?.root ?? [], nodeId);
       if (node !== null) runActions(node.actions, 'click');
     },
@@ -1383,6 +1430,7 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
           goToScene(sceneId);
         }}
         telemetryValue={(mappingId) => telemetryText(mappingId)}
+        onVideoElement={setVideoElement}
         onAlbumIndex={(index) =>
           setOpenWindow((current) =>
             current === null || current.kind !== 'media' ? current : { ...current, index },

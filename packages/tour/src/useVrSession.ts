@@ -22,6 +22,7 @@ import {
   XrWorld,
   createPanelSurface,
   createPointer,
+  createVideoSurface,
   detectXrCapabilities,
   layoutVrPanel,
   paintPanel,
@@ -39,6 +40,7 @@ import {
   type XrPanelSpec,
   type XrRay,
   type XrSessionStatus,
+  type XrVideoSurface,
   DEFAULT_VR_PANEL,
 } from '@it360/viewer';
 import { domainError, type SkinNode } from '@it360/domain';
@@ -61,6 +63,23 @@ export interface UseVrSessionOptions {
   readonly onActivate: (targetId: string) => void;
   /** Perfil de optimización por clase de dispositivo (N12). */
   readonly profile?: VrOptimizationProfile;
+  /**
+   * Vídeo que se está reproduciendo en una ventana del recorrido (N10).
+   *
+   * Entra aquí porque **un vídeo en DOM no se compone sobre la imagen del
+   * visor**: mientras la sesión presenta, el navegador dibuja lo que entrega el
+   * bucle de WebXR, así que la ventana de HTML existe para quien mire la
+   * pantalla del PC y no para quien lleva las gafas. Se lleva el mismo elemento
+   * a una textura en lugar de crear otro: con dos, el sonido se oiría dos veces.
+   *
+   * El audio no pasa por aquí y no le hace falta: suena desde su elemento
+   * porque el audio del navegador no pasa por el bucle de fotogramas. Lo que sí
+   * necesita es un panel que diga que está sonando, y eso lo compone el
+   * recorrido con los mismos nodos de piel que todo lo demás.
+   */
+  readonly video?: HTMLVideoElement | null;
+  /** Anchura del panel de vídeo en metros; 1,2 m a 2 m se ve como un televisor. */
+  readonly videoWidthM?: number;
 }
 
 export interface VrSessionHandle {
@@ -82,6 +101,10 @@ export function useVrSession(options: UseVrSessionOptions): VrSessionHandle {
   const surfacesRef = useRef(new Map<string, ReturnType<typeof createPanelSurface>>());
   const pointerRef = useRef<ReturnType<typeof createPointer> | null>(null);
   const paintedRef = useRef(new Map<string, string>());
+  /* Superficie del vídeo en curso (N10). Se guarda con su elemento para poder
+     saber si el que llega es otro: cambiar de vídeo tiene que rehacer la
+     textura, y no rehacerla deja el primero congelado en el panel. */
+  const videoRef = useRef<{ element: HTMLVideoElement; surface: XrVideoSurface } | null>(null);
 
   // Las opciones cambian en cada render del recorrido; el bucle inmersivo las
   // lee de una referencia para no reinstalarse en cada cambio de estado, que
@@ -152,6 +175,38 @@ export function useVrSession(options: UseVrSessionOptions): VrSessionHandle {
         }
         paintedRef.current.set(panel.id, signature);
       }
+    }
+
+    /* Panel de vídeo (N10). Se crea al abrirse la ventana, se recoloca delante
+       del panel de interfaz y se libera al cerrarse: una textura de vídeo
+       olvidada sigue decodificando fotogramas que nadie mira. */
+    const video = current.video ?? null;
+    const existing = videoRef.current;
+
+    if (video === null || (existing !== null && existing.element !== video)) {
+      if (existing !== null) {
+        existing.surface.dispose();
+        videoRef.current = null;
+      }
+    }
+
+    if (video !== null && videoRef.current === null) {
+      const surface = createVideoSurface(video, current.videoWidthM ?? 1.2);
+      world.overlay.add(surface.mesh);
+      videoRef.current = { element: video, surface };
+    }
+
+    const videoSurface = videoRef.current;
+    if (videoSurface !== null) {
+      /* La proporción se pone al día en cada fotograma hasta que el vídeo
+         declara su tamaño: antes de cargar los metadatos no lo sabe, y un
+         panel que se quedara con la proporción provisional mostraría la
+         imagen estirada durante toda la reproducción. */
+      videoSurface.surface.resize(current.videoWidthM ?? 1.2);
+      /* Delante del panel de interfaz y a la altura de la mirada: el vídeo es
+         lo que se está mirando, y detrás del panel no se vería. */
+      videoSurface.surface.mesh.position.set(0, 0, -1.8);
+      videoSurface.surface.mesh.rotation.set(0, 0, 0);
     }
 
     // Las superficies de paneles que se han cerrado se liberan: en la GPU, una
@@ -233,6 +288,10 @@ export function useVrSession(options: UseVrSessionOptions): VrSessionHandle {
       for (const surface of surfacesRef.current.values()) surface.dispose();
       surfacesRef.current.clear();
       paintedRef.current.clear();
+      /* El panel de vídeo también: la textura de un vídeo sigue decodificando
+         fotogramas mientras exista, y al salir del visor nadie los mira (N10). */
+      videoRef.current?.surface.dispose();
+      videoRef.current = null;
       pointerRef.current?.dispose();
       pointerRef.current = null;
       if (renderer !== null) {
@@ -251,6 +310,8 @@ export function useVrSession(options: UseVrSessionOptions): VrSessionHandle {
       controllerRef.current?.dispose();
       for (const surface of surfacesRef.current.values()) surface.dispose();
       surfacesRef.current.clear();
+      videoRef.current?.surface.dispose();
+      videoRef.current = null;
       pointerRef.current?.dispose();
     },
     [],

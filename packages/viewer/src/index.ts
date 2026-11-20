@@ -20,6 +20,7 @@ export * from './AmbientLayer';
 export * from './webxr';
 export * from './xr-session';
 export * from './xr-input';
+export * from './xr-media';
 export * from './xr-panel';
 export * from './xr-skin-panel';
 export * from './xr-panel-paint';

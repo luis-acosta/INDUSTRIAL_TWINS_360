@@ -39,6 +39,16 @@ export interface WindowHostProps {
   readonly onSceneLink?: (sceneId: string) => void;
   /** Valor en vivo de una variable de proceso, si el visor lo tiene. */
   readonly telemetryValue?: (mappingId: string) => string | null;
+  /**
+   * Entrega el elemento del vídeo que se está reproduciendo (N10).
+   *
+   * Lo pide la sesión inmersiva: un vídeo en DOM no se compone sobre la imagen
+   * del visor, así que hay que llevar **este mismo** elemento a una textura. Se
+   * reutiliza en lugar de crear otro porque con dos el sonido se oiría dos
+   * veces y los controles de la pantalla no dirían la verdad sobre lo que se
+   * ve dentro de las gafas.
+   */
+  readonly onVideoElement?: (video: HTMLVideoElement | null) => void;
 }
 
 export function WindowHost({
@@ -48,6 +58,7 @@ export function WindowHost({
   frameOrigins,
   onSceneLink,
   telemetryValue,
+  onVideoElement,
 }: WindowHostProps): JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<Element | null>(null);
@@ -169,6 +180,7 @@ export function WindowHost({
             onTab={setTabId}
             onSceneLink={onSceneLink ?? (() => undefined)}
             {...(telemetryValue !== undefined ? { telemetryValue } : {})}
+            {...(onVideoElement !== undefined ? { onVideoElement } : {})}
           />
         </div>
 
@@ -205,6 +217,7 @@ interface WindowBodyProps {
   readonly onTab: (tabId: string) => void;
   readonly onSceneLink: (sceneId: string) => void;
   readonly telemetryValue?: (mappingId: string) => string | null;
+  readonly onVideoElement?: (video: HTMLVideoElement | null) => void;
 }
 
 function WindowBody({
@@ -214,6 +227,7 @@ function WindowBody({
   onTab,
   onSceneLink,
   telemetryValue,
+  onVideoElement,
 }: WindowBodyProps): JSX.Element {
   if (win.kind === 'info') {
     return (
@@ -240,6 +254,12 @@ function WindowBody({
           controls
           autoPlay={win.autoplay}
           playsInline
+          /* React llama a la referencia con `null` al desmontar, y de eso
+             depende que la sesión inmersiva suelte la textura: sin el aviso,
+             seguiría decodificando fotogramas de un elemento que ya no está en
+             el documento. No se devuelve una función de limpieza porque en
+             React 18 se ignora, y devolverla sólo produce un aviso. */
+          ref={(element) => onVideoElement?.(element)}
         />
       );
     }

@@ -80,9 +80,10 @@ no completa, y el producto lo dice en pantalla.
 
 La publicación ya entrega un juego de panorámicas reducido por clase de visor
 (4096 px para un visor autónomo, 8192 px para uno conectado a un PC), y el
-recorrido carga la copia reducida sólo mientras presenta. Lo que no está es la
-multimedia emergente dentro de la sesión: un vídeo en DOM no se compone sobre
-la imagen del visor y hace falta reproducirlo en textura.
+recorrido carga la copia reducida sólo mientras presenta. La multimedia
+emergente también funciona dentro de la sesión: el vídeo se lleva a una textura,
+el audio suena con su panel de estado, y un documento —que no se puede mostrar
+ahí— lo dice en lugar de dejar la acción muda.
 
 ### Conexión automática de escenas (C05–C09)
 
