@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.38.0",
-  "updatedAt": "2026-11-14T00:10:00Z",
+  "version": "0.39.0",
+  "updatedAt": "2026-11-20T12:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -316,17 +316,17 @@
     "S08": "pending",
     "S09": "done",
     "S10": "partial",
-    "N01": "pending",
-    "N02": "pending",
-    "N03": "pending",
-    "N04": "partial",
-    "N05": "partial",
+    "N01": "experimental",
+    "N02": "experimental",
+    "N03": "done",
+    "N04": "done",
+    "N05": "done",
     "N06": "done",
     "N07": "done",
-    "N08": "pending",
-    "N09": "pending",
-    "N10": "pending",
-    "N11": "partial",
+    "N08": "done",
+    "N09": "done",
+    "N10": "partial",
+    "N11": "done",
     "N12": "partial",
     "B01": "experimental",
     "B02": "experimental",
@@ -339,9 +339,12 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "X09": "Conexión de lectura real al historiador: apps/server/app/influx.py consulta InfluxDB con el token del servicio, asegura sólo lectura en el único punto de salida y sirve caché marcada cuando el historiador no responde (25 pruebas). Antes el servidor tenía todo lo que rodea a la consulta y ninguna implementación que hablase con el historiador: la única existente era la falsa de las pruebas. El editor puede elegir ahora el servicio desde la interfaz; hasta esta iteración construía siempre el simulador.",
-      "X10": "Cada lectura se resuelve por identificador de mapeo contra el allowlist que declara el operador (load_mappings) y el visor no puede pedir una medición que el recorrido no publique.",
-      "X13": "Histórico con selección de intervalo de punta a punta: extremo GET /telemetry/{id}/history con tope de intervalo, ventana de agregación que nunca baja de la recomendada, marcas ISO con zona obligatoria y fallo del historiador señalado en lugar de serie vacía (TEST-API-018..025, TEST-TEL-032..039)."
+      "N03": "Interfaz dentro del visor: la piel del recorrido se maqueta como pila vertical sobre una textura y se pulsa con el rayo del mando (xr-skin-panel, xr-panel-paint, 30 pruebas). Las acciones las ejecuta el mismo ActionRunner que la versión plana, de modo que un botón hace lo mismo en el visor y en la pantalla.",
+      "N04": "Tamaño, distancia, orientación y desplazamiento angular del panel aplicados de verdad en la colocación (TEST-XRP-001..005).",
+      "N05": "Los cuatro modos se comportan distinto y probado: fijo al mundo, recentrable con cono de 40°, arrastrable con el agarre y modal que bloquea la entrada de lo que hay detrás (TEST-XRP-006..010, TEST-XRR-004, TEST-XRR-011..012).",
+      "N08": "Tarjeta de pregunta en VR: enunciado y una zona pulsable por respuesta, dimensionada según cuántas haya y sin solapes, con la respuesta elegida marcada (TEST-XRK-006..007, TEST-XRD-004..005).",
+      "N09": "Puntuación, avance y cronómetro pintados con sus valores reales, tomados de los mismos ayudantes que alimentan la interfaz plana (TEST-XRD-006..009).",
+      "N11": "Mandos leídos de verdad: flanco de subida por botón y mano, zona muerta de palanca, giro por pasos una vez por cruce, y rayo extraído de la matriz de pose (xr-input, 11 pruebas; TEST-XRR-006)."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -376,7 +379,9 @@
       "El cliente del editor sondeaba /api/v1/telemetry/health y el servidor publica /api/v1/telemetry/ping: «Probar conexión» habría fallado siempre contra el servicio real. Además daba por alcanzable el historiador sin haberlo medido, cuando el servicio responde 200 incluso si el historiador no contesta.",
       "El cliente pedía un extremo de histórico que el servidor no publicaba: la gráfica contra el servicio real quedaba vacía para siempre, y el lienzo vacío se lee como «no hay datos» y no como «no se pudieron recuperar».",
       "apps/server/app no era un paquete explícito: las importaciones relativas funcionaban en ejecución pero mypy no las resolvía, de modo que los errores de tipo del servidor pasaban inadvertidos.",
-      "El editor construía siempre el simulador: el cliente contra el servicio local existía pero no era alcanzable desde ninguna parte de la interfaz, y un cliente que no se puede elegir no está integrado."
+      "El editor construía siempre el simulador: el cliente contra el servicio local existía pero no era alcanzable desde ninguna parte de la interfaz, y un cliente que no se puede elegir no está integrado.",
+      "El botón «Entrar en VR» no podía existir: la etapa 13 tenía detección de capacidades, listas de compatibilidad y constantes de colocación, pero ninguna llamada a requestSession. Nada en el recorrido publicado podía entrar en modo inmersivo.",
+      "Pulsar «Entrar en VR» antes de que la escena creara su contexto gráfico dejaba el botón mudo: ahora dice por qué no puede entrar todavía."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",
@@ -387,7 +392,11 @@
     "parcialesExplicados": {
       "L07": "El marcador sigue a su pieza, gira con ella y se esconde cuando queda detrás de la geometría, pero se dibuja de pie frente a la cámara, no tumbado sobre la superficie como una calcomanía. Para eso hay que dibujarlo dentro de la escena y se perdería el texto legible y el acceso por teclado; queda pendiente de decidir.",
       "L10": "Las animaciones de arranque ya se reproducen en el visor publicado; las acciones que las lanzan desde un marcador siguen sin efecto allí.",
-      "S08": "El teselado se planifica y no se escribe: el visor carga la imagen completa, así que escribir la pirámide abultaría el paquete sin que nadie la lea. Se escribirá cuando el visor la pida."
+      "S08": "El teselado se planifica y no se escribe: el visor carga la imagen completa, así que escribir la pirámide abultaría el paquete sin que nadie la lea. Se escribirá cuando el visor la pida.",
+      "N01": "Experimental, no terminado: la sesión inmersiva está implementada de punta a punta —petición de sesión, espacio de referencia con reserva, bucle de fotogramas del visor, recogida al quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la especificación de WebXR (10 pruebas). Lo que NO se ha podido verificar es lo único que importa de verdad en VR: que se vea bien y no produzca malestar. Eso exige un visor físico. Se deja marcado experimental en lugar de completo porque la plataforma no debe afirmar que algo funciona en un dispositivo donde nadie lo ha ejecutado.",
+      "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
+      "N10": "Parcial: las acciones compatibles se ejecutan a través del ActionRunner común, pero la multimedia emergente —vídeo y audio dentro de la sesión— necesita una capa de reproducción en textura que no está hecha. Un vídeo en DOM no se compone sobre la imagen del visor.",
+      "N12": "Parcial: los perfiles por clase de dispositivo existen y avisan en el editor, pero la publicación todavía no genera un juego de panorámicas reducido por perfil; el visor usa el mismo paquete que la versión plana."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }

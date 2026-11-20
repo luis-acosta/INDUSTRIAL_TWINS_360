@@ -95,6 +95,16 @@ export interface PanoramaViewerProps {
    * Una variable que no esté aquí se deja visible como `{{nombre}}`.
    */
   readonly templateContext?: TemplateContext;
+  /**
+   * Se invoca con el renderizador recién creado y con `null` al liberarlo.
+   *
+   * Lo necesita la sesión inmersiva (etapa 13): WebXR exige entregar la
+   * sesión al mismo contexto WebGL que dibuja la escena, de modo que el visor
+   * inmersivo no puede crear un renderizador propio. Entregar el renderizador
+   * es menos malo que mover la sesión aquí dentro: así este componente sigue
+   * sin saber nada de WebXR.
+   */
+  readonly onRenderer?: (renderer: PanoramaRenderer | null) => void;
 }
 
 export interface ViewerStatus {
@@ -123,10 +133,18 @@ export function PanoramaViewer({
   className,
   mediaUrls,
   templateContext,
+  onRenderer,
 }: PanoramaViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PanoramaRenderer | null>(null);
+  /**
+   * El aviso se guarda en una referencia para que cambiarlo no vuelva a crear
+   * el renderizador: reconstruir el contexto WebGL en cada render tiraría la
+   * textura de la escena y produciría un parpadeo en cada cambio de estado.
+   */
+  const onRendererRef = useRef(onRenderer);
+  onRendererRef.current = onRenderer;
   const controllerRef = useRef<CameraController | null>(null);
   const frameRef = useRef<number | null>(null);
   const lastFrameMsRef = useRef(0);
@@ -167,8 +185,10 @@ export function PanoramaViewer({
       maxPixelRatio: caps.softwareFallback ? 1 : 2,
     });
     rendererRef.current = renderer;
+    onRendererRef.current?.(renderer);
 
     return () => {
+      onRendererRef.current?.(null);
       renderer.dispose();
       rendererRef.current = null;
     };

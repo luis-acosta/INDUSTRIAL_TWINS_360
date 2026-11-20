@@ -39,6 +39,7 @@ import {
   Texture,
   Vector3,
   WebGLRenderer,
+  type Object3D,
 } from 'three';
 
 export interface RendererCapabilities {
@@ -208,6 +209,73 @@ export class PanoramaRenderer {
       0.5 - 0.5 / vFraction - coverage.centerPitch / Math.PI / vFraction,
     );
     texture.needsUpdate = true;
+  }
+
+  /**
+   * Puente al gestor XR del renderizador (etapa 13).
+   *
+   * Se expone el gestor en lugar del renderizador entero para que la sesión
+   * inmersiva no pueda tocar nada más: `XrSessionController` necesita
+   * habilitar XR, fijar el espacio de referencia, entregar la sesión y tomar
+   * el bucle de fotogramas, y ninguna otra cosa.
+   */
+  get xrBridge(): {
+    enabled: boolean;
+    setReferenceSpaceType(type: XRReferenceSpaceType): void;
+    setSession(session: XRSession | null): Promise<void>;
+    setAnimationLoop(callback: ((time: number, frame?: XRFrame) => void) | null): void;
+  } {
+    const renderer = this.renderer;
+    return {
+      get enabled(): boolean {
+        return renderer.xr.enabled;
+      },
+      set enabled(value: boolean) {
+        renderer.xr.enabled = value;
+      },
+      setReferenceSpaceType(type) {
+        renderer.xr.setReferenceSpaceType(type);
+      },
+      async setSession(session) {
+        await renderer.xr.setSession(session as never);
+      },
+      setAnimationLoop(callback) {
+        renderer.setAnimationLoop(callback === null ? null : (time, frame) => callback(time, frame));
+      },
+    };
+  }
+
+  /**
+   * Objetos propios de la sesión inmersiva, añadidos a la escena que se dibuja.
+   *
+   * La panorámica de la escena plana ya está en esa escena: la sesión no
+   * duplica la esfera, la hereda. Lo que añade son los paneles y el puntero.
+   */
+  attachXrObjects(object: Object3D): void {
+    if (this.disposed) return;
+    this.scene.add(object);
+  }
+
+  detachXrObjects(object: Object3D): void {
+    this.scene.remove(object);
+  }
+
+  /**
+   * Dibuja un fotograma inmersivo.
+   *
+   * Sin `view`: la pose y la proyección de cada ojo las fija el visor a través
+   * del gestor XR, y escribir en la cámara desde aquí produciría el tirón que
+   * en VR se siente en el estómago. Es la diferencia esencial con `render`.
+   */
+  renderXr(): void {
+    if (this.disposed) return;
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Giro aplicado al decorado por el mando (N11). */
+  setSceneryYaw(yaw: number): void {
+    if (this.disposed) return;
+    this.sphere.rotation.y = yaw;
   }
 
   /** Orienta la cámara y dibuja un fotograma. */

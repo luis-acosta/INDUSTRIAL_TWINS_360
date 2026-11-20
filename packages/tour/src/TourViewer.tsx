@@ -12,6 +12,8 @@
  * propiedades— es del editor y aquí sólo estorbaría.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useVrSession } from './useVrSession';
 import {
   CONDITION_LABELS,
   DATA_QUALITY_LABELS,
@@ -30,6 +32,7 @@ import {
   type Scene,
   type DeviceKind,
   type TelemetrySample,
+  findSkinNode,
 } from '@it360/domain';
 import {
   Badge,
@@ -50,6 +53,7 @@ import {
 } from '@it360/ui';
 import {
   ActionRunner,
+  type PanoramaRenderer,
   PanoramaViewer,
   resolveEntryView,
   type ActionHost,
@@ -414,6 +418,15 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
    * ---------------------------------------------------------------- */
 
   const runnerRef = useRef<ActionRunner | null>(null);
+
+  /**
+   * Renderizador del visor plano, para la sesión inmersiva.
+   *
+   * WebXR exige entregar la sesión al mismo contexto WebGL que dibuja la
+   * escena, de modo que el modo inmersivo no puede crear un renderizador
+   * propio: reutiliza éste.
+   */
+  const [panoramaRenderer, setPanoramaRenderer] = useState<PanoramaRenderer | null>(null);
 
   /**
    * Ejecuta una lista de acciones sueltas (parada de recorrido, objetivo).
@@ -815,6 +828,62 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     );
   }
 
+  /**
+   * Sesión inmersiva (etapa 13).
+   *
+   * Los paneles de VR se componen con los mismos nodos de piel que la versión
+   * plana y se activan con el mismo `ActionRunner`: en el visor y en la
+   * pantalla, un botón del recorrido hace exactamente lo mismo. Lo que cambia
+   * es la maquetación, porque dentro del visor no hay HTML sobre la imagen.
+   */
+  const vrPanels = useMemo(
+    () =>
+      skin === null
+        ? []
+        : [
+            {
+              id: 'skin',
+              nodes: skin.root,
+              paint: {
+                // Las variables del recorrido admiten números y ausencias; el
+                // panel pinta texto. La conversión se hace aquí, una vez, y no
+                // en cada sitio donde se pinta una plantilla.
+                variables: Object.fromEntries(
+                  Object.entries(variableValues()).map(([name, value]) => [
+                    name,
+                    value === null || value === undefined ? '' : String(value),
+                  ]),
+                ),
+                scoreEntries: skinScoreLines([]).map((line) => ({
+                  label: line.label,
+                  value: String(line.value),
+                })),
+                timerText: timerText('elapsed', 0),
+                progress: skinProgress('tour', '') ?? 0,
+              },
+            },
+          ],
+    // `variableValues` y los ayudantes dependen del estado del recorrido; se
+    // recalcula con la escena y el estado de la piel, que es cuando el panel
+    // tiene que repintarse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [skin, sceneId, skinState],
+  );
+
+  const vr = useVrSession({
+    renderer: panoramaRenderer,
+    panels: vrPanels,
+    skinState,
+    sceneId: scene?.id ?? null,
+    onActivate: (targetId) => {
+      // El identificador es el del nodo de piel, o «nodo:opción» en una
+      // tarjeta de pregunta. Se resuelve contra la misma piel que se pinta.
+      const nodeId = targetId.split(':')[0] ?? targetId;
+      const node = findSkinNode(skin?.root ?? [], nodeId);
+      if (node !== null) runActions(node.actions, 'click');
+    },
+  });
+
   return (
     <div className="tour">
       <header className="tour__bar">
@@ -859,6 +928,22 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
             onClick={() => setNotesOpen(true)}
           />
         </Tooltip>
+        {/* El botón sólo existe si el equipo puede entrar: un «Entrar en VR»
+            que lleva a una pantalla negra no se vuelve a pulsar nunca. */}
+        {vr.capabilities?.immersiveVrSupported === true && (
+          <Tooltip content={vr.presenting ? 'Salir del modo inmersivo' : 'Ver en el visor de realidad virtual'}>
+            <Button
+              size="sm"
+              variant={vr.presenting ? 'primary' : 'ghost'}
+              onClick={() => (vr.presenting ? vr.exit() : vr.enter())}
+            >
+              {vr.presenting ? 'Salir de VR' : 'Entrar en VR'}
+            </Button>
+          </Tooltip>
+        )}
+        {vr.status.error !== null && (
+          <Badge tone="warning">{vr.status.error.message}</Badge>
+        )}
         {manifest.offlineCapable && (
           <Badge tone="neutral">
             Publicado el {manifest.publishedAt.slice(0, 10)}
@@ -883,6 +968,7 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
         ) : (
           <PanoramaViewer
             scene={viewerScene}
+            onRenderer={setPanoramaRenderer}
             {...(pendingView !== null ? { view: pendingView } : {})}
             onViewChange={(next) => {
               setView(next);

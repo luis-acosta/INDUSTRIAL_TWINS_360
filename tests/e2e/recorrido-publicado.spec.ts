@@ -588,3 +588,30 @@ test('la transición entre escenas se dibuja con la escena de la que se sale', a
   // Al terminar, la capa desaparece y deja de tapar la escena nueva.
   await expect(capa).toHaveCount(0, { timeout: 4000 });
 });
+
+test('no ofrece entrar en VR en un navegador sin visor', async ({ page }) => {
+  // TEST-E2E-014: Chrome publica `navigator.xr` aunque no haya ningún
+  // dispositivo conectado, de modo que mirar sólo si la API existe ofrecería
+  // el botón a todos los visitantes de escritorio. La regla de la etapa 13 es
+  // «nunca ofrecer un botón de VR que no funcione», y aquí se comprueba contra
+  // el navegador real: ninguna prueba en jsdom puede, porque allí
+  // `navigator.xr` es lo que la prueba decida.
+  await page.goto('/');
+  const barra = page.getByRole('banner');
+  await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+  // Que la API esté o no es asunto del navegador; lo que importa es que el
+  // botón no aparezca sin dispositivo capaz.
+  const soportado = await page.evaluate(async () => {
+    const xr = (navigator as Navigator & { xr?: { isSessionSupported(mode: string): Promise<boolean> } }).xr;
+    if (xr === undefined) return false;
+    return xr.isSessionSupported('immersive-vr').catch(() => false);
+  });
+  expect(soportado).toBe(false);
+
+  await expect(page.getByRole('button', { name: 'Entrar en VR' })).toHaveCount(0);
+
+  // Y el recorrido plano sigue entero: el modo inmersivo es un añadido.
+  await page.getByRole('button', { name: 'A la plataforma' }).click();
+  await expect(barra.getByText('Plataforma superior')).toBeVisible();
+});
