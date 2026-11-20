@@ -530,7 +530,7 @@ export async function buildDemoProject(): Promise<DemoAssets> {
     group: 'Unidad 200',
     tags: [],
     excludedFromPublish: false,
-    ambientEffect: { effect: 'none', intensity: 0.5 },
+    ambientEffect: { effect: 'none', intensity: 0.5, lightYaw: null, lightPitch: null },
     createdAt: ISO(12),
     updatedAt: now,
   });

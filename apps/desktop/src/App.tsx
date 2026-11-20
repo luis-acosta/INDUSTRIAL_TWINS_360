@@ -101,6 +101,7 @@ import { buildDemoProject, type DemoAssets } from './demo/demo-project';
 import { Gauge } from './components/instruments';
 import { useLatestTelemetry } from './telemetry/use-telemetry';
 import { type TelemetryClient } from './telemetry/telemetry-client';
+import { ambientForScene } from '@it360/viewer';
 import {
   createTelemetryClient,
   loadServiceEndpoint,
@@ -152,6 +153,32 @@ interface ModuleDescriptor {
 /* Se exporta para que las pruebas lean el atajo de cada módulo en lugar de
    repetir el dígito: así añadir un módulo en medio no rompe una prueba que no
    tiene nada que ver con él. */
+/**
+ * Preferencia de movimiento reducido del sistema.
+ *
+ * Se consulta en cada render en lugar de guardarse: el usuario puede cambiarla
+ * sin cerrar la aplicación, y un valor guardado al arrancar dejaría el editor
+ * dibujando efectos que el sistema ya no quiere.
+ */
+/**
+ * Dirección de la luz del destello de una escena, o `null` si no aplica.
+ *
+ * La misma regla que en el recorrido publicado, y por eso está en una función:
+ * dos reglas separadas acabarían colocando el destello en sitios distintos en
+ * el editor y en el recorrido, que es el peor defecto posible en una
+ * herramienta de autoría.
+ */
+function flareDirectionOf(scene: Scene | null): { readonly yaw: number; readonly pitch: number } | null {
+  if (scene === null || scene.ambientEffect.effect !== 'lensFlare') return null;
+  const { lightYaw, lightPitch } = scene.ambientEffect;
+  if (lightYaw !== null && lightPitch !== null) return { yaw: lightYaw, pitch: lightPitch };
+  return { yaw: scene.camera.initialView.yaw, pitch: scene.camera.initialView.pitch };
+}
+
+function reducedMotionPreferred(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
 /** Nombre del archivo dentro de una ruta, con separador de cualquier sistema. */
 function fileNameOf(path: string): string {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
@@ -1028,7 +1055,7 @@ function ScenesModule({
       group: scene?.group ?? '',
       tags: [],
       excludedFromPublish: false,
-      ambientEffect: { effect: 'none', intensity: 0.5 },
+      ambientEffect: { effect: 'none', intensity: 0.5, lightYaw: null, lightPitch: null },
       createdAt: now,
       updatedAt: now,
     };
@@ -1323,6 +1350,18 @@ function ScenesModule({
               <PanoramaViewer
                 scene={viewerScene}
                 selectedHotspotId={hotspot?.id ?? null}
+                /* El efecto se previsualiza con la misma regla que en el
+                   recorrido publicado, preferencia de movimiento reducido
+                   incluida: si aquí se mostrara de todas formas, el autor
+                   ajustaría un efecto que su propio público con esa
+                   preferencia no va a ver. El inspector avisa cuando la
+                   preferencia está activa. */
+                ambient={
+                  scene === null
+                    ? null
+                    : ambientForScene(scene, { reducedMotion: reducedMotionPreferred() })
+                }
+                flareDirection={flareDirectionOf(scene)}
                 onViewChange={(next) => {
                   setView(next);
                   onCanvasView?.(next);
@@ -1599,6 +1638,138 @@ function Inspector({
                 />
               )}
             </Field>
+
+            {/* Efecto ambiental (V06, V08). El contrato existía desde la
+                etapa 01 y no había control que lo escribiera: el campo se
+                quedaba siempre en «ninguno» y el visor no tenía nada que
+                dibujar. */}
+            <SectionLabel>Efecto ambiental</SectionLabel>
+            <Field
+              label="Efecto"
+              hint="Se dibuja encima de la escena. Con la preferencia de movimiento reducido del sistema no se muestra."
+            >
+              {({ id }) => (
+                <Select
+                  id={id}
+                  value={scene.ambientEffect.effect}
+                  onChange={(event) =>
+                    store.updateScene(
+                      scene.id,
+                      'Cambiar efecto ambiental',
+                      {
+                        ambientEffect: {
+                          ...scene.ambientEffect,
+                          effect: event.currentTarget.value as Scene['ambientEffect']['effect'],
+                        },
+                      },
+                      `scene.ambient:${scene.id}`,
+                    )
+                  }
+                >
+                  <option value="none">Ninguno</option>
+                  <option value="rain">Lluvia</option>
+                  <option value="dust">Polvo en suspensión</option>
+                  <option value="snow">Nieve</option>
+                  <option value="lensFlare">Destello de lente (experimental)</option>
+                </Select>
+              )}
+            </Field>
+            {scene.ambientEffect.effect !== 'none' && (
+              <Field label="Intensidad" inline>
+                {() => (
+                  <Slider
+                    aria-label="Intensidad del efecto ambiental"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                    value={scene.ambientEffect.intensity}
+                    onValueChange={(value) =>
+                      store.updateScene(
+                        scene.id,
+                        'Ajustar intensidad del efecto',
+                        { ambientEffect: { ...scene.ambientEffect, intensity: value } },
+                        `scene.ambientIntensity:${scene.id}`,
+                      )
+                    }
+                  />
+                )}
+              </Field>
+            )}
+            {scene.ambientEffect.effect !== 'none' && reducedMotionPreferred() && (
+              <Callout tone="info" title="No se previsualiza">
+                Este equipo tiene activada la preferencia de movimiento reducido del sistema, de
+                modo que el efecto no se dibuja aquí ni se dibujará para quien la tenga activada.
+                El ajuste se guarda igualmente.
+              </Callout>
+            )}
+            {scene.ambientEffect.effect === 'lensFlare' && (
+              <>
+                <PropertyList>
+                  <PropertyRow
+                    label="Posición de la luz"
+                    mono
+                    value={
+                      scene.ambientEffect.lightYaw === null
+                        ? 'vista inicial de la escena'
+                        : `${((scene.ambientEffect.lightYaw * 180) / Math.PI).toFixed(0)}° / ${(
+                            (scene.ambientEffect.lightPitch ?? 0) * 180 / Math.PI
+                          ).toFixed(0)}°`
+                    }
+                  />
+                </PropertyList>
+                {/* Apuntar y capturar: colocar la luz escribiendo dos ángulos
+                    es inservible, y es la diferencia entre un destello que
+                    cae donde está la luz y uno que cae donde cuadre. */}
+                <div style={{ display: 'flex', gap: 'var(--it-space-2)', flexWrap: 'wrap' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={view === null}
+                    onClick={() => {
+                      if (view === null) return;
+                      store.updateScene(
+                        scene.id,
+                        'Fijar posición de la luz',
+                        {
+                          ambientEffect: {
+                            ...scene.ambientEffect,
+                            lightYaw: view.yaw,
+                            lightPitch: view.pitch,
+                          },
+                        },
+                        `scene.light:${scene.id}`,
+                      );
+                    }}
+                  >
+                    Usar la vista actual como luz
+                  </Button>
+                  {scene.ambientEffect.lightYaw !== null && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        store.updateScene(
+                          scene.id,
+                          'Quitar posición de la luz',
+                          { ambientEffect: { ...scene.ambientEffect, lightYaw: null, lightPitch: null } },
+                          `scene.light:${scene.id}`,
+                        )
+                      }
+                    >
+                      Volver a la vista inicial
+                    </Button>
+                  )}
+                </div>
+                {scene.ambientEffect.lightYaw === null && (
+                  <Callout tone="info" title="Sin posición de luz">
+                    Mientras no se fije, el destello se coloca en la vista inicial de la escena:
+                    acierta si la luz está delante y no si queda a la espalda. Gire la cámara
+                    hacia la fuente de luz y pulse el botón.
+                  </Callout>
+                )}
+              </>
+            )}
 
             <SectionLabel>Panorámica</SectionLabel>
             <PropertyList>

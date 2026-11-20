@@ -290,7 +290,15 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
       group: 'Unidad U-200',
       tags: [],
       excludedFromPublish: false,
-      ambientEffect: { effect: 'none' as const, intensity: 0.5 },
+      // La segunda escena lleva lluvia: es lo que permite comprobar en un
+      // navegador real que la capa ambiental se monta, que respeta la
+      // preferencia de movimiento reducido y que no se come los clics de los
+      // marcadores. Ninguna de las tres cosas se puede comprobar en jsdom,
+      // donde no hay lienzo que pintar.
+      ambientEffect:
+        index === 1
+          ? { effect: 'rain' as const, intensity: 0.7, lightYaw: null, lightPitch: null }
+          : { effect: 'none' as const, intensity: 0.5, lightYaw: null, lightPitch: null },
       createdAt: now,
       updatedAt: now,
     });

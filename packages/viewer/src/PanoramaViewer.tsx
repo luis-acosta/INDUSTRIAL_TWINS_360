@@ -37,6 +37,8 @@ import {
   type PanoramaCoverage,
   type Uv,
 } from '@it360/domain';
+import { AmbientLayer, projectFlareSource } from './AmbientLayer';
+import type { AmbientState } from './ambient-effects';
 import { CameraController } from './camera-controller';
 import { detectCapabilities, PanoramaRenderer, type RendererCapabilities } from './panorama-renderer';
 import { loadPanoramaTexture, TextureCache } from './texture-loader';
@@ -105,6 +107,17 @@ export interface PanoramaViewerProps {
    * sin saber nada de WebXR.
    */
   readonly onRenderer?: (renderer: PanoramaRenderer | null) => void;
+  /**
+   * Efecto ambiental de la escena (V06, V08).
+   *
+   * Lo decide quien monta el visor y no este componente, porque la
+   * preferencia de movimiento reducido y la fuente de luz del destello
+   * dependen del contexto: en el editor hay que poder previsualizarlo aunque
+   * el sistema pida movimiento reducido, y en el recorrido publicado no.
+   */
+  readonly ambient?: AmbientState | null;
+  /** Dirección de la luz para el destello, en la esfera de la escena. */
+  readonly flareDirection?: { readonly yaw: number; readonly pitch: number } | null;
 }
 
 export interface ViewerStatus {
@@ -134,6 +147,8 @@ export function PanoramaViewer({
   mediaUrls,
   templateContext,
   onRenderer,
+  ambient = null,
+  flareDirection = null,
 }: PanoramaViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -652,6 +667,26 @@ export function PanoramaViewer({
         <p className="it-viewer__notice it-viewer__notice--warning" role="status">
           Sin aceleración por hardware: el movimiento puede resultar lento.
         </p>
+      )}
+
+      {/* Debajo del `overlay` del autor: la lluvia pasa delante de los
+          marcadores pero no delante de un panel que se está leyendo. */}
+      {ambient !== null && ambient !== undefined && (
+        <AmbientLayer
+          state={ambient}
+          flareSource={
+            flareDirection === null
+              ? null
+              : projectFlareSource(
+                  flareDirection.yaw,
+                  flareDirection.pitch,
+                  view.yaw,
+                  view.pitch,
+                  rendererRef.current?.horizontalFovDeg(view) ?? view.fov,
+                  size.width / Math.max(size.height, 1),
+                )
+          }
+        />
       )}
 
       {overlay}

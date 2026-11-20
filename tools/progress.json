@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.40.0",
-  "updatedAt": "2026-11-20T12:40:00Z",
+  "version": "0.41.0",
+  "updatedAt": "2026-11-20T13:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -204,9 +204,9 @@
     "V03": "done",
     "V04": "pending",
     "V05": "modeled",
-    "V06": "modeled",
+    "V06": "done",
     "V07": "modeled",
-    "V08": "modeled",
+    "V08": "done",
     "D01": "done",
     "D02": "done",
     "D03": "done",
@@ -339,8 +339,8 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "X16": "Borradores, revisión y publicación controlada de punta a punta: máquina de estados declarada en tabla en el servicio (review.py), separación de funciones —quien redacta no aprueba ni publica lo que redactó, aunque tenga el permiso—, API de tres rutas y módulo «Revisión y aprobación» en el editor que ofrece sólo las acciones del estado actual y explica los rechazos. 40 pruebas de servidor y 12 de interfaz.",
-      "X17": "Auditoría de cada transición en la cadena existente (quién aprobó y cuándo) y resolución de ediciones simultáneas por sección: el proyecto se resume en secciones reconocibles —una escena, un activo, un plano— y el conflicto se nombra por su título («ambos tocasteis la sala de bombas»). Publicar sobre una base que ya se movió se rechaza. 14 pruebas de dominio."
+      "V06": "Efectos ambientales dibujados de verdad: lluvia, polvo en suspensión y nieve, con simulación independiente de la cadencia de fotogramas, reaparición por los bordes sin formar columnas y número de partículas acotado para no competir con el propio recorrido. Control en el inspector, publicado en el manifiesto y comprobado en navegador real (TEST-E2E-015). El contrato existía desde la etapa 01 y no lo dibujaba nada: se podía elegir lluvia y la escena se publicaba igual de seca.",
+      "V08": "Nieve con bamboleo —lo que distingue un copo de una gota— y destello de lente con la fuente de luz declarada por el autor: el destello aparece donde está la luz y desaparece al girar hacia otro lado, que es lo que hace un objetivo. Sin declararla cae a la vista inicial de la escena y la interfaz lo dice. 42 pruebas entre simulación y pintado."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -381,7 +381,9 @@
       "can_perform sin recurso comparaba el ámbito de la concesión con un recurso vacío, de modo que toda concesión con ámbito quedaba fuera: un revisor con permiso sobre una planta —el caso normal con varias plantas— no podía listar nada, y el motivo que recibía hablaba de un recurso que la petición no tenía.",
       "El registro de auditoría se servía entero a cualquiera con el permiso, incluido quien sólo tiene una planta concedida: sus eventos no llevan planta y no se puede recortar, así que ahora se deniega con el motivo en lugar de mostrar lo que ocurre en las demás plantas.",
       "En la pantalla de revisión, una acción rechazada ponía el motivo y la recarga posterior lo borraba antes de que se pudiera leer: el problema de la consulta y el de la última acción son distintos y ahora se guardan por separado.",
-      "La prueba de la sección de medios salía antes de comprobar nada porque el proyecto de prueba nace sin medios: la guarda se ha quitado y el medio se añade en la propia prueba."
+      "La prueba de la sección de medios salía antes de comprobar nada porque el proyecto de prueba nace sin medios: la guarda se ha quitado y el medio se añade en la propia prueba.",
+      "La capa ambiental está por encima de los marcadores: sin «pointer-events: none» una escena con lluvia habría dejado de responder a los clics, que es peor defecto que no tener lluvia. Comprobado en navegador real.",
+      "Con la preferencia de movimiento reducido el efecto no se atenúa: se apaga. Un efecto ambiental es movimiento periférico constante, que es exactamente lo que molesta a quien pide esa preferencia, y «menos lluvia» sigue siendo lluvia. El editor aplica la misma regla y avisa de que no se previsualiza, para que nadie ajuste un efecto que su público no verá."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

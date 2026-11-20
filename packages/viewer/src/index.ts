@@ -15,6 +15,8 @@ export * from './ModelHotspotLayer';
 export * from './model-loader';
 export * from './model-viewer';
 export * from './model-hotspots';
+export * from './ambient-effects';
+export * from './AmbientLayer';
 export * from './webxr';
 export * from './xr-session';
 export * from './xr-input';

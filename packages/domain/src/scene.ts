@@ -237,8 +237,22 @@ export const sceneSchema = z.object({
     .object({
       effect: z.enum(['none', 'rain', 'dust', 'snow', 'lensFlare']),
       intensity: z.number().min(0).max(1),
+      /**
+       * Dirección de la fuente de luz para el destello, en la esfera.
+       *
+       * `null` significa «usar la vista inicial de la escena», que es una
+       * aproximación razonable —el autor encuadra lo que quiere que se vea—
+       * pero sólo acierta cuando la luz está delante. Con la dirección
+       * declarada, el destello aparece donde está la luz de verdad y
+       * desaparece al girar hacia otro lado, que es lo que hace un objetivo.
+       *
+       * Campo opcional con valor por omisión: un proyecto guardado por una
+       * versión anterior se abre sin migración y se comporta como antes.
+       */
+      lightYaw: z.number().nullable().default(null),
+      lightPitch: z.number().min(-Math.PI / 2).max(Math.PI / 2).nullable().default(null),
     })
-    .default({ effect: 'none', intensity: 0.5 }),
+    .default({ effect: 'none', intensity: 0.5, lightYaw: null, lightPitch: null }),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
 });

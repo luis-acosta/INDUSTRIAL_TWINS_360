@@ -73,8 +73,14 @@ export interface BeginInput {
   readonly hasGeometry: boolean;
 }
 
-/** Consulta la preferencia del sistema sobre el movimiento. */
-function prefersReducedMotion(): boolean {
+/**
+ * Consulta la preferencia del sistema sobre el movimiento.
+ *
+ * Se exporta porque la usan dos cosas distintas por el mismo motivo: las
+ * transiciones entre escenas y los efectos ambientales. Dos consultas
+ * separadas acabarían respondiendo distinto en cuanto una de ellas cambiara.
+ */
+export function prefersReducedMotion(): boolean {
   return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 

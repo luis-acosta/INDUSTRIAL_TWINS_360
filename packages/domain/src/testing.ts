@@ -140,7 +140,7 @@ export function makeScene(n: number, projectId: string, overrides: Partialize<Sc
     group: '',
     tags: [],
     excludedFromPublish: false,
-    ambientEffect: { effect: 'none', intensity: 0.5 },
+    ambientEffect: { effect: 'none', intensity: 0.5, lightYaw: null, lightPitch: null },
     createdAt: ISO_NOW,
     updatedAt: ISO_NOW,
     ...overrides,

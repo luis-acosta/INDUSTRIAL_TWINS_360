@@ -304,3 +304,20 @@
   text-overflow: ellipsis;
   max-width: 180px;
 }
+
+/* Capa de efectos ambientales (V06, V08).
+ *
+ * `pointer-events: none` no es un detalle: la capa está encima de los
+ * marcadores, y sin eso una escena con lluvia dejaría de responder a los
+ * clics, que es peor defecto que no tener lluvia. */
+.ambient-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Por encima de la escena y de los marcadores, por debajo de los paneles de
+   * interfaz: la lluvia pasa delante de un rótulo de la planta, pero no
+   * delante de la ficha de un equipo que se está leyendo. */
+  z-index: 3;
+}

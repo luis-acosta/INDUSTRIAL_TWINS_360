@@ -615,3 +615,53 @@ test('no ofrece entrar en VR en un navegador sin visor', async ({ page }) => {
   await page.getByRole('button', { name: 'A la plataforma' }).click();
   await expect(barra.getByText('Plataforma superior')).toBeVisible();
 });
+
+test('el efecto ambiental se dibuja y no se come los clics', async ({ page }) => {
+  // TEST-E2E-015: la capa ambiental sólo se puede comprobar con un lienzo de
+  // verdad. Y hay tres cosas que comprobar, cada una por su propio motivo: que
+  // la capa aparezca sólo en la escena que la configuró; que esté marcada como
+  // decorativa, porque un lector de pantalla no tiene nada que decir de la
+  // lluvia; y que no reciba eventos del puntero, porque está por encima de los
+  // marcadores y sin eso una escena con lluvia dejaría de responder.
+  await page.goto('/');
+  const barra = page.getByRole('banner');
+  await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+  // La primera escena no tiene efecto: la capa no debe existir.
+  await expect(page.locator('.ambient-layer')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'A la plataforma' }).click();
+  await expect(barra.getByText('Plataforma superior')).toBeVisible();
+
+  const capa = page.locator('.ambient-layer');
+  await expect(capa).toHaveCount(1);
+  await expect(capa).toHaveAttribute('aria-hidden', 'true');
+
+  const eventos = await capa.evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(eventos).toBe('none');
+
+  // Y dibuja de verdad: se compara el lienzo en dos instantes, que con lluvia
+  // tienen que diferir. Un lienzo que no cambia es una capa que no anima.
+  const huella = async (): Promise<string> =>
+    capa.evaluate((el) => (el as HTMLCanvasElement).toDataURL().slice(-2000));
+
+  const primera = await huella();
+  await page.waitForTimeout(400);
+  const segunda = await huella();
+  expect(primera).not.toBe(segunda);
+});
+
+test('la preferencia de movimiento reducido apaga el efecto ambiental', async ({ page }) => {
+  // TEST-E2E-016: con esa preferencia el efecto no se atenúa, se apaga: un
+  // efecto ambiental es movimiento periférico constante, que es exactamente lo
+  // que molesta a quien la activa. «Menos lluvia» sigue siendo lluvia.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+
+  const barra = page.getByRole('banner');
+  await expect(barra.getByText('Sala de bombas')).toBeVisible();
+  await page.getByRole('button', { name: 'A la plataforma' }).click();
+  await expect(barra.getByText('Plataforma superior')).toBeVisible();
+
+  await expect(page.locator('.ambient-layer')).toHaveCount(0);
+});

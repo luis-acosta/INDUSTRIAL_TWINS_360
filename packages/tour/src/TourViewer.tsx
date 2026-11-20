@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useVrSession } from './useVrSession';
+import { prefersReducedMotion } from './useSceneTransition';
 import {
   CONDITION_LABELS,
   DATA_QUALITY_LABELS,
@@ -53,6 +54,7 @@ import {
 } from '@it360/ui';
 import {
   ActionRunner,
+  ambientForScene,
   type PanoramaRenderer,
   PanoramaViewer,
   resolveEntryView,
@@ -870,6 +872,43 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     [skin, sceneId, skinState],
   );
 
+  /**
+   * Efecto ambiental de la escena (V06, V08).
+   *
+   * El contrato existía desde la etapa 01 y no lo dibujaba nada: se podía
+   * elegir lluvia y la escena se publicaba igual de seca.
+   *
+   * Se recalcula al cambiar de escena, que es cuando hay que rehacer las
+   * partículas, y no en cada giro de cámara. Con movimiento reducido no se
+   * atenúa: se apaga, porque un efecto ambiental es movimiento periférico
+   * constante y es exactamente lo que molesta a quien pide esa preferencia.
+   */
+  const ambient = useMemo(
+    () => (scene === null ? null : ambientForScene(scene, { reducedMotion: prefersReducedMotion() })),
+    [scene?.id, scene?.ambientEffect.effect, scene?.ambientEffect.intensity],
+  );
+
+  /**
+   * Dirección de la luz para el destello.
+   *
+   * Si el autor la declaró, se usa esa: el destello aparece donde está la luz
+   * y desaparece al girar hacia otro lado, que es lo que hace un objetivo de
+   * verdad. Si no la declaró, se cae a la vista inicial de la escena, que es
+   * donde el autor encuadra lo que quiere que se vea: una aproximación que
+   * acierta cuando la luz está delante.
+   */
+  const flareDirection = useMemo(() => {
+    if (scene === null || scene.ambientEffect.effect !== 'lensFlare') return null;
+    const { lightYaw, lightPitch } = scene.ambientEffect;
+    if (lightYaw !== null && lightPitch !== null) return { yaw: lightYaw, pitch: lightPitch };
+    return { yaw: scene.camera.initialView.yaw, pitch: scene.camera.initialView.pitch };
+  }, [
+    scene?.id,
+    scene?.ambientEffect.effect,
+    scene?.ambientEffect.lightYaw,
+    scene?.ambientEffect.lightPitch,
+  ]);
+
   const vr = useVrSession({
     renderer: panoramaRenderer,
     panels: vrPanels,
@@ -969,6 +1008,8 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
           <PanoramaViewer
             scene={viewerScene}
             onRenderer={setPanoramaRenderer}
+            ambient={ambient}
+            flareDirection={flareDirection}
             {...(pendingView !== null ? { view: pendingView } : {})}
             onViewChange={(next) => {
               setView(next);
