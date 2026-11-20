@@ -668,3 +668,49 @@ class TestRevisionesApi:
 
         assert cola.status_code == 200
         assert len(cola.json()["revisions"]) == 1
+
+
+class TestAmbitosDelUsuario:
+    """La respuesta de permisos incluye los ámbitos concedidos (P04)."""
+
+    @pytest.fixture()
+    def app_client(self, audit: AuditLog) -> TestClient:
+        return TestClient(create_app(mappings={}, reader=None, audit=audit))
+
+    def test_sin_restriccion_las_categorias_son_nulas(self, app_client: TestClient) -> None:
+        # TEST-API-036: «sin restricción» y «ninguna categoría» son estados
+        # distintos. Si una concesión sin categorías devolviera lista vacía, el
+        # editor ocultaría todas las notas a un usuario con permisos generales,
+        # que es el modo de fallo más desconcertante posible.
+        response = app_client.get(
+            "/api/v1/me/operations", headers={"x-usuario": "jefa", "x-rol": "administrator"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["noteCategoryIds"] is None
+
+    def test_publica_el_ambito_de_cada_concesion(self, app_client: TestClient) -> None:
+        # TEST-API-037: el editor necesita los ámbitos para recortar lo que
+        # muestra; con sólo la lista de operaciones no puede saber de qué
+        # planta ni de qué categorías de nota se trata.
+        response = app_client.get(
+            "/api/v1/me/operations",
+            headers={"x-usuario": "tecnico", "x-rol": "editor", "x-planta": "norte"},
+        )
+
+        scopes = response.json()["scopes"]
+        assert len(scopes) == 1
+        assert scopes[0]["plantId"] == "norte"
+        assert scopes[0]["role"] == "editor"
+
+    def test_la_lista_de_operaciones_sigue_estando(self, app_client: TestClient) -> None:
+        # TEST-API-038: la respuesta ya se usaba para ocultar acciones; añadir
+        # campos no puede romper a quien sólo lee los que había.
+        response = app_client.get(
+            "/api/v1/me/operations", headers={"x-usuario": "tecnico", "x-rol": "editor"}
+        )
+
+        body = response.json()
+        assert "project.update" in body["operations"]
+        assert body["total"] > 0
+        assert "aviso" in body

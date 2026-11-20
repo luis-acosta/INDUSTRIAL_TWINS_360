@@ -11,6 +11,8 @@ import {
   canTransition,
   EMPTY_NOTE_FILTER,
   filterNotes,
+  hiddenNoteCount,
+  notesVisibleTo,
   isFieldNote,
   isOverdue,
   NOTE_PRIORITY_LABELS,
@@ -53,6 +55,14 @@ import type { ProjectStore } from '../state/project-store';
 export interface NotesModuleProps {
   readonly store: ProjectStore;
   readonly onGoToScene: (sceneId: string) => void;
+  /**
+   * Categorías de nota que el usuario puede ver (P04).
+   *
+   * `undefined` o `null` significan «sin restricción», que es el caso de un
+   * puesto sin servicio de permisos configurado: el editor local no puede
+   * inventarse una restricción que nadie le ha dado.
+   */
+  readonly allowedCategories?: readonly string[] | null;
 }
 
 /**
@@ -63,7 +73,7 @@ export interface NotesModuleProps {
  */
 const WORKING_STATUSES: readonly NoteStatus[] = ['open', 'inProgress', 'blocked'];
 
-export function NotesModule({ store, onGoToScene }: NotesModuleProps): JSX.Element {
+export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModuleProps): JSX.Element {
   const [filter, setFilter] = useState<NoteFilter>(EMPTY_NOTE_FILTER);
   const [sort, setSort] = useState<NoteSort>('priorityThenDue');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -72,7 +82,26 @@ export function NotesModule({ store, onGoToScene }: NotesModuleProps): JSX.Eleme
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [fieldImportOpen, setFieldImportOpen] = useState(false);
 
-  const notes = store.project.notes;
+  /**
+   * Notas que este usuario puede ver (P04).
+   *
+   * El recorte se aplica **antes** del filtro de la pantalla: si se aplicara
+   * después, los contadores de los filtros incluirían notas que el usuario no
+   * puede abrir, y al pulsar «Seguridad: 4» aparecerían dos.
+   *
+   * Esto es presentación, no seguridad: las notas están en el archivo del
+   * proyecto y quien lo tiene las tiene. Lo que evita es que una pantalla
+   * muestre a un contratista las notas internas de mantenimiento cuando
+   * trabajan sobre el mismo proyecto.
+   */
+  const notes = useMemo(
+    () => notesVisibleTo(store.project.notes, allowedCategories ?? null),
+    [store.project.notes, allowedCategories],
+  );
+  const hidden = useMemo(
+    () => hiddenNoteCount(store.project.notes, allowedCategories ?? null),
+    [store.project.notes, allowedCategories],
+  );
   const visible = useMemo(() => sortNotes(filterNotes(notes, filter, now), sort), [notes, filter, sort, now]);
   const selected = notes.find((n) => n.id === selectedId) ?? null;
 
@@ -257,6 +286,18 @@ export function NotesModule({ store, onGoToScene }: NotesModuleProps): JSX.Eleme
         </div>
 
         <div className="module__body">
+          {/* El recorte se dice en lugar de callarlo: una lista recortada en
+              silencio hace pensar que el proyecto está incompleto, y alguien
+              acaba creando otra vez una nota que ya existía y no podía ver. */}
+          {hidden > 0 && (
+            <Callout tone="info" title="Hay notas que no puede ver">
+              {hidden === 1
+                ? 'Una nota pertenece a una categoría que no tiene concedida.'
+                : `${hidden} notas pertenecen a categorías que no tiene concedidas.`}{' '}
+              Si necesita verlas, pídaselo al administrador de la instalación.
+            </Callout>
+          )}
+
           <DataTable
             label="Notas del proyecto"
             rows={visible}

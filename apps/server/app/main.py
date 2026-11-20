@@ -29,6 +29,7 @@ from .access_model import MODEL_FINGERPRINT, OPERATIONS
 from .audit import AuditEvent, AuditLog
 from .security import (
     AccessError,
+    is_active,
     Grant,
     Resource,
     Scope,
@@ -442,9 +443,44 @@ def create_app(
         a la comprobación por recurso, y la respuesta lo dice.
         """
         operations = sorted(effective_operations(grants))
+        moment = datetime.now(timezone.utc)
+        active = [grant for grant in grants if is_active(grant, moment)]
+
+        # Las categorías de nota concedidas (P04).
+        #
+        # Hacen falta en la respuesta porque las notas viven en el proyecto del
+        # equipo del autor —el diseño local-first del producto— y es el editor
+        # quien tiene que ocultar las que el usuario no puede ver. Sin esta
+        # lista, el editor no tiene con qué filtrar y la restricción por
+        # categoría quedaba declarada en el modelo y sin aplicarse en ninguna
+        # parte.
+        #
+        # Una concesión sin categorías no está restringida, igual que en
+        # `scope_covers`: el conjunto vacío significa «todas». Si aquí
+        # significara «ninguna», un usuario con permisos generales se quedaría
+        # sin ver nota alguna.
+        unrestricted = any(not grant.scope.note_category_ids for grant in active)
+        categories: set[str] = set()
+        for grant in active:
+            categories.update(grant.scope.note_category_ids)
+
         return {
             "operations": operations,
             "total": len(OPERATIONS),
+            "scopes": [
+                {
+                    "role": grant.role,
+                    "plantId": grant.scope.plant_id,
+                    "unitId": grant.scope.unit_id,
+                    "areaId": grant.scope.area_id,
+                    "noteCategoryIds": sorted(grant.scope.note_category_ids),
+                }
+                for grant in active
+            ],
+            # `null` significa «sin restricción por categoría»; una lista, las
+            # únicas que puede ver. Se distingue del array vacío a propósito:
+            # vacío sería «ninguna», que es un estado legítimo y distinto.
+            "noteCategoryIds": None if unrestricted else sorted(categories),
             "aviso": (
                 "Esta lista es por rol, no por recurso: una operación puede estar "
                 "permitida en una unidad y no en otra."

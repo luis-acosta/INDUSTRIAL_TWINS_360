@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.46.0",
-  "updatedAt": "2026-11-20T18:05:00Z",
+  "version": "0.47.0",
+  "updatedAt": "2026-11-20T18:40:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -279,7 +279,7 @@
     "P01": "done",
     "P02": "done",
     "P03": "done",
-    "P04": "partial",
+    "P04": "done",
     "P05": "partial",
     "P06": "done",
     "P07": "pending",
@@ -339,8 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "F10": "Barras de progreso y de reproducción con datos reales en las cuatro fuentes. La de evaluación mostraba el avance del RECORRIDO —una barra de examen decía por qué parada iba la visita guiada—; la de medio preguntaba por un medio que nunca empezaba, porque la acción de reproducir tenía un anfitrión vacío en el recorrido publicado; y la de puntuación no se dibujaba nunca porque faltaba declarar qué puntuación equivale al 100 %, que ahora es un campo del componente. 14 pruebas de reproducción.",
-      "L11": "La vista se conserva al cambiar entre modelos que declaran el mismo espacio de coordenadas: el caso de la carcasa cerrada y el despiece del mismo equipo, donde reiniciar la cámara obliga a volver a buscar la pieza. El campo «coordinateSpaceId» existía desde la etapa 08 y no lo leía nadie. Un espacio sin declarar no agrupa con nada, ni consigo mismo: tratar dos «no lo sé» como iguales dejaría la cámara dentro de una pared. El editor dice con qué escenas agrupa, que es la única forma de comprobar que el identificador se escribió igual en las dos."
+      "P04": "Restricción por perfil y categoría aplicada de punta a punta: el servicio publica los ámbitos concedidos —incluidas las categorías de nota— y el editor recorta la lista de notas y las categorías que ofrece al crear. Antes el modelo de acceso tenía el ámbito por categoría desde la etapa 11 y nada lo aplicaba. El recorte se declara explícitamente como presentación y no seguridad —quien tiene el archivo tiene las notas— y por eso un servicio inalcanzable no restringe nada: un editor que se bloqueara por no poder preguntar los permisos sería inservible en una planta sin red, que es donde se usa. 14 pruebas."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -399,7 +398,9 @@
       "Un archivo con la cabecera dañada deja al reproductor sin disparar ni «loadedmetadata» ni «error»: sin plazo, la importación se quedaba colgada sin decir nada.",
       "La barra de progreso con fuente «evaluación» devolvía el avance del recorrido guiado: una barra de examen mostraba por qué parada iba la visita.",
       "Las acciones playMedia y pauseMedia eran funciones vacías en el recorrido publicado: pulsar el marcador no sonaba nada, y de paso la barra de reproducción no tenía nada que medir.",
-      "La barra con fuente «puntuación» no se dibujaba nunca y nada lo explicaba: faltaba el objetivo, porque una puntuación no tiene máximo por sí misma."
+      "La barra con fuente «puntuación» no se dibujaba nunca y nada lo explicaba: faltaba el objetivo, porque una puntuación no tiene máximo por sí misma.",
+      "El extremo de permisos devolvía sólo la lista de operaciones, sin los ámbitos: el editor no tenía con qué recortar nada, de modo que la restricción por categoría de nota estaba modelada y sin aplicar en ninguna parte.",
+      "«Sin restricción» y «ninguna categoría» son estados distintos y se distinguen en toda la cadena: confundirlos ocultaría todas las notas a un usuario con permisos generales, o las mostraría todas a uno restringido."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

@@ -112,6 +112,7 @@ import { NotesModule } from './modules/NotesModule';
 import { TelemetryModule } from './modules/TelemetryModule';
 import { ReviewModule } from './modules/ReviewModule';
 import { HttpReviewClient } from './review/review-client';
+import { UNRESTRICTED, fetchAccessProfile, type AccessProfile } from './access/access-client';
 import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModule';
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
@@ -305,6 +306,32 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
     () => ({ userId: store.project.users[0]?.id ?? 'editor-local', role: 'editor' }),
     [store.project.users],
   );
+
+  /**
+   * Perfil de acceso del usuario según el servicio (P04).
+   *
+   * Sin servicio configurado, o si no responde, se trabaja sin restricciones:
+   * esto es presentación y no seguridad —quien tiene el archivo tiene las
+   * notas—, y un editor que se bloqueara por no poder preguntar los permisos
+   * sería inservible en una planta sin red, que es donde se usa.
+   */
+  const [accessProfile, setAccessProfile] = useState<AccessProfile>(UNRESTRICTED);
+
+  useEffect(() => {
+    if (serviceEndpoint === null) {
+      setAccessProfile(UNRESTRICTED);
+      return undefined;
+    }
+
+    let cancelled = false;
+    void fetchAccessProfile(serviceEndpoint, reviewIdentity).then((result) => {
+      if (cancelled) return;
+      setAccessProfile(result.ok ? result.value : UNRESTRICTED);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceEndpoint, reviewIdentity]);
 
   const reviewClient = useMemo(
     () => (serviceEndpoint === null ? null : new HttpReviewClient(serviceEndpoint, reviewIdentity)),
@@ -652,6 +679,7 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
               )}
               {moduleId === 'notes' && (
                 <NotesModule
+                  allowedCategories={accessProfile.noteCategoryIds}
                   store={store}
                   onGoToScene={(targetSceneId) => {
                     setSceneId(targetSceneId);

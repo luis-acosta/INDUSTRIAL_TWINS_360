@@ -328,3 +328,72 @@ export function countByStatus(notes: readonly Note[]): Record<NoteStatus, number
   for (const note of notes) counts[note.status] += 1;
   return counts;
 }
+
+/* ------------------------------------------------------------------ *
+ * Restricción por categoría (P04)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Categorías de nota que un usuario puede ver, según el servicio.
+ *
+ * `null` significa «sin restricción». Se distingue del array vacío a
+ * propósito: vacío es «ninguna categoría», que es un estado legítimo —un
+ * visitante al que se le concedió lectura del recorrido y de ninguna
+ * categoría de notas— y no lo mismo que no tener restricción. Confundir los
+ * dos es el error que convierte un control de acceso en un filtro que no
+ * filtra, o en uno que lo oculta todo.
+ */
+export type AllowedNoteCategories = readonly string[] | null;
+
+/**
+ * Notas que el usuario puede ver (P04).
+ *
+ * Esto es un **recorte de presentación**, no un control de seguridad: las
+ * notas están en el archivo del proyecto y quien lo tiene las tiene. El
+ * control real es quién recibe el archivo, y la comprobación por recurso en el
+ * servicio para lo que pasa por él. Lo que esta función evita es que una
+ * pantalla muestre a un contratista las notas internas de mantenimiento cuando
+ * trabajan sobre el mismo proyecto: distinto problema, igual de real.
+ *
+ * Por eso está aquí y no en el servidor: el recorte tiene que aplicarse donde
+ * se dibuja la lista, y la lista se dibuja con datos locales.
+ */
+export function notesVisibleTo(
+  notes: readonly Note[],
+  allowed: AllowedNoteCategories,
+): readonly Note[] {
+  if (allowed === null) return notes;
+  const permitted = new Set(allowed);
+  return notes.filter((note) => permitted.has(note.categoryId));
+}
+
+/**
+ * Categorías que se pueden ofrecer al crear o reclasificar una nota.
+ *
+ * Mismo criterio que para ver: ofrecer una categoría que luego no se puede ver
+ * dejaría al autor creando notas que desaparecen de su vista al guardarlas, lo
+ * que parece una pérdida de datos.
+ */
+export function categoriesAvailableTo(
+  categories: readonly NoteCategory[],
+  allowed: AllowedNoteCategories,
+): readonly NoteCategory[] {
+  if (allowed === null) return categories;
+  const permitted = new Set(allowed);
+  return categories.filter((category) => permitted.has(category.id));
+}
+
+/**
+ * Cuántas notas quedan ocultas por la restricción.
+ *
+ * La interfaz lo dice en lugar de callarlo: una lista recortada en silencio
+ * hace pensar que el proyecto está incompleto, y alguien acaba volviendo a
+ * crear una nota que ya existía y no podía ver.
+ */
+export function hiddenNoteCount(
+  notes: readonly Note[],
+  allowed: AllowedNoteCategories,
+): number {
+  if (allowed === null) return 0;
+  return notes.length - notesVisibleTo(notes, allowed).length;
+}
