@@ -53,22 +53,9 @@ puntuación con objetivos independientes— pero las pantallas para crearlos des
 el editor no. Un proyecto que ya traiga recorridos o evaluaciones los ejecuta
 bien; crearlos desde cero requiere editar el proyecto por otra vía.
 
-### Importación de archivos a la biblioteca de medios
-
-Los documentos técnicos se **vinculan** desde la biblioteca de medios del
-proyecto, pero no hay todavía pantalla para **meter** un archivo nuevo en esa
-biblioteca desde el editor. Un proyecto importado trae sus medios; uno creado
-desde cero empieza vacío.
-
 ### Editor de interfaz por arrastrar y soltar (F01)
 
 No está. Los *skins* se aplican si vienen en el proyecto.
-
-### Realidad virtual (etapa 13)
-
-La detección de capacidades, los perfiles de dispositivo y las reglas de
-compatibilidad de componentes están implementadas y probadas. La sesión
-inmersiva en sí —entrar en VR y navegar con los mandos— no.
 
 ### Correo y móvil (P07, P09)
 
@@ -77,6 +64,25 @@ Sin empezar.
 ---
 
 ## 2. Lo que es experimental
+
+### Realidad virtual (etapa 13): verificada en dobles, no en un visor
+
+La sesión inmersiva está implementada de punta a punta —petición de sesión,
+espacio de referencia, bucle de fotogramas, paneles de interfaz con los mismos
+nodos que la versión plana, acciones con el mismo ejecutor, y recogida al
+quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la
+especificación de WebXR.
+
+**Lo que nadie ha podido comprobar es lo único que importa de verdad en VR:**
+que se vea bien y no produzca malestar. Eso exige un visor físico y no se ha
+ejecutado en ninguno. Por eso la sesión inmersiva se declara **experimental** y
+no completa, y el producto lo dice en pantalla.
+
+La publicación ya entrega un juego de panorámicas reducido por clase de visor
+(4096 px para un visor autónomo, 8192 px para uno conectado a un PC), y el
+recorrido carga la copia reducida sólo mientras presenta. Lo que no está es la
+multimedia emergente dentro de la sesión: un vídeo en DOM no se compone sobre
+la imagen del visor y hace falta reproducirlo en textura.
 
 ### Conexión automática de escenas (C05–C09)
 
@@ -106,9 +112,12 @@ aceptable, requiere revisión, rechazado. Lo rechazado no se entrega.
 resultado, cobertura incompleta, y el caso en que OpenCV declara éxito con una
 imagen degenerada.
 
-**Lo que no está:** puntos de control a mano (B07), Live Panorama y Adaptive HDR
-(B06), y proyecciones distintas de la esférica (B04: se validan en la entrada,
-la tubería proyecta en esférica).
+**Lo que no está:** Live Panorama y Adaptive HDR (B06). Los puntos de control a
+mano (B07) están implementados y marcados **experimentales**: estiman la
+homografía de cada par, rechazan la que no es plausible y señalan el punto peor
+marcado volviendo a estimar sin él, pero con cinco puntos justos el margen es
+estrecho y conviene marcar más. Las proyecciones distintas de la esférica (B04)
+ya se producen: cúbica, cilíndrica, Mercator y estereográfica.
 
 **Recomendación de uso:** fotografíe con exposición manual fija y gire poco
 entre tomas —cada foto debe compartir al menos un tercio con la anterior—. Los

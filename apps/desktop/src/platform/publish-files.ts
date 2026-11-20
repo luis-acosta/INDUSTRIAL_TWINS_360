@@ -127,6 +127,9 @@ export async function publishProject(
     appVersion: APP_VERSION,
     runtime: runtime.value,
     mediaFiles: prepared.files,
+    // Las copias reducidas para visor inmersivo ya están escritas; el
+    // exportador sólo las declara en el manifiesto (N12).
+    vrPanoramas: prepared.vrPanoramas,
     ...(request.includeDocuments === true ? { includeDocuments: true } : {}),
     ...(request.includeUnreviewed === true ? { includeUnreviewed: true } : {}),
     ...(request.telemetryEndpoint !== undefined

@@ -541,3 +541,71 @@ describe('publicationReport', () => {
     expect(report).toContain('Sin advertencias.');
   });
 });
+
+describe('panorámicas de visor inmersivo en el manifiesto (N12)', () => {
+  /* Lo que se vigila aquí es una sola cosa, y es la que puede hacer daño: el
+     manifiesto no puede anunciar una copia reducida que el paquete no lleva.
+     El visor la pediría dentro de la sesión inmersiva y recibiría un 404, que
+     en unas gafas se ve como una escena en negro sin explicación posible. */
+
+  it('declara sólo las copias que vienen entre los archivos', () => {
+    // TEST-PUB-N12-001
+    const base = projectFixture();
+    const panoA = base.media[0]!;
+    const site = buildSite(base, {
+      ...SITE_OPTIONS,
+      mediaFiles: new Map([
+        ...SITE_OPTIONS.mediaFiles,
+        ['media/vr/standalone/escena-1.jpg', encoder.encode('reducida-1')],
+      ]),
+      vrPanoramas: {
+        [panoA.id]: {
+          standalone: 'media/vr/standalone/escena-1.jpg',
+          // Esta no se escribió: el contenedor no estaba disponible.
+          tethered: 'media/vr/tethered/escena-1.jpg',
+        },
+      },
+    });
+
+    expect(site.manifest.vrPanoramas[panoA.id]).toEqual({
+      standalone: 'media/vr/standalone/escena-1.jpg',
+    });
+  });
+
+  it('descarta las de un medio que el plan dejó fuera', () => {
+    // TEST-PUB-N12-002: si la escena no se publica, su panorámica tampoco, y
+    // la variante quedaría apuntando a un archivo que nadie escribe.
+    const base = projectFixture();
+    const panoA = base.media[0]!;
+    const first = base.scenes[0]!;
+    const second = base.scenes[1]!;
+    const project: Project = {
+      ...base,
+      scenes: base.scenes.map((scene) =>
+        scene.id === first.id ? { ...scene, excludedFromPublish: true } : scene,
+      ),
+      settings: { ...base.settings, entrySceneId: second.id },
+    };
+
+    const site = buildSite(project, {
+      ...SITE_OPTIONS,
+      mediaFiles: new Map([
+        ...SITE_OPTIONS.mediaFiles,
+        ['media/vr/standalone/escena-1.jpg', encoder.encode('reducida-1')],
+      ]),
+      vrPanoramas: { [panoA.id]: { standalone: 'media/vr/standalone/escena-1.jpg' } },
+    });
+
+    expect(site.plan.media.map((m) => m.id)).not.toContain(panoA.id);
+    expect(site.manifest.vrPanoramas).toEqual({});
+  });
+
+  it('un paquete sin copias reducidas lleva el mapa vacío, no ausente', () => {
+    // TEST-PUB-N12-003: el visor lee el campo en cada cambio de escena; si
+    // faltara, tendría que distinguir «no hay» de «paquete antiguo» y la
+    // distinción no le sirve de nada.
+    const site = buildSite(projectFixture(), SITE_OPTIONS);
+
+    expect(site.manifest.vrPanoramas).toEqual({});
+  });
+});

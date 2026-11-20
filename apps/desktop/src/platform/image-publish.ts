@@ -26,6 +26,8 @@
 
 import {
   planImage,
+  planVrVariants,
+  VR_VARIANT_PROFILES,
   type ImagePlan,
   type Media,
   type Project,
@@ -60,10 +62,27 @@ export interface PreparedMedia {
   readonly notes: readonly string[];
   readonly originalBytes: number;
   readonly publishedBytes: number;
+  /**
+   * Panorámicas reducidas escritas, por medio y perfil (N12).
+   *
+   * Va aparte del proyecto porque no son medios del proyecto: son copias de
+   * entrega. Entra en el manifiesto tal cual, y sólo con lo que se escribió.
+   */
+  readonly vrPanoramas: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 const isEncodable = (format: PublishImageFormat): format is EncodableFormat =>
   format === 'jpeg' || format === 'png' || format === 'webp';
+
+/**
+ * Formato del codificador que corresponde a un tipo ya publicado.
+ *
+ * Un tipo que el codificador no produce —AVIF— cae en JPEG, que es lo que la
+ * tubería plana entrega también en ese caso: la variante no puede estar en un
+ * formato que el paquete no usa en ningún otro sitio.
+ */
+const formatOfMime = (mime: string): EncodableFormat =>
+  mime === 'image/webp' ? 'webp' : mime === 'image/png' ? 'png' : 'jpeg';
 
 /**
  * Recodifica las imágenes del proyecto según sus ajustes de publicación.
@@ -155,6 +174,58 @@ export async function prepareMediaForPublish(
     });
   }
 
+  /* Copias reducidas para visor inmersivo (N12).
+     Se hacen sobre los archivos que de verdad se van a publicar —no sobre los
+     originales— porque la variante tiene que ser la misma imagen que ve la
+     pantalla, sólo más pequeña. */
+  const vrPanoramas: Record<string, Record<string, string>> = {};
+
+  for (const profile of VR_VARIANT_PROFILES) {
+    const plan = planVrVariants(media, project.scenes, quality, profile);
+    if (plan.note !== null && plan.variants.length > 0) notes.push(plan.note);
+
+    if (plan.variants.length === 0) continue;
+
+    if (!canEncode) {
+      /* Sin contenedor no hay reescalado, y una entrada en el manifiesto que
+         apunte a un archivo que no se escribió deja la escena en negro dentro
+         de las gafas. Se dice y no se promete. */
+      notes.push(
+        `No se preparó el juego de panorámicas para «${profile}»: la versión web no puede reescalar. El visor cargará las panorámicas completas.`,
+      );
+      continue;
+    }
+
+    for (const variant of plan.variants) {
+      const published = media.find((entry) => entry.id === variant.mediaId);
+      if (published === undefined) continue;
+      const source = files.get(published.relativePath);
+      if (source === undefined) continue;
+
+      /* La variante se codifica en el mismo formato que la versión plana: es
+         la misma imagen más pequeña, no otra decisión de codificación. */
+      const format = formatOfMime(published.mime);
+      const reduced = await encodeOne(source, {
+        format,
+        quality: variant.quality,
+        maxEdgePx: variant.maxEdgePx,
+      });
+
+      if (reduced === null) {
+        notes.push(
+          `No se pudo reducir una panorámica para «${profile}»; el visor cargará la versión completa.`,
+        );
+        continue;
+      }
+
+      files.set(variant.relativePath, reduced.bytes);
+      publishedBytes += reduced.bytes.byteLength;
+      const forMedia = vrPanoramas[variant.mediaId] ?? {};
+      forMedia[profile] = variant.relativePath;
+      vrPanoramas[variant.mediaId] = forMedia;
+    }
+  }
+
   onProgress?.(project.media.length, project.media.length);
 
   if (quality.tiled && project.media.some((entry) => entry.kind === 'image')) {
@@ -169,6 +240,7 @@ export async function prepareMediaForPublish(
     notes,
     originalBytes,
     publishedBytes,
+    vrPanoramas,
   };
 }
 

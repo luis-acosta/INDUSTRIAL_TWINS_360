@@ -27,6 +27,7 @@ import {
   VR_PROFILES,
   VR_SUPPORTED_COMPONENTS,
   vrCompatibilityWarnings,
+  vrDeviceClass,
   type VrPanelPlacement,
 } from './webxr';
 import { makeHotspot, testUuid } from '@it360/domain/testing';
@@ -404,5 +405,37 @@ describe('DESKTOP_ONLY', () => {
     expect(DESKTOP_ONLY.desktop).toBe(true);
     expect(DESKTOP_ONLY.tablet).toBe(true);
     expect(DESKTOP_ONLY.mobile).toBe(true);
+  });
+});
+
+describe('vrDeviceClass', () => {
+  it('reconoce los navegadores de visor autónomo', () => {
+    // TEST-XRC-001: los navegadores de los visores autónomos corren sobre
+    // Android y lo declaran; ésa es la única señal observable, porque WebXR no
+    // dice de qué clase es el dispositivo.
+    expect(
+      vrDeviceClass(
+        'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 OculusBrowser/33.0',
+      ),
+    ).toBe('standalone');
+    expect(vrDeviceClass('Mozilla/5.0 (Linux; Android 12; Pico 4) Chrome/107')).toBe('standalone');
+  });
+
+  it('un navegador de escritorio se trata como visor conectado', () => {
+    // TEST-XRC-002: un visor conectado se usa desde el navegador de un PC, que
+    // sí puede con una textura del doble de lado.
+    expect(vrDeviceClass('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131')).toBe('tethered');
+    expect(vrDeviceClass('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Safari/17')).toBe(
+      'tethered',
+    );
+  });
+
+  it('en la duda elige el perfil conservador', () => {
+    // TEST-XRC-003: equivocarse hacia «autónomo» cuesta nitidez en un PC que
+    // podía con más; equivocarse hacia «conectado» deja la escena a tirones
+    // dentro del visor, que es donde el fallo se siente físicamente. Un
+    // identificador desconocido tiene que caer del lado seguro.
+    expect(vrDeviceClass('')).toBe('standalone');
+    expect(vrDeviceClass('Navegador de un visor que todavía no existe')).toBe('standalone');
   });
 });

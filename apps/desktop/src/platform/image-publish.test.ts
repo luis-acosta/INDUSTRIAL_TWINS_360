@@ -124,6 +124,7 @@ describe('publishSummary', () => {
       files: new Map(),
       notes: [],
       originalBytes: 100_000_000,
+      vrPanoramas: {},
       publishedBytes: 40_000_000,
     });
 
@@ -140,6 +141,7 @@ describe('publishSummary', () => {
       files: new Map(),
       notes: [],
       originalBytes: 40_000_000,
+      vrPanoramas: {},
       publishedBytes: 60_000_000,
     });
 
@@ -152,6 +154,7 @@ describe('publishSummary', () => {
       files: new Map(),
       notes: [],
       originalBytes: 0,
+      vrPanoramas: {},
       publishedBytes: 0,
     });
 

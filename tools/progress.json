@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.48.0",
-  "updatedAt": "2026-11-20T21:00:00Z",
+  "version": "0.49.0",
+  "updatedAt": "2026-11-20T22:15:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -327,7 +327,7 @@
     "N09": "done",
     "N10": "partial",
     "N11": "done",
-    "N12": "partial",
+    "N12": "done",
     "B01": "experimental",
     "B02": "experimental",
     "B03": "experimental",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "P05": "Asignación de tareas sobre el equipo real del proyecto. El editor escribía el responsable como texto libre y guardaba junto a él el identificador fijo «local»: el nombre se veía bien y todo lo que depende del identificador no servía —«asignadas a mí» no podía distinguir a nadie porque todos los responsables compartían identificador, y dos formas de escribir un mismo nombre eran dos responsables al buscar y uno solo al identificar—. Ahora el responsable se elige del listado de usuarios del proyecto y lo que se guarda es el identificador que el servicio usa para los permisos, con el filtro de tareas propias apoyado en el mismo. Las personas inactivas no se ofrecen, salvo cuando ya son responsables de la nota abierta: excluirlas ahí haría que abrir una tarea antigua le cambiara el responsable. Sin equipo en el proyecto el desplegable se deshabilita con el motivo, y sin identidad el interruptor de tareas propias no aparece, en lugar de devolver siempre una lista vacía que se lee como «no tengo nada pendiente»."
+      "N12": "Publicación optimizada por clase de visor, de punta a punta. Los perfiles por dispositivo existían desde la etapa 13 y sólo servían para avisar en el editor: el paquete entregaba las mismas imágenes para la pantalla y para las gafas, y un visor autónomo no admite una textura de 8192 px —la reduce él mismo con un filtro peor, después de haberla descargado entera—. Ahora el dominio planifica las copias (4096 px para autónomo, 8192 px para conectado a PC), el contenedor las escribe con el mismo codificador y filtro Lanczos3 que la tubería plana, el manifiesto declara únicamente las que de verdad se escribieron, y el recorrido carga la reducida sólo mientras presenta. Las reglas que evitan el daño: no se emite copia de una imagen que ya cabe —duplicaría el paquete sin mejorar nada—, no se emite nada si no hay contenedor que reescale, y una entrada de manifiesto nunca puede apuntar a un archivo ausente, porque el 404 ocurriría dentro de la sesión inmersiva, donde no hay forma de explicarle el fallo a quien lleva las gafas. La clase de dispositivo se deduce del navegador —WebXR no la expone— y la duda se resuelve siempre hacia el perfil conservador."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -414,7 +414,6 @@
       "N01": "Experimental, no terminado: la sesión inmersiva está implementada de punta a punta —petición de sesión, espacio de referencia con reserva, bucle de fotogramas del visor, recogida al quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la especificación de WebXR (10 pruebas). Lo que NO se ha podido verificar es lo único que importa de verdad en VR: que se vea bien y no produzca malestar. Eso exige un visor físico. Se deja marcado experimental en lugar de completo porque la plataforma no debe afirmar que algo funciona en un dispositivo donde nadie lo ha ejecutado.",
       "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
       "N10": "Parcial: las acciones compatibles se ejecutan a través del ActionRunner común, pero la multimedia emergente —vídeo y audio dentro de la sesión— necesita una capa de reproducción en textura que no está hecha. Un vídeo en DOM no se compone sobre la imagen del visor.",
-      "N12": "Parcial: los perfiles por clase de dispositivo existen y avisan en el editor, pero la publicación todavía no genera un juego de panorámicas reducido por perfil; el visor usa el mismo paquete que la versión plana.",
       "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."

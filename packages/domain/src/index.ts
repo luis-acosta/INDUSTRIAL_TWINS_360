@@ -17,6 +17,7 @@ export * from './info-window';
 export * from './model-hotspot';
 export * from './model-space';
 export * from './publish-plan';
+export * from './vr-publish';
 export * from './action';
 export * from './hotspot';
 export * from './hotspot-geometry';

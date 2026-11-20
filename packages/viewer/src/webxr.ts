@@ -255,6 +255,42 @@ export const VR_PROFILES: Readonly<Record<string, VrOptimizationProfile>> = {
   },
 };
 
+/** Claves de perfil, en el mismo orden que `VR_PROFILES`. */
+export type VrProfileKey = 'standalone' | 'tethered';
+
+/**
+ * Clase de dispositivo a partir del identificador del navegador (N12).
+ *
+ * WebXR no dice si el visor es autónomo o va conectado a un PC, y la diferencia
+ * decide qué panorámica se puede cargar: un visor autónomo no admite una
+ * textura de 8192 px. Lo único observable es el navegador, y ahí sí hay señal:
+ * los navegadores de los visores autónomos corren sobre Android y se anuncian
+ * como tal; un visor conectado se usa desde el navegador de un PC.
+ *
+ * **La duda se resuelve siempre hacia el lado conservador.** Si el navegador no
+ * es reconociblemente de escritorio, se asume autónomo: equivocarse hacia
+ * «autónomo» cuesta nitidez en un PC que podía con más, y equivocarse hacia
+ * «conectado» deja la escena en negro o a tirones en el visor, que es el sitio
+ * donde un fallo se siente físicamente.
+ */
+export function vrDeviceClass(userAgent: string): VrProfileKey {
+  const ua = userAgent.toLowerCase();
+
+  // Android primero: un visor autónomo lo lleva y además dice «windows nt» en
+  // ningún caso, pero algunos navegadores de visor incluyen «linux».
+  if (ua.includes('android') || ua.includes('quest') || ua.includes('pico')) {
+    return 'standalone';
+  }
+
+  const desktop =
+    ua.includes('windows nt') ||
+    ua.includes('macintosh') ||
+    ua.includes('mac os x') ||
+    (ua.includes('linux') && !ua.includes('mobile'));
+
+  return desktop ? 'tethered' : 'standalone';
+}
+
 /** Avisos de compatibilidad de una escena para VR, para mostrar en el editor. */
 export function vrCompatibilityWarnings(
   hotspots: readonly Hotspot[],

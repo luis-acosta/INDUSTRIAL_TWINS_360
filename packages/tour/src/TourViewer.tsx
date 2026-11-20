@@ -61,11 +61,12 @@ import {
   type PanoramaRenderer,
   PanoramaViewer,
   resolveEntryView,
+  vrDeviceClass,
   type ActionHost,
   type ViewerScene,
 } from '@it360/viewer';
 import type { LoadedTour } from './manifest';
-import { mediaUrlIndex } from './manifest';
+import { mediaUrl, mediaUrlIndex } from './manifest';
 import { FieldNotePanel } from './FieldNotePanel';
 import { WindowHost } from './WindowHost';
 import {
@@ -945,16 +946,6 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     [manifest.assets, openAssetId],
   );
 
-  if (viewerScene === null) {
-    return (
-      <EmptyState
-        icon={<IconPanorama size={32} />}
-        title="El recorrido no tiene escenas publicadas"
-        description="Vuelva a publicarlo incluyendo al menos una escena."
-      />
-    );
-  }
-
   /**
    * Sesión inmersiva (etapa 13).
    *
@@ -1047,6 +1038,42 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
       if (node !== null) runActions(node.actions, 'click');
     },
   });
+
+  /**
+   * Panorámica reducida mientras la sesión inmersiva presenta (N12).
+   *
+   * El paquete puede traer una copia más pequeña por clase de visor. Se usa
+   * **sólo** mientras se está presentando: en la pantalla plana se quiere la
+   * imagen completa, y una reducida ahí se vería blanda sin motivo.
+   *
+   * Si el paquete no trae variante para este medio —porque ya cabía, o porque
+   * se publicó con una versión anterior— se carga la ruta plana. El manifiesto
+   * sólo declara las copias que de verdad se escribieron, de modo que esto no
+   * puede pedir un archivo ausente.
+   */
+  const vrTextureUrl = useMemo(() => {
+    if (!vr.presenting) return null;
+    if (scene?.mediaId == null) return null;
+    const byProfile = manifest.vrPanoramas[scene.mediaId];
+    if (byProfile === undefined) return null;
+    const path = byProfile[vrDeviceClass(navigator.userAgent)];
+    return path === undefined ? null : mediaUrl(tour.baseUrl, path);
+  }, [vr.presenting, scene?.mediaId, manifest.vrPanoramas, tour.baseUrl]);
+
+  /* La salida por «sin escenas» va aquí y no antes de los ganchos: con un
+     `return` temprano, el orden de los ganchos cambiaría en cuanto el
+     recorrido se quedara sin escena publicada —al navegar a un identificador
+     que el paquete no trae— y React desmontaría el visor con un error en
+     lugar de mostrar el aviso. */
+  if (viewerScene === null) {
+    return (
+      <EmptyState
+        icon={<IconPanorama size={32} />}
+        title="El recorrido no tiene escenas publicadas"
+        description="Vuelva a publicarlo incluyendo al menos una escena."
+      />
+    );
+  }
 
   return (
     <div className="tour">
@@ -1152,7 +1179,11 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
           />
         ) : (
           <PanoramaViewer
-            scene={viewerScene}
+            /* Con la sesión inmersiva presentando se carga la copia reducida
+               si el paquete la trae; en la pantalla plana, la completa. */
+            scene={
+              vrTextureUrl === null ? viewerScene : { ...viewerScene, textureUrl: vrTextureUrl }
+            }
             onRenderer={setPanoramaRenderer}
             ambient={ambient}
             flareDirection={flareDirection}

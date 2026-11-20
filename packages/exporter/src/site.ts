@@ -22,7 +22,7 @@
  *    guion inyectado lo haga.
  */
 import { collectFrameOrigins, frameSrcDirective } from './frame-origins';
-import { toManifest, type Manifest, type Project, type Uuid } from '@it360/domain';
+import { toManifest, type Manifest, type Media, type Project, type Uuid } from '@it360/domain';
 import { auditForSecrets, planPublication, type PlanOptions, type PublishPlan } from './plan';
 
 /** Archivo del paquete: ruta relativa y contenido. */
@@ -59,6 +59,15 @@ export interface SiteOptions extends PlanOptions {
   readonly runtime: ViewerRuntime;
   /** Contenido de los medios, por ruta relativa del proyecto. */
   readonly mediaFiles: ReadonlyMap<string, Uint8Array>;
+  /**
+   * Panorámicas reducidas por perfil de visor que ya se han escrito (N12).
+   *
+   * Las escribe quien prepara los medios, no el exportador: aquí sólo se
+   * declaran en el manifiesto, y se filtran por las que de verdad vienen entre
+   * los archivos. Una entrada que apuntara a un archivo ausente dejaría la
+   * escena en negro dentro de las gafas.
+   */
+  readonly vrPanoramas?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export interface SiteResult {
@@ -222,6 +231,7 @@ export function buildSite(project: Project, options: SiteOptions): SiteResult {
         : {}),
       logoPath,
       faviconPath,
+      vrPanoramas: vrPanoramasPresent(options.vrPanoramas ?? {}, options.mediaFiles, plan.media),
     },
   );
 
@@ -305,4 +315,36 @@ export function buildSite(project: Project, options: SiteOptions): SiteResult {
     warnings,
     totalBytes: files.reduce((total, file) => total + file.bytes.byteLength, 0),
   };
+}
+
+/**
+ * Recorta el mapa de panorámicas de VR a lo que el paquete lleva de verdad
+ * (N12).
+ *
+ * Se filtra por dos cosas: que el archivo esté entre los medios que se
+ * escriben, y que su panorama plano siga en el plan. Un medio excluido por el
+ * plan —escena no publicable— no debe dejar su variante en el manifiesto, y un
+ * archivo que no se escribió no debe anunciarse: el visor lo pediría y
+ * recibiría un 404 dentro de la sesión inmersiva, donde no hay forma de
+ * contarle el fallo al usuario.
+ */
+function vrPanoramasPresent(
+  map: Readonly<Record<string, Readonly<Record<string, string>>>>,
+  mediaFiles: ReadonlyMap<string, Uint8Array>,
+  planned: readonly Media[],
+): Readonly<Record<string, Readonly<Record<string, string>>>> {
+  const plannedIds = new Set<string>(planned.map((entry) => entry.id));
+  const kept: Record<string, Record<string, string>> = {};
+
+  for (const [mediaId, byProfile] of Object.entries(map)) {
+    if (!plannedIds.has(mediaId)) continue;
+    for (const [profile, path] of Object.entries(byProfile)) {
+      if (!mediaFiles.has(path)) continue;
+      const forMedia = kept[mediaId] ?? {};
+      forMedia[profile] = path;
+      kept[mediaId] = forMedia;
+    }
+  }
+
+  return kept;
 }

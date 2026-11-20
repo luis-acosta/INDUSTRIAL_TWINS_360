@@ -14,6 +14,8 @@ import {
   toManifest,
   estimateBytes,
   planImage,
+  planVrVariants,
+  VR_VARIANT_PROFILES,
   type PublishQuality,
   walkSkin,
 } from '@it360/domain';
@@ -308,8 +310,17 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
       const note = planImage(entry, quality).note;
       if (note !== null && note !== 'no es una imagen') notes.add(note);
     }
+
+    /* Juego de panorámicas para visor inmersivo (N12). Se cuenta antes de
+       generar porque cambia el peso del paquete y el autor lo nota al
+       subirlo; callarlo haría que descubriera la diferencia después. */
+    for (const profile of VR_VARIANT_PROFILES) {
+      const plan = planVrVariants(project.media, project.scenes, quality, profile);
+      if (plan.note !== null && plan.variants.length > 0) notes.add(plan.note);
+    }
+
     return [...notes];
-  }, [project.media, quality]);
+  }, [project.media, project.scenes, quality]);
 
   return (
     <div className="module">

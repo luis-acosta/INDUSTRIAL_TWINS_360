@@ -278,6 +278,18 @@ export const manifestSchema = z.object({
    * abriéndose.
    */
   idleTimeoutMs: z.number().int().min(5_000).max(600_000).default(30_000),
+  /**
+   * Panorámicas reducidas por clase de visor inmersivo (N12).
+   *
+   * De identificador de medio a perfil («standalone», «tethered») y de ahí a la
+   * ruta de la copia reducida. Sólo lleva las que existen de verdad en el
+   * paquete: un medio que ya cabe en el tope del perfil no tiene entrada, y el
+   * visor carga entonces la ruta plana. Si llevara entradas de archivos que no
+   * se escribieron, la escena saldría en negro dentro de las gafas.
+   *
+   * Lleva valor por omisión para que un paquete anterior siga abriéndose.
+   */
+  vrPanoramas: z.record(z.string(), z.record(z.string(), z.string().max(400))).default({}),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;
@@ -778,6 +790,14 @@ export interface ManifestOptions {
   /** Ruta relativa del logotipo ya copiado al paquete. */
   readonly logoPath?: string | null;
   readonly faviconPath?: string | null;
+  /**
+   * Panorámicas reducidas ya escritas, por medio y perfil (N12).
+   *
+   * Lo pasa quien publica, porque sólo él sabe qué copias llegó a escribir: el
+   * contenedor puede no estar disponible, y entonces no hay variantes y el
+   * manifiesto no debe prometerlas.
+   */
+  readonly vrPanoramas?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 /**
@@ -915,6 +935,9 @@ export function toManifest(project: Project, options: ManifestOptions): Manifest
     // de modo que el ajuste tiene que viajar con el paquete: si no, el valor
     // que el autor configuró se quedaría en el editor.
     idleTimeoutMs: project.settings.idleTimeoutMs,
+    // Lo rellena el exportador cuando ha escrito de verdad las copias; aquí no
+    // se puede saber qué archivos se han generado.
+    vrPanoramas: options.vrPanoramas ?? {},
   });
 }
 
