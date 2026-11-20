@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.44.0",
-  "updatedAt": "2026-11-20T16:20:00Z",
+  "version": "0.45.0",
+  "updatedAt": "2026-11-20T17:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -203,7 +203,7 @@
     "V02": "done",
     "V03": "done",
     "V04": "pending",
-    "V05": "modeled",
+    "V05": "done",
     "V06": "done",
     "V07": "modeled",
     "V08": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "L10": "Las acciones sobre el modelo funcionan en el recorrido publicado: animaciones por nombre y visibilidad de piezas, con un mando imperativo del modelo —«reproduce la animación» es un suceso, no un estado—. Antes eran dos funciones vacías: el editor ofrecía las acciones, el ejecutor las recibía y el anfitrión las descartaba, así que pulsar el marcador no movía nada. Además la escena registra ahora qué animaciones y piezas trae el archivo, y la validación del proyecto avisa de una acción que nombra una que no existe: el modo de fallo era silencioso y el autor sólo lo descubría probando el paquete publicado."
+      "V05": "Importación real de audio y vídeo: el formato se reconoce por el contenido y no por la extensión ni por el tipo que declara el sistema —el contrato del proyecto exige validar todos los archivos, y además así no se rechaza un archivo correcto con una extensión poco habitual—, con duración y dimensiones medidas por el reproductor del navegador, plazo para el archivo que no responde y aviso cuando no se pudo medir. Se añade audio/mp4 (M4A), que es lo que graban los teléfonos. El selector de narración de una parada listaba audios que el proyecto no podía contener: ahora se importan desde la propia parada. 40 pruebas nuevas."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -392,7 +392,10 @@
       "Un temporizador no marcado «una sola vez» se habría disparado en cada evaluación del reloj: a 60 fps, sesenta veces por segundo. Los eventos de disparo único se distinguen ahora de los que sí pueden repetirse —fin de medio y foco—, y «idle» se rearma con la actividad del visitante en lugar de gastarse una vez por escena.",
       "Las marcas de «una sola vez» se perdían al pasar por una escena que no contenía la acción, porque el registro se filtraba por las acciones de la escena de destino: el aviso volvía a salir en la siguiente vuelta. Ahora hay dos registros con caducidades distintas.",
       "En el recorrido publicado, modelPlayAnimation y modelSetVisibility eran funciones vacías: las acciones sobre el modelo que el editor ofrece no hacían nada y nada explicaba por qué.",
-      "Una acción que nombra una animación o una pieza inexistente no fallaba, simplemente no hacía nada: el peor modo de fallo, porque el autor configura, prueba y publica un marcador muerto. Ahora la escena guarda lo que trae el archivo y la validación lo avisa antes de publicar."
+      "Una acción que nombra una animación o una pieza inexistente no fallaba, simplemente no hacía nada: el peor modo de fallo, porque el autor configura, prueba y publica un marcador muerto. Ahora la escena guarda lo que trae el archivo y la validación lo avisa antes de publicar.",
+      "El selector de narración de una parada de recorrido listaba los audios del proyecto y no había forma de añadir ninguno: la lista estaba siempre vacía y la opción «esperar a que termine la narración» no se podía usar nunca.",
+      "La duración de un medio llega como infinito en los flujos sin duración declarada —un MP3 grabado por tramos—: guardarla rompería cualquier cálculo que la use, y guardar cero haría que una parada que espera al audio avanzara de inmediato. Las dos se tratan como «no medida».",
+      "Un archivo con la cabecera dañada deja al reproductor sin disparar ni «loadedmetadata» ni «error»: sin plazo, la importación se quedaba colgada sin decir nada."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

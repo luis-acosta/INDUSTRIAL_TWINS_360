@@ -13,7 +13,7 @@
  * delante de la visita, y ese es exactamente el momento en que el autor ya no
  * puede arreglarlo.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   createQuiz,
   createTour,
@@ -37,6 +37,7 @@ import {
 import { QuizEditor } from './QuizEditor';
 import { TourEditor } from './TourEditor';
 import type { ProjectStore } from '../state/project-store';
+import { importMediaFile } from '../platform/media-import';
 
 export interface ToursModuleProps {
   readonly store: ProjectStore;
@@ -81,6 +82,43 @@ export function ToursModule({ store }: ToursModuleProps): JSX.Element {
     store.updateProject(`Crear evaluación ${created.name}`, { quizzes: [...project.quizzes, created] });
     setSelection({ kind: 'quiz', id: created.id });
   };
+
+  /**
+   * Importa una narración y la da de alta en el proyecto (V05).
+   *
+   * El selector de narración listaba los audios del proyecto y no había forma
+   * de añadir ninguno: la lista estaba siempre vacía y el campo «Esperar a
+   * que termine la narración» no se podía usar nunca.
+   */
+  const importAudio = useCallback(
+    async (file: File): Promise<string | null> => {
+      const result = await importMediaFile(file, project.media, { folder: 'media/audio' });
+      if (!result.ok) {
+        push({
+          tone: 'alarm',
+          title: 'No se pudo importar la narración',
+          description: `${result.error.message}${result.error.recovery === undefined ? '' : ` ${result.error.recovery}`}`,
+        });
+        return null;
+      }
+
+      if (!result.value.reused) {
+        store.updateProject(`Importar narración ${result.value.media.originalName}`, {
+          media: [...project.media, result.value.media],
+        });
+      }
+
+      push({
+        tone: result.value.warning === null ? 'nominal' : 'warning',
+        title: result.value.reused
+          ? 'Esa narración ya estaba en el proyecto'
+          : `«${result.value.media.originalName}» importada`,
+        ...(result.value.warning === null ? {} : { description: result.value.warning }),
+      });
+      return result.value.media.id;
+    },
+    [project.media, push, store],
+  );
 
   const onSaveTour = (next: Tour, label: string): void => {
     store.updateProject(label, {
@@ -203,6 +241,7 @@ export function ToursModule({ store }: ToursModuleProps): JSX.Element {
               project={project}
               onChange={onSaveTour}
               onRequestDelete={() => setConfirmDelete(true)}
+              onImportAudio={importAudio}
             />
           )}
           {quiz !== null && (

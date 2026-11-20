@@ -29,7 +29,16 @@ export const IMAGE_MIME_TYPES = [
 
 export const VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'] as const;
 
-export const AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm'] as const;
+export const AUDIO_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  // Las grabadoras de voz de teléfono —el origen más habitual de una nota de
+  // campo hablada— producen M4A, que es un contenedor MP4 con sólo audio.
+  // Sin este tipo, esas grabaciones había que convertirlas antes de importar.
+  'audio/mp4',
+] as const;
 
 export const DOCUMENT_MIME_TYPES = [
   'application/pdf',
@@ -88,6 +97,7 @@ export const MIME_EXTENSION: Readonly<Record<MimeType, string>> = {
   'audio/ogg': '.ogg',
   'audio/wav': '.wav',
   'audio/webm': '.weba',
+  'audio/mp4': '.m4a',
   'application/pdf': '.pdf',
   'text/plain': '.txt',
   'text/csv': '.csv',

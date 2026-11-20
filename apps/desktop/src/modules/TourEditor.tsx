@@ -50,13 +50,21 @@ import { ActionEditor } from './ActionEditor';
 import { formatDuration } from './ToursModule';
 
 export interface TourEditorProps {
+  /** Importa un audio en el proyecto y devuelve su identificador (V05). */
+  readonly onImportAudio?: (file: File) => Promise<string | null>;
   readonly tour: Tour;
   readonly project: Project;
   readonly onChange: (tour: Tour, label: string) => void;
   readonly onRequestDelete: () => void;
 }
 
-export function TourEditor({ tour, project, onChange, onRequestDelete }: TourEditorProps): JSX.Element {
+export function TourEditor({
+  tour,
+  project,
+  onChange,
+  onRequestDelete,
+  onImportAudio,
+}: TourEditorProps): JSX.Element {
   const [openWaypoint, setOpenWaypoint] = useState<string | null>(null);
 
   const problems = validateTour(tour, {
@@ -160,6 +168,7 @@ export function TourEditor({ tour, project, onChange, onRequestDelete }: TourEdi
                 open={openWaypoint === waypoint.id}
                 onToggle={() => setOpenWaypoint(openWaypoint === waypoint.id ? null : waypoint.id)}
                 onPatch={(patch, label) => onChange(updateWaypoint(tour, waypoint.id, patch), label)}
+                {...(onImportAudio === undefined ? {} : { onImportAudio })}
                 onMove={(delta) =>
                   onChange(moveWaypoint(tour, waypoint.id, index + delta), 'Reordenar paradas')
                 }
@@ -333,6 +342,7 @@ function WaypointRow({
   open,
   onToggle,
   onPatch,
+  onImportAudio,
   onMove,
   onDuplicate,
   onRemove,
@@ -347,6 +357,8 @@ function WaypointRow({
   open: boolean;
   onToggle: () => void;
   onPatch: (patch: Partial<Waypoint>, label: string) => void;
+  /** Importa un audio y devuelve su identificador, o `null` si no se pudo. */
+  onImportAudio?: (file: File) => Promise<string | null>;
   onMove: (delta: number) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -479,23 +491,59 @@ function WaypointRow({
             </Field>
           </div>
 
-          <Field label="Narración">
+          <Field
+            label="Narración"
+            hint={
+              audios.length === 0
+                ? 'Aún no hay narraciones en el proyecto: importe un archivo de audio.'
+                : undefined
+            }
+          >
             {({ id }) => (
-              <Select
-                id={id}
-                value={waypoint.audioMediaId ?? ''}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  onPatch({ audioMediaId: value === '' ? null : (value as Uuid) }, 'Cambiar narración');
-                }}
-              >
-                <option value="">Sin narración</option>
-                {audios.map((media) => (
-                  <option key={media.id} value={media.id}>
-                    {media.originalName}
-                  </option>
-                ))}
-              </Select>
+              <div style={{ display: 'flex', gap: 'var(--it-space-2)', alignItems: 'center' }}>
+                <Select
+                  id={id}
+                  value={waypoint.audioMediaId ?? ''}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    onPatch({ audioMediaId: value === '' ? null : (value as Uuid) }, 'Cambiar narración');
+                  }}
+                >
+                  <option value="">Sin narración</option>
+                  {audios.map((media) => (
+                    <option key={media.id} value={media.id}>
+                      {media.originalName}
+                      {media.durationS === null ? '' : ` · ${Math.round(media.durationS)} s`}
+                    </option>
+                  ))}
+                </Select>
+
+                {/* Importar desde aquí y no desde una biblioteca aparte: el
+                    autor está decidiendo la narración de esta parada, y
+                    obligarle a ir a otro sitio y volver es donde se pierde el
+                    hilo de lo que estaba haciendo. */}
+                {onImportAudio !== undefined && (
+                  <label className="button button--secondary button--sm">
+                    Importar audio
+                    <input
+                      type="file"
+                      accept="audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,.mp3,.ogg,.wav,.weba,.m4a"
+                      style={{ display: 'none' }}
+                      onChange={async (event) => {
+                        const file = event.currentTarget.files?.[0];
+                        // El campo se limpia antes de esperar: si no, volver a
+                        // elegir el mismo archivo no dispararía el evento.
+                        event.currentTarget.value = '';
+                        if (file === undefined) return;
+                        const mediaId = await onImportAudio(file);
+                        if (mediaId !== null) {
+                          onPatch({ audioMediaId: mediaId as Uuid }, 'Asignar narración importada');
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
             )}
           </Field>
 

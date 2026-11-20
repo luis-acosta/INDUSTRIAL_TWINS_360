@@ -685,3 +685,39 @@ describe('ToursModule — acciones de una parada', () => {
     expect(screen.queryByText('Este marcador no hace nada')).not.toBeInTheDocument();
   });
 });
+
+describe('narración de una parada (V05)', () => {
+  it('avisa cuando el proyecto todavía no tiene audios', async () => {
+    // TEST-TRS-038: el selector listaba los audios del proyecto y no había
+    // forma de añadir ninguno: la lista estaba siempre vacía y el campo
+    // «esperar a que termine la narración» no se podía usar nunca. Lo primero
+    // que hay que decirle al autor es que importe uno.
+    const project = makeProject();
+    let tour = createTour(project.id, 'Visita', NOW);
+    tour = insertWaypoint(tour, createWaypoint(project.scenes[0]!.id));
+
+    mount({ ...project, tours: [tour] });
+    await userEvent.click(screen.getByRole('button', { name: /Visita/ }));
+    // La parada se abre: los ajustes de una parada cerrada no se dibujan.
+    await userEvent.click(screen.getByRole('button', { name: /Nave principal/ }));
+
+    expect(screen.getByText(/importe un archivo de audio/)).toBeInTheDocument();
+  });
+
+  it('ofrece importar el audio desde la propia parada', async () => {
+    // TEST-TRS-039: el autor está decidiendo la narración de esta parada;
+    // mandarle a otra pantalla y de vuelta es donde se pierde el hilo.
+    const project = makeProject();
+    let tour = createTour(project.id, 'Visita', NOW);
+    tour = insertWaypoint(tour, createWaypoint(project.scenes[0]!.id));
+
+    mount({ ...project, tours: [tour] });
+    await userEvent.click(screen.getByRole('button', { name: /Visita/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Nave principal/ }));
+
+    const importar = screen.getByText('Importar audio');
+    expect(importar).toBeTruthy();
+    const input = importar.querySelector('input[type="file"]');
+    expect(input?.getAttribute('accept')).toContain('audio/mpeg');
+  });
+})

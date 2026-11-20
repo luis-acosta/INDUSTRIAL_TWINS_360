@@ -22,12 +22,16 @@
  */
 
 import {
+  AUDIO_MIME_TYPES,
   IMAGE_MIME_TYPES,
   MEDIA_SIZE_LIMITS,
+  MIME_EXTENSION,
+  VIDEO_MIME_TYPES,
   mediaSchema,
   type Media,
   type MimeType,
 } from './media';
+import { kindOfMime, resolveAmbiguous, sniffMedia } from './media-sniff';
 import { domainError, err, ok, type DomainError, type Result } from './result';
 
 /** Extensiones aceptadas, por si el navegador no declara el tipo. */
@@ -213,6 +217,133 @@ export function importImage(
     byteSize: input.byteSize,
     width: input.width,
     height: input.height,
+    createdAt: input.createdAt,
+  });
+
+  if (!parsed.success) {
+    return err(
+      domainError('VALIDATION_FAILED', `«${input.originalName}» no se pudo registrar.`, {
+        detail: { issues: parsed.error.issues.map((i) => i.message) },
+      }),
+    );
+  }
+
+  return ok({ media: parsed.data, reused: false });
+}
+
+/* ------------------------------------------------------------------ *
+ * Importación de audio y vídeo (V05)
+ * ------------------------------------------------------------------ */
+
+export interface MediaImportInput {
+  readonly id: string;
+  readonly sha256: string;
+  readonly declaredMime: string;
+  readonly originalName: string;
+  readonly byteSize: number;
+  /** Primeros bytes del archivo, para reconocer el formato por contenido. */
+  readonly head: Uint8Array;
+  /** Duración medida por el reproductor, en segundos. */
+  readonly durationS: number | null;
+  /** Dimensiones del vídeo; nulas para audio. */
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly createdAt: string;
+  readonly folder?: string;
+}
+
+/**
+ * Da de alta un audio o un vídeo, o reutiliza el que ya estaba.
+ *
+ * Se separa de `importImage` y no se fusiona con ella porque las reglas no son
+ * las mismas y mezclarlas haría el código más corto y peor: una imagen tiene
+ * que tener dimensiones y no duración, un audio al contrario, un vídeo ambas,
+ * y el límite de tamaño de un vídeo es ocho veces el de una imagen. Lo que sí
+ * comparten —deduplicación por contenido, nombre de archivo seguro, ruta libre
+ * en el paquete— está en funciones comunes.
+ *
+ * El formato se decide por el contenido (`sniffMedia`) y no por lo que declare
+ * el sistema: es lo que exige el contrato de seguridad del proyecto, y además
+ * evita rechazar un archivo correcto por una extensión poco habitual.
+ */
+export function importAudioVideo(
+  input: MediaImportInput,
+  existing: readonly Media[],
+): Result<ImageImport, DomainError> {
+  if (input.byteSize <= 0) {
+    return err(
+      domainError('VALIDATION_FAILED', `«${input.originalName}» está vacío.`, {
+        recovery: 'Compruebe que el archivo se copió completo.',
+      }),
+    );
+  }
+
+  const sniffed = sniffMedia(input.head, input.declaredMime, input.originalName);
+  const mime = resolveAmbiguous(sniffed, input.declaredMime);
+
+  if (mime === null) {
+    return err(
+      domainError(
+        'UNSUPPORTED_FORMAT',
+        `El contenido de «${input.originalName}» no corresponde a ningún formato de audio o vídeo reconocido.`,
+        {
+          recovery: `Formatos admitidos: ${[...VIDEO_MIME_TYPES, ...AUDIO_MIME_TYPES].join(', ')}.`,
+        },
+      ),
+    );
+  }
+
+  const kind = kindOfMime(mime);
+  if (kind !== 'audio' && kind !== 'video') {
+    // Ocurre de verdad: alguien arrastra una foto al importador de vídeo. Se
+    // dice qué es en lugar de un «formato no admitido» que no orienta.
+    return err(
+      domainError('UNSUPPORTED_FORMAT', `«${input.originalName}» es ${mime}, no un audio ni un vídeo.`, {
+        recovery: 'Use el importador de imágenes para este archivo.',
+      }),
+    );
+  }
+
+  if (input.byteSize > MEDIA_SIZE_LIMITS[kind]) {
+    const mb = Math.round(MEDIA_SIZE_LIMITS[kind] / (1024 * 1024));
+    return err(
+      domainError('FILE_TOO_LARGE', `«${input.originalName}» supera el límite de ${mb} MB.`, {
+        recovery:
+          kind === 'video'
+            ? 'Recorte el vídeo o publíquelo a menor resolución antes de importarlo.'
+            : 'Recorte la grabación o conviértala a un formato comprimido.',
+      }),
+    );
+  }
+
+  const reusable = existing.find((m) => m.sha256 === input.sha256 && m.kind === kind);
+  if (reusable !== undefined) return ok({ media: reusable, reused: true });
+
+  const extension = MIME_EXTENSION[mime] ?? (kind === 'audio' ? '.bin' : '.bin');
+  const relativePath = freeRelativePath(
+    existing.map((m) => m.relativePath),
+    input.folder ?? (kind === 'audio' ? 'media/audio' : 'media/video'),
+    safeMediaFileName(input.originalName, extension),
+  );
+
+  /*
+   * La duración se registra si el reproductor la midió, y se deja nula si no.
+   * Inventarla —cero, o un valor por omisión— tendría una consecuencia
+   * concreta: una parada de recorrido configurada para «esperar al audio»
+   * avanzaría de inmediato, y el autor vería un recorrido que se salta su
+   * propia narración sin saber por qué.
+   */
+  const parsed = mediaSchema.safeParse({
+    id: input.id,
+    sha256: input.sha256,
+    mime,
+    kind,
+    relativePath,
+    originalName: input.originalName.slice(0, 255),
+    byteSize: input.byteSize,
+    width: kind === 'video' ? input.width : null,
+    height: kind === 'video' ? input.height : null,
+    durationS: input.durationS !== null && input.durationS > 0 ? input.durationS : null,
     createdAt: input.createdAt,
   });
 
