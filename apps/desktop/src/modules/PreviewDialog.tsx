@@ -22,15 +22,17 @@
  * paquete temporal exigiría un servidor local: el visor pide su manifiesto con
  * `fetch`, y desde `file://` el navegador lo bloquea.
  */
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   toManifest,
   type CameraView,
   type Project,
   type Scene,
 } from '@it360/domain';
-import { Button, Callout, Dialog } from '@it360/ui';
+import { Button, Callout, Dialog, Tooltip, useToast } from '@it360/ui';
 import { TourViewer, type LoadedTour } from '@it360/tour';
+import { captureFileName, captureSupport, startCapture, type CaptureHandle } from '@it360/viewer';
+import { saveBinaryFile } from '../platform/save-file';
 
 export interface PreviewDialogProps {
   readonly project: Project;
@@ -94,6 +96,81 @@ export function PreviewDialog({
     return `#${parts.join('&')}`;
   }, [target, view]);
 
+  /**
+   * Grabación del recorrido en vídeo (S07).
+   *
+   * El lienzo se busca al empezar y no se guarda en una referencia del
+   * componente: el visor lo monta y lo desmonta al cambiar entre una escena
+   * panorámica y una de modelo, y una referencia vieja grabaría un lienzo que
+   * ya no se dibuja —un vídeo en negro que sólo se descubre al abrirlo—.
+   */
+  const stageRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<CaptureHandle | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const { push } = useToast();
+
+  const support = useMemo(() => captureSupport(), []);
+
+  useEffect(() => {
+    if (!recording) return undefined;
+    const timer = setInterval(() => setElapsedMs(handleRef.current?.elapsedMs() ?? 0), 500);
+    return () => clearInterval(timer);
+  }, [recording]);
+
+  const toggleCapture = useCallback(async (): Promise<void> => {
+    if (handleRef.current !== null) {
+      setSaving(true);
+      try {
+        const blob = await handleRef.current.stop();
+        handleRef.current = null;
+        setRecording(false);
+        setElapsedMs(0);
+
+        if (blob.size === 0) {
+          push({
+            tone: 'alarm',
+            title: 'La grabación salió vacía',
+            description:
+              'El navegador no entregó ningún fotograma. Pruebe a grabar con la vista en movimiento.',
+          });
+          return;
+        }
+
+        const name = captureFileName(
+          project.title,
+          support.mimeType ?? 'video/webm',
+          new Date(),
+        );
+        const saved = await saveBinaryFile(name, new Uint8Array(await blob.arrayBuffer()));
+        push(
+          saved
+            ? { tone: 'nominal', title: `Vídeo guardado como «${name}»` }
+            : { tone: 'warning', title: 'No se guardó el vídeo' },
+        );
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    const canvas = stageRef.current?.querySelector('canvas') ?? null;
+    if (canvas === null) {
+      push({
+        tone: 'alarm',
+        title: 'Todavía no hay nada que grabar',
+        description: 'Espere a que la escena termine de cargarse y vuelva a intentarlo.',
+      });
+      return;
+    }
+
+    handleRef.current = startCapture(canvas);
+    setRecording(true);
+  }, [project.title, push, support.mimeType]);
+
+  const capture = { support, recording, saving, elapsedMs, toggle: toggleCapture };
+
   return (
     <Dialog
       open
@@ -101,12 +178,43 @@ export function PreviewDialog({
       title="Previsualización del recorrido"
       onClose={onClose}
       footer={
-        <Button variant="primary" onClick={onClose}>
-          Cerrar
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--it-space-2)', alignItems: 'center' }}>
+          {/* Grabación del recorrido en vídeo (S07). Va aquí y no en
+              Publicación porque lo que se graba es esto: lo que el autor está
+              viendo, con la visita que acabe de arrancar. */}
+          {capture.support.supported ? (
+            <Button
+              variant={capture.recording ? 'danger' : 'secondary'}
+              onClick={() => void capture.toggle()}
+              disabled={capture.saving}
+            >
+              {capture.recording
+                ? `Detener y guardar (${Math.floor(capture.elapsedMs / 1000)} s)`
+                : 'Grabar vídeo'}
+            </Button>
+          ) : (
+            <Tooltip content={capture.support.reason ?? ''}>
+              <span>
+                <Button variant="secondary" disabled>
+                  Grabar vídeo
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+          <Button variant="primary" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
       }
     >
       <div className="preview">
+        {capture.recording && (
+          <Callout tone="info" title="Grabando la vista del recorrido">
+            Se graba el lienzo: la panorámica o el modelo con sus marcadores. Los paneles de la
+            interfaz son HTML encima del lienzo y no entran en el vídeo, y el audio de las
+            narraciones tampoco. Arranque la visita guiada y deje que avance.
+          </Callout>
+        )}
         {excluded && (
           <Callout tone="warning" title="La escena que está editando no se publicaría">
             «{editing?.title ?? ''}» está en borrador o excluida, así que no entra en el paquete y
@@ -119,7 +227,7 @@ export function PreviewDialog({
             Un recorrido necesita al menos una escena publicada. Revise el estado de las escenas.
           </Callout>
         ) : (
-          <div className="preview__stage">
+          <div className="preview__stage" ref={stageRef}>
             <TourViewer key={entry} tour={tour} initialHash={entry} />
           </div>
         )}

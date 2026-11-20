@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.53.0",
-  "updatedAt": "2026-11-21T01:10:00Z",
+  "version": "0.54.0",
+  "updatedAt": "2026-11-21T01:40:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -312,7 +312,7 @@
     "S03": "done",
     "S04": "partial",
     "S05": "done",
-    "S07": "pending",
+    "S07": "done",
     "S08": "pending",
     "S09": "done",
     "S10": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "S10": "Marca propia del cliente, de punta a punta. El contrato llevaba el bloque desde la etapa 00 y el exportador ya escribía el icono en el HTML, el color en una variable del sistema de diseño y copiaba el logotipo al paquete: lo que no había era forma de ponerlo desde el editor —sólo llegaba en un proyecto importado— ni sitio donde se viera el logotipo, que era un archivo que el paquete llevaba y nadie leía. Ahora hay panel de marca en Ajustes —título, logotipo, icono y acento, eligiendo imágenes que ya están en el proyecto para no duplicarlas en el paquete— y el recorrido dibuja el logotipo en su barra, con el título como texto alternativo: quien usa un lector de pantalla necesita saber de quién es el recorrido, y si el logotipo no carga es lo único que queda escrito. El arreglo que importa es otro: el sistema de diseño trae un color de texto sobre acento fijo por tema, y el acento lo trae el cliente, así que con un amarillo corporativo la etiqueta de un botón quedaba a 1,4:1 de contraste —un botón en blanco—. El exportador calcula ahora el texto que sí se lee y lo escribe junto al acento. El módulo llevaba además un aviso de contraste que se quitó al medirlo: con el texto elegido, el peor acento posible de todo el espacio de color da 4,58:1, por encima del mínimo de 4,5:1, de modo que el aviso no podía saltar nunca. Queda escrito en el código por qué no está, para que no vuelva: un aviso que no puede saltar aparenta una comprobación que no existe."
+      "S07": "Exportación del recorrido a vídeo, para mandárselo a quien no va a abrir el paquete: una inducción de seguridad para contratas, una reunión de arranque, el anexo de un informe. Se graba con lo que trae el navegador —`captureStream` del lienzo y `MediaRecorder`—, así que no hace falta transcodificador ni un programa aparte. Lo que entra en el vídeo se dice antes de grabar y no después: el lienzo, es decir la panorámica o el modelo con sus marcadores; los paneles de la interfaz son HTML encima y no entran, y el audio de las narraciones tampoco. Detalles que deciden si el archivo sirve: la tasa de bits se calcula por píxeles y fotogramas en lugar de dejar la del navegador, que apunta a videollamada y deshace en bloques los rótulos de los equipos —que es lo que alguien va a mirar—; el trozo vacío que algunos navegadores entregan al parar se descarta, porque deja un archivo que ciertos reproductores rechazan; las pistas del lienzo se paran al terminar, o el lienzo sigue produciendo fotogramas para un flujo que nadie lee; y el lienzo se busca al empezar a grabar y no se recuerda, porque el visor lo desmonta al pasar de una escena panorámica a una de modelo y grabar el viejo daría un vídeo en negro que sólo se descubre al abrirlo. La capacidad se consulta antes de ofrecer el botón: uno que falla al pulsarlo, después de preparar la escena, desperdicia el trabajo y no explica por qué."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

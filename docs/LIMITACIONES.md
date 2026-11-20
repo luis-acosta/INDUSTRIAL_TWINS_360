@@ -127,6 +127,18 @@ de los fallos.
 
 ---
 
+### Vídeo del recorrido: se graba el lienzo (S07)
+
+La previsualización graba el recorrido en vídeo con lo que trae el navegador,
+sin programas aparte. **Lo que entra en el vídeo es el lienzo**: la panorámica o
+el modelo con sus marcadores. Los paneles de la interfaz son HTML encima del
+lienzo y no entran, y el audio de las narraciones tampoco, porque no pasa por el
+lienzo. Se dice en la pantalla antes de grabar, no después.
+
+El formato es el que admita el navegador —WebM con VP9 donde se pueda—. Para un
+vídeo de la pantalla completa, con interfaz y sonido, hace falta un grabador de
+pantalla.
+
 ### Vídeo: se elige, no se transcodifica (V04)
 
 El recorrido entrega la versión del vídeo que corresponde al dispositivo y a la
