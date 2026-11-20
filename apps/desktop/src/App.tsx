@@ -680,6 +680,7 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
               {moduleId === 'notes' && (
                 <NotesModule
                   allowedCategories={accessProfile.noteCategoryIds}
+                  currentUserId={reviewIdentity.userId}
                   store={store}
                   onGoToScene={(targetSceneId) => {
                     setSceneId(targetSceneId);

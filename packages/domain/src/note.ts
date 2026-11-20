@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { anchorSchema } from './hotspot';
 import { uuidSchema } from './identity';
+import type { User } from './access';
 
 /* ------------------------------------------------------------------ *
  * Ciclo de vida (P08, X08)
@@ -396,4 +397,84 @@ export function hiddenNoteCount(
 ): number {
   if (allowed === null) return 0;
   return notes.length - notesVisibleTo(notes, allowed).length;
+}
+
+/* ------------------------------------------------------------------ *
+ * Asignación de tareas (P05)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Asigna una nota a una persona del equipo del proyecto.
+ *
+ * Hasta ahora el responsable se escribía a mano y se guardaba con el
+ * identificador fijo `'local'`. Eso tenía dos consecuencias prácticas: filtrar
+ * «asignadas a mí» no podía funcionar —todas las asignadas tenían el mismo
+ * identificador— y dos formas de escribir el mismo nombre («J. Pérez», «Jose
+ * Perez») eran dos responsables distintos a efectos de búsqueda e iguales a
+ * efectos de identidad, que es la peor combinación.
+ *
+ * Con una persona del equipo, el identificador significa algo: es el mismo que
+ * usa el servicio para los permisos, de modo que una tarea asignada se puede
+ * cruzar con quién puede verla.
+ *
+ * El nombre se copia además del identificador, y no es redundancia: un
+ * recorrido publicado o un informe exportado tiene que seguir diciendo quién
+ * era el responsable aunque esa persona ya no esté en el equipo del proyecto.
+ */
+export function assignNote(note: Note, user: User | null, nowIso: string): Note {
+  if (user === null) {
+    return { ...note, assigneeId: null, assigneeName: null, updatedAt: nowIso };
+  }
+  return {
+    ...note,
+    assigneeId: user.id,
+    assigneeName: user.displayName,
+    updatedAt: nowIso,
+  };
+}
+
+/**
+ * Personas a las que se puede asignar una tarea.
+ *
+ * Se excluyen las inactivas: asignar a alguien que ya no está en el equipo
+ * produce una tarea que nadie va a mirar, y es un error fácil de cometer en un
+ * desplegable largo donde los nombres no dicen quién sigue.
+ *
+ * Quien ya es responsable de la nota se incluye aunque esté inactivo, porque
+ * si no, abrir la nota cambiaría el responsable al primero de la lista o lo
+ * dejaría en blanco: el histórico de la tarea no se puede perder por abrirla.
+ */
+export function assignableUsers(users: readonly User[], note: Note | null): readonly User[] {
+  const current = note?.assigneeId ?? null;
+  return users.filter((user) => user.active || user.id === current);
+}
+
+/**
+ * Tareas de una persona, de las más urgentes a las menos.
+ *
+ * Es la vista que pide quien entra al editor para saber qué tiene pendiente, y
+ * el orden es el que importa en una planta: lo vencido primero —ya está tarde—
+ * y después por prioridad.
+ */
+export function tasksAssignedTo(
+  notes: readonly Note[],
+  userId: string,
+  now: Date,
+): readonly Note[] {
+  const mine = notes.filter(
+    (note) => note.assigneeId === userId && note.status !== 'resolved' && note.status !== 'archived',
+  );
+
+  const weight: Record<Note['priority'], number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+  return [...mine].sort((a, b) => {
+    const overdueA = isOverdue(a, now) ? 0 : 1;
+    const overdueB = isOverdue(b, now) ? 0 : 1;
+    if (overdueA !== overdueB) return overdueA - overdueB;
+    if (weight[a.priority] !== weight[b.priority]) return weight[a.priority] - weight[b.priority];
+    // A igualdad, la de fecha más próxima primero; las sin fecha, al final.
+    const dueA = a.dueDate === null ? Number.POSITIVE_INFINITY : Date.parse(a.dueDate);
+    const dueB = b.dueDate === null ? Number.POSITIVE_INFINITY : Date.parse(b.dueDate);
+    return dueA - dueB;
+  });
 }

@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.47.0",
-  "updatedAt": "2026-11-20T18:40:00Z",
+  "version": "0.48.0",
+  "updatedAt": "2026-11-20T21:00:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -280,7 +280,7 @@
     "P02": "done",
     "P03": "done",
     "P04": "done",
-    "P05": "partial",
+    "P05": "done",
     "P06": "done",
     "P07": "pending",
     "P08": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "P04": "Restricción por perfil y categoría aplicada de punta a punta: el servicio publica los ámbitos concedidos —incluidas las categorías de nota— y el editor recorta la lista de notas y las categorías que ofrece al crear. Antes el modelo de acceso tenía el ámbito por categoría desde la etapa 11 y nada lo aplicaba. El recorte se declara explícitamente como presentación y no seguridad —quien tiene el archivo tiene las notas— y por eso un servicio inalcanzable no restringe nada: un editor que se bloqueara por no poder preguntar los permisos sería inservible en una planta sin red, que es donde se usa. 14 pruebas."
+      "P05": "Asignación de tareas sobre el equipo real del proyecto. El editor escribía el responsable como texto libre y guardaba junto a él el identificador fijo «local»: el nombre se veía bien y todo lo que depende del identificador no servía —«asignadas a mí» no podía distinguir a nadie porque todos los responsables compartían identificador, y dos formas de escribir un mismo nombre eran dos responsables al buscar y uno solo al identificar—. Ahora el responsable se elige del listado de usuarios del proyecto y lo que se guarda es el identificador que el servicio usa para los permisos, con el filtro de tareas propias apoyado en el mismo. Las personas inactivas no se ofrecen, salvo cuando ya son responsables de la nota abierta: excluirlas ahí haría que abrir una tarea antigua le cambiara el responsable. Sin equipo en el proyecto el desplegable se deshabilita con el motivo, y sin identidad el interruptor de tareas propias no aparece, en lugar de devolver siempre una lista vacía que se lee como «no tengo nada pendiente»."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

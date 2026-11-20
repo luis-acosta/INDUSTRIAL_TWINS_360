@@ -10,6 +10,9 @@ import { useMemo, useState } from 'react';
 import {
   canTransition,
   EMPTY_NOTE_FILTER,
+  assignNote,
+  assignableUsers,
+  tasksAssignedTo,
   filterNotes,
   hiddenNoteCount,
   notesVisibleTo,
@@ -63,6 +66,16 @@ export interface NotesModuleProps {
    * inventarse una restricción que nadie le ha dado.
    */
   readonly allowedCategories?: readonly string[] | null;
+  /**
+   * Identificador del usuario del puesto (P05).
+   *
+   * Es el mismo que el servicio usa para los permisos y el que se guarda al
+   * asignar: así «asignadas a mí» señala las mismas notas que el servicio
+   * atribuye a esta persona. Sin servicio configurado el identificador es el
+   * del equipo local, y el filtro sigue sirviendo para un equipo que ya se
+   * conoce.
+   */
+  readonly currentUserId?: string | null;
 }
 
 /**
@@ -73,7 +86,12 @@ export interface NotesModuleProps {
  */
 const WORKING_STATUSES: readonly NoteStatus[] = ['open', 'inProgress', 'blocked'];
 
-export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModuleProps): JSX.Element {
+export function NotesModule({
+  store,
+  onGoToScene,
+  allowedCategories,
+  currentUserId,
+}: NotesModuleProps): JSX.Element {
   const [filter, setFilter] = useState<NoteFilter>(EMPTY_NOTE_FILTER);
   const [sort, setSort] = useState<NoteSort>('priorityThenDue');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -103,7 +121,21 @@ export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModu
     [store.project.notes, allowedCategories],
   );
   const visible = useMemo(() => sortNotes(filterNotes(notes, filter, now), sort), [notes, filter, sort, now]);
+
   const selected = notes.find((n) => n.id === selectedId) ?? null;
+
+  /**
+   * Personas a las que se puede asignar (P05).
+   *
+   * Las inactivas quedan fuera —asignar a quien ya no está produce una tarea
+   * que nadie va a mirar— salvo la que ya es responsable de la nota abierta:
+   * si se excluyera, abrir la nota cambiaría su responsable o lo dejaría en
+   * blanco, y el histórico de la tarea no se puede perder por abrirla.
+   */
+  const team = useMemo(
+    () => assignableUsers(store.project.users, selected),
+    [store.project.users, selected],
+  );
 
   const counts = useMemo(() => {
     const byStatus: Record<string, number> = {};
@@ -112,6 +144,22 @@ export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModu
   }, [notes]);
 
   const overdue = useMemo(() => notes.filter((n) => isOverdue(n, now)).length, [notes, now]);
+
+  /**
+   * Tareas pendientes de quien está en el puesto (P05).
+   *
+   * Se cuentan sobre las notas visibles y no sobre el filtro de la pantalla:
+   * el número tiene que seguir diciendo lo mismo cuando se filtra por otra
+   * cosa, porque es lo que se mira al entrar.
+   */
+  const myTasks = useMemo(
+    () => (currentUserId == null ? [] : tasksAssignedTo(notes, currentUserId, now)),
+    [notes, currentUserId, now],
+  );
+  const mineOnly =
+    currentUserId != null &&
+    filter.assigneeIds.length === 1 &&
+    filter.assigneeIds[0] === currentUserId;
 
   const writeNotes = (label: string, next: readonly Note[]): void => {
     store.updateProject(label, { notes: [...next] });
@@ -199,6 +247,7 @@ export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModu
             <p className="module__subtitle">
               {notes.length} registro(s) · {counts['open'] ?? 0} abiertas · {counts['inProgress'] ?? 0} en curso
               {overdue > 0 && <> · {overdue} vencida(s)</>}
+              {myTasks.length > 0 && <> · {myTasks.length} asignada(s) a usted</>}
             </p>
           </div>
           <div className="module__head-actions">
@@ -283,6 +332,21 @@ export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModu
             checked={filter.onlyOverdue}
             onChange={(event) => setFilter({ ...filter, onlyOverdue: event.currentTarget.checked })}
           />
+          {/* El interruptor se oculta si no hay identidad con la que comparar:
+              un «asignadas a mí» que no puede saber quién es «mí» devolvería
+              siempre una lista vacía y parecería que no hay tareas. */}
+          {currentUserId != null && (
+            <Switch
+              label="Asignadas a mí"
+              checked={mineOnly}
+              onChange={(event) =>
+                setFilter({
+                  ...filter,
+                  assigneeIds: event.currentTarget.checked ? [currentUserId] : [],
+                })
+              }
+            />
+          )}
         </div>
 
         <div className="module__body">
@@ -506,25 +570,48 @@ export function NotesModule({ store, onGoToScene, allowedCategories }: NotesModu
                 )}
               </Field>
 
-              <Field label="Responsable" inline>
+              {/* Responsable del equipo del proyecto y no texto libre (P05).
+                  Con texto libre, el identificador que se guardaba era siempre
+                  «local»: filtrar «asignadas a mí» no podía funcionar, y dos
+                  formas de escribir el mismo nombre eran dos responsables
+                  distintos al buscar e iguales al identificar. */}
+              <Field
+                label="Responsable"
+                inline
+                hint={
+                  team.length === 0
+                    ? 'El proyecto todavía no tiene equipo: añada personas en Ajustes para poder asignar.'
+                    : undefined
+                }
+              >
                 {({ id }) => (
-                  <TextInput
+                  <Select
                     id={id}
                     size="sm"
-                    value={selected.assigneeName ?? ''}
-                    placeholder="sin asignar"
-                    onChange={(event) =>
+                    disabled={team.length === 0}
+                    value={selected.assigneeId ?? ''}
+                    onChange={(event) => {
+                      const chosen = team.find((user) => user.id === event.currentTarget.value) ?? null;
+                      const assigned = assignNote(selected, chosen, new Date().toISOString());
                       updateNote(
                         selected.id,
-                        'Asignar responsable',
+                        chosen === null ? 'Quitar responsable' : `Asignar a ${chosen.displayName}`,
                         {
-                          assigneeName: event.currentTarget.value.length === 0 ? null : event.currentTarget.value,
-                          assigneeId: event.currentTarget.value.length === 0 ? null : 'local',
+                          assigneeId: assigned.assigneeId,
+                          assigneeName: assigned.assigneeName,
                         },
                         `note.assignee:${selected.id}`,
-                      )
-                    }
-                  />
+                      );
+                    }}
+                  >
+                    <option value="">Sin asignar</option>
+                    {team.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName}
+                        {user.active ? '' : ' (inactivo)'}
+                      </option>
+                    ))}
+                  </Select>
                 )}
               </Field>
 
