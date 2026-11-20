@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useVrSession } from './useVrSession';
-import type { ModelSceneControls } from '@it360/viewer';
+import type { ModelCameraState, ModelSceneControls } from '@it360/viewer';
 import { prefersReducedMotion } from './useSceneTransition';
 import { useTriggers } from './useTriggers';
 import {
@@ -36,6 +36,7 @@ import {
   type DeviceKind,
   type TelemetrySample,
   findSkinNode,
+  viewForEntering,
 } from '@it360/domain';
 import {
   Badge,
@@ -89,6 +90,7 @@ import { QuizPlayer } from './QuizPlayer';
 import { TourPlayerBar } from './TourPlayerBar';
 import { useSceneTransition } from './useSceneTransition';
 import { useTourPlayback } from './useTourPlayback';
+import { useMediaPlayback } from './useMediaPlayback';
 import { TransitionOverlay } from './TransitionOverlay';
 import { formatElapsed, targetForHotspot, tourGate, type SessionResult } from './playback';
 import { buildShareUrl, parseDeepLink, resolveDeepLink } from './deep-link';
@@ -206,6 +208,14 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
 
   /** Evaluación en curso y resultados de la sesión (J08, O09). */
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
+  /**
+   * Avance de la evaluación en curso (F10).
+   *
+   * Lo publica el reproductor de evaluaciones, que es quien sabe por qué
+   * pregunta va. Derivarlo aquí exigiría duplicar su recuento y los dos
+   * acabarían discrepando.
+   */
+  const [quizProgress, setQuizProgress] = useState<number | null>(null);
   const [results, setResults] = useState<readonly SessionResult[]>([]);
   const [huntQuestion, setHuntQuestion] = useState<Question | null>(null);
   const [huntFound, setHuntFound] = useState<readonly string[]>([]);
@@ -475,6 +485,16 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
    */
   const modelControlsRef = useRef<ModelSceneControls | null>(null);
 
+  /**
+   * Última vista de cada espacio de coordenadas de modelo (L11).
+   *
+   * Va en una referencia porque se escribe en cada movimiento de cámara —
+   * cientos por segundo al girar alrededor de un equipo— y guardarla en el
+   * estado redibujaría el recorrido en cada uno de ellos. Lo único que la lee
+   * es la entrada en una escena de modelo.
+   */
+  const carriedModelViewRef = useRef<{ spaceId: string; view: ModelCameraState } | null>(null);
+
   const triggers = useTriggers({
     sceneId: scene?.id ?? null,
     sceneActions: scene?.actions ?? [],
@@ -486,6 +506,12 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
   useEffect(() => {
     previousSceneRef.current = { id: scene?.id ?? null, actions: scene?.actions ?? [] };
   }, [scene?.id, scene?.actions]);
+
+  /** Reproducción de medios pedida por una acción (F10, J06). */
+  const mediaPlayback = useMediaPlayback({
+    urlOf: (mediaId) => mediaUrls.get(mediaId) ?? null,
+    onEnded: (mediaId) => triggers.notifyMediaEnd(mediaId, scene?.actions ?? []),
+  });
 
   const playback = useTourPlayback({
     goTo: (targetSceneId, targetView) => {
@@ -550,16 +576,28 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
    * declare, esa barra no se dibuja en lugar de inventarse un máximo.
    */
   const skinProgress = useCallback(
-    (source: 'tour' | 'media' | 'score' | 'quiz', _scoreKey: string): number | null => {
+    (source: 'tour' | 'media' | 'score' | 'quiz', scoreKey: string, target?: number | null): number | null => {
       if (source === 'tour') {
         return playback.tour === null ? null : progressFraction(playback.progress, 1);
       }
       if (source === 'quiz') {
-        return activeQuizId === null ? null : progressFraction(playback.progress, 1);
+        // Antes devolvía el avance del RECORRIDO: una barra de evaluación
+        // mostraba por qué parada iba la visita guiada. Ahora es el avance de
+        // la evaluación en curso, que es lo que el autor pidió al elegir esa
+        // fuente.
+        return quizProgress;
       }
-      return null;
+      if (source === 'media') {
+        return mediaPlayback.state.fraction;
+      }
+      // Puntuación: hace falta un objetivo, porque ocho puntos pueden ser el
+      // total o la mitad. Si el autor no lo declaró, no se dibuja la barra en
+      // lugar de inventar un máximo.
+      if (target === null || target === undefined || target <= 0) return null;
+      const value = scoresRef.current[`score.${scoreKey}`] ?? 0;
+      return progressFraction(value / target, 1);
     },
-    [playback.tour, playback.progress, activeQuizId],
+    [playback.tour, playback.progress, quizProgress, mediaPlayback.state.fraction],
   );
 
   /** Texto del temporizador de la interfaz (F10). */
@@ -728,8 +766,12 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
       createNote: () => undefined,
       showPlan: () => openPlan(),
       setVisualEffect: () => undefined,
-      playMedia: () => undefined,
-      pauseMedia: () => undefined,
+      // Reproducción de medios desde una acción (F10, J06). Eran dos
+      // funciones vacías: pulsar el marcador no sonaba nada y la barra de
+      // reproducción de la interfaz quedaba invisible por no haber nada que
+      // medir.
+      playMedia: (mediaId, loop, volume) => mediaPlayback.play(mediaId, loop, volume),
+      pauseMedia: (mediaId) => mediaPlayback.pause(mediaId),
       enterVr: () => undefined,
       exitVr: () => undefined,
       /**
@@ -1089,6 +1131,24 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
             scene={scene}
             mediaUrls={mediaUrls}
             onHotspot={(hotspot) => activateHotspot(hotspot, 'click')}
+            /* Vista conservada al entrar, si venimos de otro modelo del mismo
+               espacio de coordenadas (L11). Manda sobre la vista guardada de
+               la escena: el visitante acaba de colocar la cámara donde le
+               interesa, y devolverle a la que el autor guardó hace meses
+               deshace su trabajo. */
+            {...(() => {
+              const carried = viewForEntering(scene, carriedModelViewRef.current);
+              return carried === undefined ? {} : { initialView: carried };
+            })()}
+            onCameraChange={(state) => {
+              const space = scene.model?.coordinateSpaceId ?? null;
+              // Sólo se recuerda la vista de un modelo que declara espacio:
+              // guardar la de uno sin declararlo no serviría para nada, porque
+              // nunca se podría aplicar a otro.
+              if (space !== null) {
+                carriedModelViewRef.current = { spaceId: space, view: state };
+              }
+            }}
           />
         ) : (
           <PanoramaViewer
@@ -1203,6 +1263,7 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
           quiz={activeQuiz}
           mediaUrl={(mediaId) => (mediaId === null ? null : (mediaUrls.get(mediaId) ?? null))}
           onGoalReached={(actions) => runActions(actions, 'scoreThreshold')}
+          onProgress={setQuizProgress}
           onGoToScene={(id) => goToScene(id)}
           huntFound={huntFound}
           onHuntStart={(question) => {

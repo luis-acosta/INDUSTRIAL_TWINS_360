@@ -64,6 +64,14 @@ export interface QuizPlayerProps {
   readonly onHuntStart: (question: Question) => void;
   readonly onFinish: (runtime: QuizRuntime) => void;
   readonly onClose: () => void;
+  /**
+   * Avance de la evaluación, 0..1 (F10).
+   *
+   * Lo publica este componente porque es quien sabe por qué pregunta va;
+   * derivarlo fuera exigiría duplicar el recuento de respuestas y los dos
+   * acabarían discrepando en el primer cambio de reglas.
+   */
+  readonly onProgress?: (fraction: number | null) => void;
 }
 
 export function QuizPlayer({
@@ -75,6 +83,7 @@ export function QuizPlayer({
   onHuntStart,
   onFinish,
   onClose,
+  onProgress,
 }: QuizPlayerProps): JSX.Element {
   const [runtime, setRuntime] = useState<QuizRuntime>(() => startQuiz(quiz, Date.now()));
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -109,6 +118,12 @@ export function QuizPlayer({
   const finished = runtime.currentQuestionId === null;
   const answered = runtime.answers.length;
   const total = quiz.questions.length;
+
+  useEffect(() => {
+    // `null` al terminar: la barra de una evaluación cerrada no debe quedarse
+    // al cien por cien, porque eso dice «en curso y completa».
+    onProgress?.(finished ? null : total === 0 ? null : answered / total);
+  }, [answered, total, finished, onProgress]);
 
   /* ---------------------------------------------------------------- *
    * Respuesta

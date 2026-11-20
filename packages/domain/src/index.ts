@@ -15,6 +15,7 @@ export * from './media-import';
 export * from './media-sniff';
 export * from './info-window';
 export * from './model-hotspot';
+export * from './model-space';
 export * from './publish-plan';
 export * from './action';
 export * from './hotspot';

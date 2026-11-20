@@ -241,6 +241,16 @@ export const componentConfigSchema = z.discriminatedUnion('kind', [
     /** Qué representa: avance del recorrido, del audio o de la puntuación. */
     source: z.enum(['tour', 'media', 'score', 'quiz']).default('tour'),
     scoreKey: z.string().max(64).default(''),
+    /**
+     * Valor que corresponde al 100 % cuando la fuente es la puntuación.
+     *
+     * Hace falta porque una puntuación no tiene máximo por sí misma: ocho
+     * puntos de seguridad pueden ser el total o la mitad. Sin declararlo, la
+     * barra no se puede dibujar —y así ocurría: el visor devolvía «sin datos»
+     * y la barra quedaba invisible sin que nada lo explicara—. Con el objetivo
+     * declarado, la barra significa algo.
+     */
+    scoreTarget: z.number().positive().nullable().default(null),
     showLabel: z.boolean().default(true),
   }),
   z.object({

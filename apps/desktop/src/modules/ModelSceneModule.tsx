@@ -27,6 +27,7 @@ import {
   type ModelSurfaceAnchor,
   type Scene as DomainScene,
   type Uuid,
+  scenesInSameSpace,
 } from '@it360/domain';
 import {
   describeModelProblem,
@@ -52,6 +53,8 @@ import {
   Switch,
   TextInput,
   useToast,
+  PropertyList,
+  PropertyRow,
 } from '@it360/ui';
 import type { Object3D } from 'three';
 import type { ProjectStore } from '../state/project-store';
@@ -203,6 +206,18 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
   };
 
   const lighting: ModelLighting | null = settings?.lighting ?? null;
+
+  /**
+   * Escenas que comparten espacio de coordenadas con ésta (L11).
+   *
+   * Se calcula sobre el proyecto entero porque es lo que el autor necesita
+   * comprobar: que el identificador que acaba de escribir coincide con el de
+   * la otra escena, letra por letra.
+   */
+  const compatibleScenes = useMemo(
+    () => scenesInSameSpace(scene, store.project.scenes),
+    [scene, store.project.scenes],
+  );
 
   const onMeshNames = useCallback(
     (names: readonly string[]): void => {
@@ -868,6 +883,26 @@ export function ModelSceneModule({ store, scene }: ModelSceneModuleProps): JSX.E
             />
           )}
         </Field>
+
+        {/* Un identificador mal escrito no da ningún error: simplemente no
+            agrupa. Decir con qué escenas agrupa es la única forma de que el
+            autor compruebe que lo escribió igual en las dos. */}
+        {settings.coordinateSpaceId !== null && (
+          <PropertyList>
+            <PropertyRow
+              label="Conserva la vista con"
+              value={
+                compatibleScenes.length === 0 ? (
+                  <span className="muted">
+                    ninguna otra escena declara este espacio todavía
+                  </span>
+                ) : (
+                  compatibleScenes.map((other) => other.title).join(', ')
+                )
+              }
+            />
+          </PropertyList>
+        )}
       </aside>
     </div>
   );

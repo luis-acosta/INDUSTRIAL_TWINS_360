@@ -88,16 +88,46 @@ export function ComponentPanel({
           </Field>
 
           {config.source === 'score' && (
-            <Field label="Clave de puntuación" inline hint="La que usen las acciones del recorrido.">
-              {({ id }) => (
-                <TextInput
-                  id={id}
-                  size="sm"
-                  value={config.scoreKey}
-                  onChange={(event) => setConfig({ scoreKey: event.currentTarget.value }, 'key')}
-                />
-              )}
-            </Field>
+            <>
+              <Field label="Clave de puntuación" inline hint="La que usen las acciones del recorrido.">
+                {({ id }) => (
+                  <TextInput
+                    id={id}
+                    size="sm"
+                    value={config.scoreKey}
+                    onChange={(event) => setConfig({ scoreKey: event.currentTarget.value }, 'key')}
+                  />
+                )}
+              </Field>
+
+              {/* Sin objetivo, la barra no se puede dibujar: ocho puntos
+                  pueden ser el total o la mitad. Y así ocurría —el visor
+                  devolvía «sin datos» y la barra quedaba invisible sin que
+                  nada lo explicara—, de modo que el campo no es un adorno. */}
+              <Field
+                label="Puntuación que equivale al 100 %"
+                inline
+                hint={
+                  config.scoreTarget === null
+                    ? 'Mientras no se indique, esta barra no se dibuja: una puntuación no tiene máximo por sí misma.'
+                    : undefined
+                }
+              >
+                {() => (
+                  <NumberInput
+                    aria-label="Puntuación objetivo"
+                    min={0}
+                    max={100000}
+                    step={1}
+                    decimals={0}
+                    value={config.scoreTarget ?? 0}
+                    onValueChange={(value) =>
+                      setConfig({ scoreTarget: value > 0 ? value : null }, 'target')
+                    }
+                  />
+                )}
+              </Field>
+            </>
           )}
 
           <Field label="Mostrar el porcentaje" inline>

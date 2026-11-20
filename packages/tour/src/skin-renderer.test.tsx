@@ -376,7 +376,7 @@ describe('componentes', () => {
     // Una barra vacía dice «empezado y sin avance», que es distinto de «no
     // empezado».
     mount({
-      nodes: [node({ kind: 'progressBar', source: 'tour', scoreKey: '', showLabel: true })],
+      nodes: [node({ kind: 'progressBar', source: 'tour', scoreKey: '', scoreTarget: null, showLabel: true })],
     });
 
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
@@ -384,7 +384,7 @@ describe('componentes', () => {
 
   it('TEST-SKR-016 con avance en curso la barra se dibuja y se anuncia', () => {
     mount({
-      nodes: [node({ kind: 'progressBar', source: 'tour', scoreKey: '', showLabel: true })],
+      nodes: [node({ kind: 'progressBar', source: 'tour', scoreKey: '', scoreTarget: null, showLabel: true })],
       progress: () => 0.4,
     });
 

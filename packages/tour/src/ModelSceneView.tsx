@@ -43,6 +43,15 @@ export interface ModelSceneViewProps {
    * ejecutor la recibía y su anfitrión la descartaba.
    */
   readonly onControls?: (controls: ModelSceneControls | null) => void;
+  /**
+   * Avisa de la vista actual del modelo (L11).
+   *
+   * Lo usa el recorrido para conservar la vista al pasar a otro modelo del
+   * mismo espacio de coordenadas: sin ello, el visitante que cambia de un
+   * modelo a su despiece tiene que volver a buscar la pieza que estaba
+   * mirando.
+   */
+  readonly onCameraChange?: (state: ModelCameraState) => void;
 }
 
 interface Prepared {
@@ -56,6 +65,7 @@ export function ModelSceneView({
   onHotspot,
   initialView,
   onControls,
+  onCameraChange,
 }: ModelSceneViewProps): JSX.Element {
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -163,6 +173,7 @@ export function ModelSceneView({
         {...(initialView !== undefined ? { initialView } : {})}
         onFrame={layer.handle.onFrame}
         {...(onControls !== undefined ? { onControls } : {})}
+        {...(onCameraChange !== undefined ? { onCameraChange } : {})}
         className="tour__model-canvas"
         ariaLabel={`Modelo de ${scene.title}`}
       />

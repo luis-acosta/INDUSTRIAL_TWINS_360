@@ -224,13 +224,13 @@ describe('contenedor de pestañas', () => {
 describe('ajustes que el visor publicado aún no atiende', () => {
   it('TEST-SCP-009 la barra de avance de audio avisa', () => {
     // Guardarlo en silencio prometería una función que no existe.
-    mount({ kind: 'progressBar', source: 'media', scoreKey: '', showLabel: true });
+    mount({ kind: 'progressBar', source: 'media', scoreKey: '', scoreTarget: null, showLabel: true });
 
     expect(screen.getByText('El avance del audio todavía no llega al visor')).toBeInTheDocument();
   });
 
   it('TEST-SCP-010 el avance del recorrido no avisa, porque sí funciona', () => {
-    mount({ kind: 'progressBar', source: 'tour', scoreKey: '', showLabel: true });
+    mount({ kind: 'progressBar', source: 'tour', scoreKey: '', scoreTarget: null, showLabel: true });
 
     expect(screen.queryByText(/todavía no llega al visor/)).not.toBeInTheDocument();
   });

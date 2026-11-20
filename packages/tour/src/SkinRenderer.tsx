@@ -67,7 +67,18 @@ export interface SkinHost {
   readonly onCarousel: (nodeId: string, index: number) => void;
   readonly onSelectScene: (sceneId: string) => void;
   /** Progreso por origen, en [0, 1]; `null` si no hay nada en curso. */
-  readonly progress: (source: 'tour' | 'media' | 'score' | 'quiz', scoreKey: string) => number | null;
+  /**
+   * Avance de una barra.
+   *
+   * `scoreTarget` sólo lo usa la fuente «puntuación»: una puntuación no tiene
+   * máximo por sí misma, de modo que sin el objetivo que declara el autor no
+   * hay fracción que dibujar.
+   */
+  readonly progress: (
+    source: 'tour' | 'media' | 'score' | 'quiz',
+    scoreKey: string,
+    scoreTarget?: number | null,
+  ) => number | null;
   /** Texto del temporizador y de la puntuación, que los lleva el anfitrión. */
   readonly timerText: (mode: 'elapsed' | 'countdown', durationS: number) => string;
   readonly scoreLines: (keys: readonly string[]) => readonly { label: string; value: string }[];
@@ -308,7 +319,7 @@ function ComponentView({ node, inner, host }: ComponentViewProps): JSX.Element {
     }
 
     case 'progressBar': {
-      const fraction = host.progress(config.source, config.scoreKey);
+      const fraction = host.progress(config.source, config.scoreKey, config.scoreTarget);
       if (fraction === null) {
         /* Sin nada en curso no se dibuja una barra al 0 %: una barra vacía
            dice «empezado y sin avance», que es distinto de «no empezado». */
