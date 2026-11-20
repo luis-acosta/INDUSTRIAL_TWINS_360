@@ -47,7 +47,7 @@ import { tagUniquenessScopeSchema, uuidSchema } from './identity';
  * rápida de corromper el trabajo de alguien. Se avisa y se ofrece actualizar
  * la aplicación.
  */
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /** Versión mínima que las migraciones saben leer. */
 export const MINIMUM_SCHEMA_VERSION = 1;

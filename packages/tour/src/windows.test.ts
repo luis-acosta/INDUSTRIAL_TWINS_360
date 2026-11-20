@@ -555,3 +555,91 @@ describe('infoWindow', () => {
     expect(block?.kind === 'sceneLink' && block.label).toBe('Plataforma superior');
   });
 });
+
+describe('versión del vídeo en la ventana (V04)', () => {
+  /* Es el cruce que hace útil la escalera: hasta ahora el proyecto podía
+     llevar tres versiones y la ventana entregaba siempre la principal, así que
+     un 4K llegaba igual a una tableta de planta y se quedaba cargando. */
+
+  const master = makeMedia(70, {
+    kind: 'video',
+    mime: 'video/mp4',
+    relativePath: 'media/arranque.mp4',
+    originalName: 'arranque-2160p.mp4',
+    width: 3840,
+    height: 2160,
+    durationS: 92,
+  });
+  const small = makeMedia(71, {
+    kind: 'video',
+    mime: 'video/mp4',
+    relativePath: 'media/arranque-720.mp4',
+    originalName: 'arranque-720p.mp4',
+    width: 1280,
+    height: 720,
+    durationS: 92,
+  });
+
+  function contextWith(selection?: {
+    device: 'desktop' | 'tablet' | 'mobile' | 'vr';
+    viewportHeightPx: number;
+    saveData: boolean;
+    effectiveType: string | null;
+  }) {
+    const manifest: Manifest = toManifest(
+      {
+        ...makeProject(),
+        media: [
+          { ...master, renditions: [{ mediaId: small.id, heightPx: 720 }] },
+          small,
+        ] as never,
+      },
+      { publishedAt: NOW, appVersion: '0.52.0', offlineCapable: true },
+    );
+
+    return {
+      manifest,
+      mediaUrls: new Map([
+        [master.id, 'https://x.invalid/media/arranque.mp4'],
+        [small.id, 'https://x.invalid/media/arranque-720.mp4'],
+      ]),
+      ...(selection === undefined ? {} : { selection }),
+    };
+  }
+
+  it('TEST-WIN-V04-001 en un móvil entrega la versión pequeña', () => {
+    const win = mediaWindow(
+      contextWith({ device: 'mobile', viewportHeightPx: 700, saveData: false, effectiveType: '4g' }),
+      master.id,
+      [],
+      false,
+    );
+
+    expect(win?.kind).toBe('media');
+    expect(win?.kind === 'media' && win.items[0]?.url).toBe(
+      'https://x.invalid/media/arranque-720.mp4',
+    );
+  });
+
+  it('TEST-WIN-V04-002 el pie sigue siendo el del vídeo que el autor enlazó', () => {
+    /* El visitante no tiene por qué ver «arranque-720p.mp4»: eso es un detalle
+       de entrega, y leerlo en el pie parece un error del proyecto. */
+    const win = mediaWindow(
+      contextWith({ device: 'mobile', viewportHeightPx: 700, saveData: false, effectiveType: '4g' }),
+      master.id,
+      [],
+      false,
+    );
+
+    expect(win?.kind === 'media' && win.items[0]?.caption).toBe('arranque-2160p.mp4');
+  });
+
+  it('TEST-WIN-V04-003 sin contexto entrega el principal', () => {
+    /* No saber en qué dispositivo se está no es motivo para dar la versión
+       pequeña: en una pantalla grande con red de sobra se vería borrosa y el
+       visitante no tendría forma de pedir la buena. */
+    const win = mediaWindow(contextWith(), master.id, [], false);
+
+    expect(win?.kind === 'media' && win.items[0]?.url).toBe('https://x.invalid/media/arranque.mp4');
+  });
+});

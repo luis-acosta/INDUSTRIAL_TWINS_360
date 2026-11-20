@@ -36,7 +36,9 @@ import {
   type DeviceKind,
   type TelemetrySample,
   findSkinNode,
+  readSelectionContext,
   viewForEntering,
+  type SelectionContext,
 } from '@it360/domain';
 import {
   Badge,
@@ -171,6 +173,10 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
    * ejecutarse cuando aparece o desaparece.
    */
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  /* Si la sesión inmersiva está presentando, en una referencia: la elección de
+     versión de vídeo se hace al abrir la ventana y no puede depender del orden
+     en que se declaran los ganchos (V04). */
+  const vrPresentingRef = useRef(false);
   /**
    * Puntuaciones de la sesión.
    *
@@ -722,7 +728,12 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
       openMedia: (mediaId, albumMediaIds, autoplay) => {
         // Dentro del recorrido y no en una pestaña nueva: un álbum necesita un
         // «siguiente», y en una pestaña nueva no hay ninguno.
-        const win = mediaWindow({ manifest, mediaUrls }, mediaId, albumMediaIds, autoplay);
+        const win = mediaWindow(
+          { manifest, mediaUrls, selection: videoSelection() },
+          mediaId,
+          albumMediaIds,
+          autoplay,
+        );
         if (win !== null) setOpenWindow(win);
       },
       openDocument: (documentId, page) => {
@@ -1089,6 +1100,34 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
   });
 
   /**
+   * Contexto para elegir la versión de un vídeo (V04).
+   *
+   * Se lee al abrir la ventana y no al montar el recorrido: el visitante puede
+   * activar el ahorro de datos, girar la tableta o cambiar de red mientras
+   * recorre la planta, y una lectura hecha al principio entregaría la versión
+   * que correspondía hace media hora.
+   *
+   * La clase de dispositivo sale del ancho de la ventana por el mismo motivo
+   * por el que la usa el resto del visor: es lo que decide cuánto vídeo cabe en
+   * pantalla, y es observable sin preguntar nada al visitante.
+   */
+  const videoSelection = useCallback(
+    (): SelectionContext =>
+      readSelectionContext(
+        navigator,
+        vrPresentingRef.current
+          ? 'vr'
+          : globalThis.innerWidth < 720
+            ? 'mobile'
+            : globalThis.innerWidth < 1280
+              ? 'tablet'
+              : 'desktop',
+        globalThis.innerHeight,
+      ),
+    [],
+  );
+
+  /**
    * Cámara de la geometría de destino durante la transición (C10).
    *
    * Es la parte que el ajuste «usar geometría de fondo» prometía y no hacía:
@@ -1112,6 +1151,10 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     if (current === null) return;
     controls.setOrbit(orbitForView(run.state.toView, current));
   }, [transition.run]);
+
+  useEffect(() => {
+    vrPresentingRef.current = vr.presenting;
+  }, [vr.presenting]);
 
   /**
    * Panorámica reducida mientras la sesión inmersiva presenta (N12).

@@ -556,6 +556,18 @@ export const MIGRATIONS: readonly Migration[] = [
       rewriteJsonColumn(db, 'scene', 'model_json');
     },
   },
+  {
+    version: 4,
+    name: 'versiones-de-video',
+    description:
+      'Columna para las versiones de menor resolución de un vídeo (V04), que el visor elige según el dispositivo y la red. Con valor por omisión «[]»: un proyecto anterior se abre sin tocar sus datos.',
+    up: (db) => {
+      /* `ALTER TABLE ... ADD COLUMN` con valor por omisión no reescribe la
+         tabla en SQLite, así que esto es instantáneo incluso en un proyecto
+         con miles de medios. */
+      db.exec("ALTER TABLE media ADD COLUMN renditions_json TEXT NOT NULL DEFAULT '[]'");
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ *

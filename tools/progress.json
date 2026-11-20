@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.51.0",
-  "updatedAt": "2026-11-20T23:45:00Z",
+  "version": "0.52.0",
+  "updatedAt": "2026-11-21T00:20:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -202,7 +202,7 @@
     "V01": "done",
     "V02": "done",
     "V03": "done",
-    "V04": "pending",
+    "V04": "done",
     "V05": "done",
     "V06": "done",
     "V07": "modeled",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "C10": "Geometría 3D como fondo de transición, de verdad. El ajuste existía en el editor de acciones desde la etapa 02 y lo único que hacía era evitar que la transición degradara a fundido: el modelo de destino se quedaba quieto detrás de una fotografía que se desvanecía, que es exactamente lo que el ajuste prometía evitar. Faltaba la traducción entre las dos formas de describir una vista —el recorrido usa yaw/pitch, natural dentro de una esfera, y una escena de modelo tiene una cámara que orbita un punto— y un modo de mover esa cámara desde fuera. Ahora `orbitForView` traduce, `ModelSceneControls.setOrbit` aplica, y el visor mueve la cámara del modelo con la vista que el plan calcula en cada fotograma: se ve la geometría girar hacia la vista de llegada mientras la fotografía anterior se desvanece encima. Dos detalles que un signo equivocado arruina: el polar se mide desde el cenit, así que mirar arriba lo reduce —invertirlo pone la cámara bajo el suelo del modelo—, y nunca queda exactamente en el cenit o el nadir, donde el vector de arriba de la cámara es indefinido y la imagen da un salto de media vuelta al terminar. Se pregunta por la transición efectiva y no por la que pidió el autor: con «prefers-reduced-motion» activa no se mueve nada, porque ése es el movimiento que esa preferencia pide no hacer."
+      "V04": "Entrega de vídeo optimizada por dispositivo. El proyecto podía llevar varias versiones del mismo vídeo y la ventana entregaba siempre la principal, así que tenerlas no servía de nada: un vídeo de proceso en 4K llegaba igual a una tableta de planta con red compartida y se quedaba cargando hasta que el visitante lo abandonaba. Ahora la escalera se ordena en el dominio, el visor elige la versión más pequeña que no se vea peor que la pantalla, y el ahorro de datos y una red lenta mandan por delante de cualquier criterio de calidad —son una petición explícita del visitante y una condición medida, y pasar por encima de ellas es decidir por él—. No saber la red no cuenta como tenerla lenta: suponer lo peor daría un vídeo borroso a quien tiene fibra. La plataforma no transcodifica y no finge hacerlo: las versiones las exporta quien hace el vídeo, y aquí se validan —la comprobación de duración es la que más vale, porque una versión que no es el mismo vídeo cambia lo que se ve según el dispositivo—, se publican y se eligen. Está escrito en LIMITACIONES, que es donde lo busca quien prepara el material. Migración 4 para la columna nueva, con valor por omisión: un proyecto anterior se abre sin tocar sus datos."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

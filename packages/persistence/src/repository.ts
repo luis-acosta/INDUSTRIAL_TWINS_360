@@ -150,6 +150,7 @@ export function loadProject(db: SqlDatabase): Result<LoadResult> {
         thumbnailPath: nullableText(row, 'thumbnail_path'),
         panorama: asJson(row['panorama_json'] ?? null, null),
         tiles: asJson(row['tiles_json'] ?? null, []),
+        renditions: asJson(row['renditions_json'] ?? null, []),
         quarantined: bool(row, 'quarantined'),
         quarantineReason: nullableText(row, 'quarantine_reason'),
         createdAt: text(row, 'created_at'),
@@ -725,12 +726,13 @@ export function saveProject(
         insert(
           `INSERT INTO media (id, sha256, mime, kind, relative_path, original_name, byte_size,
              width, height, duration_s, thumbnail_path, panorama_json, tiles_json,
-             quarantined, quarantine_reason, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             renditions_json, quarantined, quarantine_reason, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             m.id, m.sha256, m.mime, m.kind, m.relativePath, m.originalName, m.byteSize,
             m.width, m.height, m.durationS, m.thumbnailPath,
             m.panorama === null ? null : toJson(m.panorama), toJson(m.tiles),
+            toJson(m.renditions),
             toInt(m.quarantined), m.quarantineReason, m.createdAt,
           ],
         );

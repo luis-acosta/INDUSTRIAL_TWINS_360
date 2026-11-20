@@ -196,6 +196,20 @@ export const mediaSchema = z.object({
   panorama: panoramaMetadataSchema.nullable().default(null),
   tiles: z.array(tileLevelSchema).default([]),
   /**
+   * Otras versiones del mismo vídeo, de menor resolución (V04).
+   *
+   * Las exporta quien hace el vídeo —esta plataforma no transcodifica, y no
+   * finge hacerlo— y aquí se validan, se publican y se eligen según el
+   * dispositivo y la red. Vacío es el caso normal de un vídeo pequeño: no hay
+   * nada que elegir y se entrega él.
+   *
+   * Va con valor por omisión para que un proyecto guardado antes siga
+   * abriéndose sin migración de datos.
+   */
+  renditions: z
+    .array(z.object({ mediaId: uuidSchema, heightPx: z.number().int().min(144).max(4320) }))
+    .default([]),
+  /**
    * Medio en cuarentena: se importó, se detectó un problema y se conserva
    * sin usarlo. No se borra, porque puede ser el único original que tiene el
    * usuario; tampoco se publica, porque rompería el recorrido.

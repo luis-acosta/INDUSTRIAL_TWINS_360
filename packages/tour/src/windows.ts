@@ -14,10 +14,12 @@
 import {
   parseRichText,
   resolveVariables,
+  selectRendition,
   type Action,
   type InfoWindow,
   type Manifest,
   type RichNode,
+  type SelectionContext,
 } from '@it360/domain';
 
 /* ------------------------------------------------------------------ *
@@ -203,6 +205,14 @@ export function isFrameAllowed(url: string, allowedOrigins: readonly string[]): 
 export interface WindowContext {
   readonly manifest: Manifest;
   readonly mediaUrls: ReadonlyMap<string, string>;
+  /**
+   * Contexto para elegir la versión de un vídeo (V04).
+   *
+   * Sin él se entrega el vídeo principal, que es lo correcto cuando no se sabe
+   * en qué dispositivo se está: entregar la versión pequeña por defecto daría
+   * un vídeo borroso en una pantalla grande con red de sobra.
+   */
+  readonly selection?: SelectionContext;
 }
 
 /** Ventana de un medio, con su álbum si lo tiene (E02, E03). */
@@ -213,6 +223,7 @@ export function mediaWindow(
   autoplay: boolean,
 ): TourWindow | null {
   const ids = albumMediaIds.length > 0 ? albumMediaIds : [mediaId];
+  const byId = new Map(context.manifest.media.map((entry) => [entry.id, entry]));
 
   const items: MediaItem[] = [];
   for (const id of ids) {
@@ -223,8 +234,20 @@ export function mediaWindow(
     // tarjeta vacía parece un fallo del recorrido.
     if (url === undefined || media === undefined) continue;
 
+    /* Versión del vídeo que corresponde al dispositivo y a la red (V04). El
+       proyecto puede llevar varias; hasta ahora se entregaba siempre la
+       principal, de modo que un 4K llegaba igual a una tableta de planta y se
+       quedaba cargando. */
+    const chosen =
+      context.selection === undefined || mediaKindOf(media.mime) !== 'video'
+        ? media
+        : selectRendition(media, media.renditions, byId, context.selection);
+    const chosenUrl = chosen.id === media.id ? url : (context.mediaUrls.get(chosen.id) ?? url);
+
     items.push({
-      url,
+      url: chosenUrl,
+      // El pie es del vídeo que el autor enlazó, no del archivo entregado: el
+      // visitante no tiene por qué ver «arranque-720p.mp4».
       caption: media.originalName,
       kind: mediaKindOf(media.mime),
     });

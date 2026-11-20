@@ -127,6 +127,24 @@ de los fallos.
 
 ---
 
+### Vídeo: se elige, no se transcodifica (V04)
+
+El recorrido entrega la versión del vídeo que corresponde al dispositivo y a la
+red —con el ahorro de datos y una red lenta por delante de cualquier criterio de
+calidad—, y la publicación avisa cuando un vídeo de alta resolución es la única
+versión que hay.
+
+**Lo que esta plataforma no hace es transcodificar.** No lleva codificador de
+vídeo: añadirlo significaría arrastrar al instalador una biblioteca de cientos
+de megabytes con sus propias licencias, y el resultado sería peor que el de
+cualquier herramienta de edición. Las versiones las exporta quien hace el vídeo
+—que ya las exporta— y se añaden al proyecto; aquí se validan, se publican y se
+eligen. La comprobación que más vale es la de duración: una versión que no es el
+mismo vídeo cambia lo que se ve según el dispositivo, y eso no se descubre hasta
+que alguien lo abre en el dispositivo equivocado.
+
+---
+
 ## 3. Límites por diseño
 
 Estas no son carencias: son decisiones, y están así a propósito.

@@ -15,6 +15,7 @@ import {
   estimateBytes,
   planImage,
   planVrVariants,
+  renditionWarnings,
   VR_VARIANT_PROFILES,
   type PublishQuality,
   walkSkin,
@@ -309,6 +310,16 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
     for (const entry of project.media) {
       const note = planImage(entry, quality).note;
       if (note !== null && note !== 'no es una imagen') notes.add(note);
+    }
+
+    /* Versiones de vídeo (V04). El aviso es concreto —«exporte una versión de
+       720p»— porque eso se puede hacer; «el vídeo es grande» no. */
+    const byId = new Map(project.media.map((entry) => [entry.id, entry]));
+    for (const entry of project.media) {
+      if (entry.kind !== 'video') continue;
+      for (const warning of renditionWarnings(entry, entry.renditions, byId)) {
+        notes.add(warning);
+      }
     }
 
     /* Juego de panorámicas para visor inmersivo (N12). Se cuenta antes de
