@@ -68,6 +68,7 @@ export function makeMedia(n: number, overrides: Partialize<Media> = {}): Media {
       gps: null,
     },
     tiles: [],
+    renditions: [],
     quarantined: false,
     quarantineReason: null,
     createdAt: ISO_NOW,

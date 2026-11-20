@@ -49,6 +49,7 @@ import {
 import type { ProjectStore } from '../state/project-store';
 import { APP_VERSION } from '../version';
 import { publishProject } from '../platform/publish-files';
+import { importMediaFile } from '../platform/media-import';
 
 export interface PublishModuleProps {
   readonly store: ProjectStore;
@@ -304,6 +305,109 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
     return total;
   }, [project.media, quality]);
 
+  /** Vídeos del proyecto: los únicos que admiten versiones (V04). */
+  const videos = useMemo(
+    () => project.media.filter((entry) => entry.kind === 'video' && !entry.quarantined),
+    [project.media],
+  );
+
+  const [importingRendition, setImportingRendition] = useState(false);
+
+  /**
+   * Da de alta otra versión de un vídeo (V04).
+   *
+   * La altura se toma de la medición real del archivo y no se pregunta: el
+   * autor ya sabe qué exportó, y un número escrito a mano que no coincida con
+   * el archivo haría que el visor eligiera mal sin que nada lo delatara.
+   */
+  const addRendition = useCallback(
+    async (videoId: string, file: File): Promise<void> => {
+      setImportingRendition(true);
+      try {
+        const result = await importMediaFile(file, project.media, { folder: 'media/video' });
+        if (!result.ok) {
+          push({
+            tone: 'alarm',
+            title: 'No se pudo añadir la versión',
+            description: `${result.error.message}${result.error.recovery === undefined ? '' : ` ${result.error.recovery}`}`,
+          });
+          return;
+        }
+
+        const added = result.value.media;
+        if (added.kind !== 'video') {
+          push({
+            tone: 'alarm',
+            title: 'Eso no es un vídeo',
+            description: `«${added.originalName}» no es un archivo de vídeo, así que no puede ser otra versión de uno.`,
+          });
+          return;
+        }
+
+        if (added.height === null) {
+          push({
+            tone: 'alarm',
+            title: 'No se pudo medir la versión',
+            description:
+              'Sin conocer su altura no se puede saber cuándo entregarla. Exporte el archivo con otra herramienta o compruebe que no está dañado.',
+          });
+          return;
+        }
+
+        const primary = project.media.find((entry) => entry.id === videoId);
+        if (primary === undefined) return;
+
+        const media = result.value.reused ? project.media : [...project.media, added];
+        store.updateProject(`Añadir versión ${added.height}p de ${primary.originalName}`, {
+          media: media.map((entry) =>
+            entry.id !== videoId
+              ? entry
+              : {
+                  ...entry,
+                  renditions: [
+                    ...entry.renditions.filter((r) => r.mediaId !== added.id),
+                    { mediaId: added.id, heightPx: added.height ?? 0 },
+                  ],
+                },
+          ),
+        });
+
+        push({
+          tone: 'nominal',
+          title: `Versión de ${added.height}p añadida`,
+          description: `Se entregará a los dispositivos que no puedan con «${primary.originalName}».`,
+        });
+      } finally {
+        setImportingRendition(false);
+      }
+    },
+    [project.media, push, store],
+  );
+
+  /**
+   * Quita una versión de la escalera.
+   *
+   * El archivo se queda en la biblioteca de medios: puede estar en uso en otro
+   * sitio, y borrarlo por quitarlo de aquí destruiría trabajo ajeno a esta
+   * pantalla. Si no se usa en ninguna parte, el plan de publicación ya lo deja
+   * fuera del paquete por su cuenta.
+   */
+  const removeRendition = useCallback(
+    (videoId: string, renditionId: string): void => {
+      const primary = project.media.find((entry) => entry.id === videoId);
+      if (primary === undefined) return;
+
+      store.updateProject(`Quitar una versión de ${primary.originalName}`, {
+        media: project.media.map((entry) =>
+          entry.id !== videoId
+            ? entry
+            : { ...entry, renditions: entry.renditions.filter((r) => r.mediaId !== renditionId) },
+        ),
+      });
+    },
+    [project.media, store],
+  );
+
   /** Advertencias del plan que el autor debe leer antes de generar. */
   const planNotes = useMemo(() => {
     const notes = new Set<string>();
@@ -536,6 +640,78 @@ export function PublishModule({ store, mediaFiles }: PublishModuleProps): JSX.El
               </p>
             </div>
           </Panel>
+
+          {/* Versiones de vídeo (V04). Va en esta pantalla porque es donde el
+              autor piensa en el peso de la entrega, y es donde aparece el
+              aviso de la versión que falta. */}
+          {videos.length > 0 && (
+            <Panel title="Versiones de vídeo">
+              <div className="panel__stack">
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--it-text-xs)',
+                    color: 'var(--it-color-text-tertiary)',
+                  }}
+                >
+                  El recorrido entrega la versión que corresponde al dispositivo y a la red, y da
+                  prioridad al ahorro de datos del visitante. Esta aplicación no reescala vídeo:
+                  exporte las versiones con su editor y añádalas aquí.
+                </p>
+
+                {videos.map((entry) => (
+                  <div key={entry.id} className="panel__stack">
+                    <PropertyList>
+                      <PropertyRow
+                        label={entry.originalName}
+                        value={entry.height === null ? 'altura desconocida' : `${entry.height}p`}
+                        mono
+                      />
+                      {entry.renditions.map((rendition) => {
+                        const media = project.media.find((m) => m.id === rendition.mediaId);
+                        return (
+                          <PropertyRow
+                            key={rendition.mediaId}
+                            label={`· ${media?.originalName ?? 'versión ausente del proyecto'}`}
+                            value={
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  gap: 'var(--it-space-2)',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                {rendition.heightPx}p
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeRendition(entry.id, rendition.mediaId)}
+                                >
+                                  Quitar
+                                </Button>
+                              </span>
+                            }
+                          />
+                        );
+                      })}
+                    </PropertyList>
+                    <label className="csv-dialog__file">
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm"
+                        aria-label={`Añadir versión de ${entry.originalName}`}
+                        disabled={importingRendition}
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          if (file !== undefined) void addRendition(entry.id, file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
 
           <Panel
             title={
