@@ -60,6 +60,8 @@ import {
   ambientForScene,
   type PanoramaRenderer,
   PanoramaViewer,
+  movesGeometry,
+  orbitForView,
   resolveEntryView,
   vrDeviceClass,
   type ActionHost,
@@ -1085,6 +1087,31 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
       if (node !== null) runActions(node.actions, 'click');
     },
   });
+
+  /**
+   * Cámara de la geometría de destino durante la transición (C10).
+   *
+   * Es la parte que el ajuste «usar geometría de fondo» prometía y no hacía:
+   * hasta ahora sólo evitaba que la transición degradara a fundido, y el modelo
+   * de destino se quedaba quieto detrás de una fotografía que se desvanecía. Al
+   * mover su cámara con la vista que calcula el plan en cada fotograma, lo que
+   * se ve es la geometría girando hacia la vista de llegada, que es lo que da
+   * la sensación de haber avanzado.
+   *
+   * Se aplica sólo si la transición efectiva lo conserva: con
+   * `prefers-reduced-motion` activa queda en corte y la cámara no se mueve,
+   * porque ése es exactamente el movimiento que esa preferencia pide no hacer.
+   */
+  useEffect(() => {
+    const run = transition.run;
+    const controls = modelControlsRef.current;
+    if (run === null || controls === null) return;
+    if (!movesGeometry(run.transition)) return;
+
+    const current = controls.currentView();
+    if (current === null) return;
+    controls.setOrbit(orbitForView(run.state.toView, current));
+  }, [transition.run]);
 
   /**
    * Panorámica reducida mientras la sesión inmersiva presenta (N12).

@@ -356,3 +356,76 @@ describe('encadenado', () => {
     expect(cancel).toHaveBeenCalled();
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Fondo de geometría (C10)
+ * ------------------------------------------------------------------ */
+
+describe('transición efectiva en el resultado', () => {
+  const withGeometry: Transition = {
+    kind: 'zoomThrough',
+    durationMs: 600,
+    useGeometry: true,
+  };
+
+  it('TEST-TRN-010 conserva la geometría cuando la escena de destino la tiene', () => {
+    /* Quien dibuja la escena de destino necesita saber si debe mover su
+       geometría, y la degradación ocurre dentro del gancho: sin este dato
+       tendría que volver a decidirla por su cuenta y las dos decisiones
+       acabarían separándose. */
+    const { result } = renderHook(() => useSceneTransition());
+
+    act(() => {
+      result.current.begin({
+        canvas: workingCanvas(),
+        transition: withGeometry,
+        fromView: FROM,
+        target: TARGET,
+        hasGeometry: true,
+      });
+    });
+
+    expect(result.current.run?.transition.useGeometry).toBe(true);
+  });
+
+  it('TEST-TRN-011 la degrada a fundido cuando el destino no tiene geometría', () => {
+    /* Es una mejora visual, no una función que deba fallar de forma visible:
+       el visitante no tiene por qué enterarse de que el autor pidió algo que
+       esta escena no puede dar. Lo que no puede es quedarse como pedido, o
+       la cámara del modelo se movería sin modelo que mover. */
+    const { result } = renderHook(() => useSceneTransition());
+
+    act(() => {
+      result.current.begin({
+        canvas: workingCanvas(),
+        transition: withGeometry,
+        fromView: FROM,
+        target: TARGET,
+        hasGeometry: false,
+      });
+    });
+
+    expect(result.current.run?.transition.useGeometry).toBe(false);
+    expect(result.current.run?.transition.kind).toBe('fade');
+  });
+
+  it('TEST-TRN-012 con movimiento reducido no hay transición y nada que mover', () => {
+    /* La preferencia del sistema gana sobre el ajuste del autor: un
+       desplazamiento con zoom puede producir malestar real. Y como no hay
+       transición, tampoco hay cámara de geometría que animar. */
+    reducedMotion = true;
+    const { result } = renderHook(() => useSceneTransition());
+
+    act(() => {
+      result.current.begin({
+        canvas: workingCanvas(),
+        transition: withGeometry,
+        fromView: FROM,
+        target: TARGET,
+        hasGeometry: true,
+      });
+    });
+
+    expect(result.current.run).toBeNull();
+  });
+});

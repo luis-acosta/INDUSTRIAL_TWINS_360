@@ -36,6 +36,7 @@ import {
   type ModelCameraState,
 } from './model-viewer';
 import type { CameraBounds } from '@it360/domain';
+import { orbitForView } from './transition';
 
 const BOUNDS: CameraBounds = {
   minDistance: 1,
@@ -682,5 +683,30 @@ describe('playAnimation', () => {
 
     playAnimation(mixer, clips, 'GIRO', false);
     expect(primera?.time).toBe(0);
+  });
+});
+
+describe('cámara de la geometría durante una transición (C10)', () => {
+  it('la vista traducida deja la cámara donde la transición apunta', () => {
+    // TEST-MVC-C10-001: comprueba la composición completa sin WebGL, que es lo
+    // que de verdad ocurre en el visor: la transición calcula una vista de
+    // panorámica, se traduce a órbita y se aplica al mando del modelo.
+    const controller = new ModelCameraController(
+      { target: new Vector3(0, 1, 0), distance: 4, azimuth: 0, polar: Math.PI / 2, fov: 60 },
+      'orbit',
+      BOUNDS,
+    );
+
+    controller.setState(
+      orbitForView({ yaw: 1.2, pitch: 0.3, fov: 70 }, controller.getState()),
+    );
+    const state = controller.getState();
+
+    expect(state.azimuth).toBeCloseTo(1.2, 5);
+    expect(state.polar).toBeCloseTo(Math.PI / 2 - 0.3, 5);
+    // El objetivo y la distancia son de la escena de destino y no se tocan:
+    // moverlos acercaría o alejaría el modelo sin que nadie lo pidiera.
+    expect(state.distance).toBeCloseTo(4, 5);
+    expect(state.target.y).toBeCloseTo(1, 5);
   });
 });

@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.50.0",
-  "updatedAt": "2026-11-20T23:05:00Z",
+  "version": "0.51.0",
+  "updatedAt": "2026-11-20T23:45:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -197,7 +197,7 @@
     "C07": "experimental",
     "C08": "experimental",
     "C09": "experimental",
-    "C10": "partial",
+    "C10": "done",
     "C11": "done",
     "V01": "done",
     "V02": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "N10": "Multimedia emergente dentro de la sesión inmersiva. El motivo por el que faltaba merecía quedar escrito y ahora está en el módulo: un vídeo en DOM no se compone sobre la imagen del visor —mientras la sesión presenta, el navegador dibuja lo que entrega el bucle de WebXR—, así que la ventana de HTML existía para quien mirara la pantalla del PC y no para quien llevaba las gafas; el visitante pulsaba un punto de interés, el sonido empezaba y en el visor no pasaba nada. Los tres casos se tratan como lo que son: el vídeo va a una textura con el mismo elemento que reproduce la ventana plana —con dos, el sonido se oiría dos veces y los controles de la pantalla no dirían la verdad—, el audio no necesita textura porque no pasa por el bucle de fotogramas y sólo necesita un panel que diga que está sonando, y un documento o una página enmarcada no se pueden mostrar y se dice en lugar de dejar la acción muda. El panel se compone con nodos de piel reales pasados por el esquema del contrato, de modo que se maqueta, se pinta, se apunta con el mando y se activa con el mismo código que cualquier otro panel: una vía de dibujado aparte habría que mejorarla dos veces, y la segunda se olvidaría. El botón de cerrar está siempre, porque dentro del visor no hay una tecla de escape que pulsar."
+      "C10": "Geometría 3D como fondo de transición, de verdad. El ajuste existía en el editor de acciones desde la etapa 02 y lo único que hacía era evitar que la transición degradara a fundido: el modelo de destino se quedaba quieto detrás de una fotografía que se desvanecía, que es exactamente lo que el ajuste prometía evitar. Faltaba la traducción entre las dos formas de describir una vista —el recorrido usa yaw/pitch, natural dentro de una esfera, y una escena de modelo tiene una cámara que orbita un punto— y un modo de mover esa cámara desde fuera. Ahora `orbitForView` traduce, `ModelSceneControls.setOrbit` aplica, y el visor mueve la cámara del modelo con la vista que el plan calcula en cada fotograma: se ve la geometría girar hacia la vista de llegada mientras la fotografía anterior se desvanece encima. Dos detalles que un signo equivocado arruina: el polar se mide desde el cenit, así que mirar arriba lo reduce —invertirlo pone la cámara bajo el suelo del modelo—, y nunca queda exactamente en el cenit o el nadir, donde el vector de arriba de la cámara es indefinido y la imagen da un salto de media vuelta al terminar. Se pregunta por la transición efectiva y no por la que pidió el autor: con «prefers-reduced-motion» activa no se mueve nada, porque ése es el movimiento que esa preferencia pide no hacer."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

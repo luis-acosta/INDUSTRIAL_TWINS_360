@@ -54,6 +54,21 @@ export interface ModelSceneControls {
   setVisibility(nodeName: string, visible: boolean): boolean;
   /** Nombres de las animaciones disponibles, para poder explicar un fallo. */
   animationNames(): readonly string[];
+  /**
+   * Coloca la cámara sin tocar el objetivo ni la distancia (C10).
+   *
+   * La usa la transición entre escenas para mover la cámara del modelo durante
+   * el cambio: así el visitante ve girar la geometría mientras la fotografía de
+   * la escena anterior se desvanece encima, que es lo que el ajuste «usar
+   * geometría de fondo» prometía y no hacía —el modelo se quedaba quieto—.
+   *
+   * No mueve el objetivo ni la distancia a propósito: son de la escena de
+   * destino, y cambiarlos durante la transición acercaría o alejaría el modelo
+   * sin que nadie lo hubiera pedido.
+   */
+  setOrbit(orbit: { readonly azimuth: number; readonly polar: number; readonly fov: number }): void;
+  /** Vista actual, para poder partir de ella. `null` si la cámara no está lista. */
+  currentView(): ModelCameraState | null;
 }
 
 export interface ModelSceneProps {
@@ -251,6 +266,13 @@ export function ModelScene({
         return true;
       },
       animationNames: () => animations.map((clip) => clip.name),
+      setOrbit: (orbit) => {
+        const controller = controllerRef.current;
+        if (controller === null) return;
+        controller.setState(orbit);
+        requestFrame();
+      },
+      currentView: () => controllerRef.current?.getState() ?? null,
     };
 
     onControls(controls);

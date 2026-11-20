@@ -4,6 +4,8 @@ import {
   effectiveTransition,
   evaluateTransition,
   INSTANT_TRANSITION,
+  movesGeometry,
+  orbitForView,
   planTransition,
   resolveEntryView,
   type TransitionTarget,
@@ -518,5 +520,65 @@ describe('subconjunto compatible con VR', () => {
     // texto de un par de milímetros a dos metros.
     expect(isPanelReadable(DEFAULT_VR_PANEL, 13, 1200)).toBe(false);
     expect(isPanelReadable(DEFAULT_VR_PANEL, 32, 1200)).toBe(true);
+  });
+});
+
+describe('fondo de geometría (C10)', () => {
+  it('traduce la vista de panorámica a órbita del modelo', () => {
+    // TEST-TRG-001: el recorrido describe las vistas en yaw/pitch y una escena
+    // de modelo tiene una cámara que orbita. Sin esta traducción, el ajuste
+    // «usar geometría de fondo» sólo evitaba la degradación a fundido y el
+    // modelo se quedaba quieto: lo que prometía evitar.
+    const orbit = orbitForView(
+      { yaw: 1.2, pitch: 0, fov: 70 },
+      { azimuth: 0, polar: Math.PI / 2, fov: 60 },
+    );
+
+    expect(orbit.azimuth).toBeCloseTo(1.2, 6);
+    // Pitch cero es mirar al horizonte: medio arco desde el cenit.
+    expect(orbit.polar).toBeCloseTo(Math.PI / 2, 6);
+    expect(orbit.fov).toBe(70);
+  });
+
+  it('mirar arriba reduce el polar y mirar abajo lo aumenta', () => {
+    // TEST-TRG-002: es el signo que, invertido, pone la cámara bajo el suelo
+    // del modelo y termina la transición mirando el envés de la geometría.
+    const up = orbitForView(
+      { yaw: 0, pitch: 0.6, fov: 70 },
+      { azimuth: 0, polar: Math.PI / 2, fov: 60 },
+    );
+    const down = orbitForView(
+      { yaw: 0, pitch: -0.6, fov: 70 },
+      { azimuth: 0, polar: Math.PI / 2, fov: 60 },
+    );
+
+    expect(up.polar).toBeLessThan(Math.PI / 2);
+    expect(down.polar).toBeGreaterThan(Math.PI / 2);
+  });
+
+  it('no deja la cámara exactamente en el cenit ni en el nadir', () => {
+    // TEST-TRG-003: ahí el vector de arriba de la cámara queda indefinido y la
+    // imagen da un salto de media vuelta justo al terminar la transición.
+    const zenith = orbitForView(
+      { yaw: 0, pitch: Math.PI / 2, fov: 70 },
+      { azimuth: 0, polar: Math.PI / 2, fov: 60 },
+    );
+    const nadir = orbitForView(
+      { yaw: 0, pitch: -Math.PI / 2, fov: 70 },
+      { azimuth: 0, polar: Math.PI / 2, fov: 60 },
+    );
+
+    expect(zenith.polar).toBeGreaterThan(0);
+    expect(nadir.polar).toBeLessThan(Math.PI);
+  });
+
+  it('sólo mueve la geometría cuando la transición efectiva lo conserva', () => {
+    // TEST-TRG-004: se pregunta por la transición **efectiva** y no por la que
+    // pidió el autor. Con `prefers-reduced-motion` activa la transición queda
+    // en corte, y mover la cámara del modelo sería justo el movimiento que esa
+    // preferencia pide no hacer.
+    expect(movesGeometry({ kind: 'zoomThrough', durationMs: 700, useGeometry: true })).toBe(true);
+    expect(movesGeometry({ kind: 'fade', durationMs: 700, useGeometry: false })).toBe(false);
+    expect(movesGeometry({ kind: 'cut', durationMs: 0, useGeometry: true })).toBe(false);
   });
 });

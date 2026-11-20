@@ -237,3 +237,56 @@ export function effectiveTransition(
   }
   return requested;
 }
+
+/* ------------------------------------------------------------------ *
+ * Fondo de geometría (C10)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Vista orbital que corresponde a una vista de panorámica.
+ *
+ * Es la conversión que hacía falta para que `useGeometry` significara algo. El
+ * recorrido describe las vistas en yaw/pitch —lo natural dentro de una esfera—
+ * y una escena de modelo tiene una cámara que orbita alrededor de un punto. Sin
+ * traducir, el ajuste del editor sólo evitaba que la transición degradara a
+ * fundido: el modelo se quedaba quieto detrás de una fotografía que se
+ * desvanecía, que es exactamente lo que el ajuste prometía evitar.
+ *
+ * El azimut es el yaw. La elevación polar se mide desde el cenit, de modo que
+ * un pitch de cero —mirando al horizonte— es media vuelta de π, y mirar hacia
+ * arriba *reduce* el polar. Confundir el signo aquí pone la cámara bajo el
+ * suelo del modelo, y entonces la transición termina mirando el envés de la
+ * geometría.
+ *
+ * El objetivo y la distancia se conservan: son de la escena de destino y no de
+ * la vista de la que se viene. Moverlos durante la transición haría que el
+ * modelo se acercara o se alejara sin que nadie lo hubiera pedido.
+ */
+export function orbitForView(
+  view: CameraView,
+  current: { readonly azimuth: number; readonly polar: number; readonly fov: number },
+): { readonly azimuth: number; readonly polar: number; readonly fov: number } {
+  const polar = Math.PI / 2 - view.pitch;
+  // Nunca exactamente en el cenit o el nadir: ahí el vector de arriba de la
+  // cámara queda indefinido y la imagen da un salto de media vuelta.
+  const clamped = Math.min(Math.PI - 0.01, Math.max(0.01, polar));
+
+  return {
+    azimuth: view.yaw,
+    polar: clamped,
+    // El FOV de la vista se respeta si la transición lo mueve; si no, el de la
+    // cámara, para no abrir el campo de visión sin motivo.
+    fov: Number.isFinite(view.fov) ? view.fov : current.fov,
+  };
+}
+
+/**
+ * `true` si esta transición debe mover la cámara de la geometría de destino.
+ *
+ * Reúne las dos condiciones en un sitio: que el autor lo haya pedido y que la
+ * transición efectiva no lo haya degradado. Preguntar sólo por el ajuste del
+ * autor haría que la cámara se moviera también con `prefers-reduced-motion`
+ * activo, que es justo el movimiento que esa preferencia pide no hacer.
+ */
+export const movesGeometry = (effective: Transition): boolean =>
+  effective.useGeometry && effective.kind !== 'cut';

@@ -43,6 +43,16 @@ export interface SceneTransitionRun {
   /** Imagen de la escena de la que se sale. */
   readonly snapshot: string;
   readonly state: TransitionState;
+  /**
+   * Transición **efectiva**, ya degradada si procedía (C10).
+   *
+   * Va en el resultado porque quien dibuja la escena de destino necesita saber
+   * si debe mover su geometría, y la degradación ocurre aquí dentro: con la
+   * transición que pidió el autor, la cámara del modelo se movería también con
+   * `prefers-reduced-motion` activa, que es el movimiento que esa preferencia
+   * pide no hacer.
+   */
+  readonly transition: Transition;
 }
 
 export interface SceneTransition {
@@ -134,7 +144,7 @@ export function useSceneTransition(): SceneTransition {
       return;
     }
 
-    setRun({ snapshot, state });
+    setRun({ snapshot, state, transition: plan.transition });
     frameRef.current = requestAnimationFrame(tick);
   }, [stop]);
 
@@ -158,7 +168,7 @@ export function useSceneTransition(): SceneTransition {
       snapshotRef.current = snapshot;
       startedRef.current = performance.now();
 
-      setRun({ snapshot, state: evaluateTransition(plan, 0) });
+      setRun({ snapshot, state: evaluateTransition(plan, 0), transition: effective });
       frameRef.current = requestAnimationFrame(tick);
     },
     [stop, tick],
