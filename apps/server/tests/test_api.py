@@ -470,3 +470,201 @@ class TestHistorico:
         )
 
         assert response.status_code == 503
+
+
+class TestRevisionesApi:
+    """Flujo de revisión por HTTP (X16, X19)."""
+
+    @pytest.fixture()
+    def app_client(self, audit: AuditLog) -> TestClient:
+        return TestClient(create_app(mappings={}, reader=None, audit=audit))
+
+    @staticmethod
+    def _headers(user: str, role: str) -> dict[str, str]:
+        return {"x-usuario": user, "x-rol": role, "x-planta": "norte"}
+
+    def _crear(self, client: TestClient, *, sections: dict[str, str] | None = None) -> str:
+        response = client.post(
+            "/api/v1/revisions",
+            headers=self._headers("tecnico", "editor"),
+            json={
+                "projectId": "planta-norte",
+                "summary": "Rótulos de la sala de bombas",
+                "sections": sections or {"scene:1": "a1"},
+                "contentDigest": "d1",
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["revisionId"]
+
+    def test_el_flujo_completo_por_http(self, app_client: TestClient) -> None:
+        # TEST-API-026: la API es la que usarán las integraciones del cliente
+        # (X19); el flujo tiene que poder recorrerse sin tocar el almacén.
+        revision_id = self._crear(app_client)
+
+        enviar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("tecnico", "editor"),
+            json={"action": "submit"},
+        )
+        assert enviar.json()["state"] == "in_review"
+
+        aprobar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("jefa", "reviewer"),
+            json={"action": "approve", "comment": "Conforme"},
+        )
+        assert aprobar.json()["state"] == "approved"
+        assert aprobar.json()["approvedBy"] == "jefa"
+
+        publicar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("jefa", "reviewer"),
+            json={"action": "publish"},
+        )
+        assert publicar.json()["state"] == "published"
+
+    def test_el_autor_que_puede_aprobar_recibe_403(self, app_client: TestClient) -> None:
+        # TEST-API-027: la separación de funciones se aplica en el servidor y
+        # se distingue del fallo de permisos por el código del cuerpo, no sólo
+        # por el texto.
+        response = app_client.post(
+            "/api/v1/revisions",
+            headers=self._headers("jefa", "administrator"),
+            json={
+                "projectId": "planta-norte",
+                "summary": "Cambio propio",
+                "sections": {},
+                "contentDigest": "d",
+            },
+        )
+        revision_id = response.json()["revisionId"]
+
+        app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("jefa", "administrator"),
+            json={"action": "submit"},
+        )
+        aprobar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("jefa", "administrator"),
+            json={"action": "approve"},
+        )
+
+        assert aprobar.status_code == 403
+        assert aprobar.json()["detail"]["code"] == "separation_of_duties"
+
+    def test_una_transicion_imposible_devuelve_409(self, app_client: TestClient) -> None:
+        # TEST-API-028: 409 le dice al cliente «vuelve a leer el estado»; un
+        # 400 le haría leer el mensaje para decidir, que es lo que ningún
+        # cliente hace bien.
+        revision_id = self._crear(app_client)
+        aprobar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("jefa", "reviewer"),
+            json={"action": "approve"},
+        )
+        assert aprobar.status_code == 409
+        assert aprobar.json()["detail"]["code"] == "invalid_transition"
+
+    def test_un_editor_no_puede_aprobar(self, app_client: TestClient) -> None:
+        # TEST-API-029: el permiso se comprueba aquí y no en la interfaz.
+        revision_id = self._crear(app_client)
+        app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("tecnico", "editor"),
+            json={"action": "submit"},
+        )
+        aprobar = app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("otro", "editor"),
+            json={"action": "approve"},
+        )
+        assert aprobar.status_code == 403
+        assert aprobar.json()["detail"]["code"] == "permission_denied"
+
+    def test_la_cola_se_consulta_por_proyecto_y_estado(self, app_client: TestClient) -> None:
+        # TEST-API-030: el revisor quiere su cola, no todos los borradores de
+        # la planta.
+        pendiente = self._crear(app_client)
+        app_client.post(
+            f"/api/v1/revisions/{pendiente}/actions",
+            headers=self._headers("tecnico", "editor"),
+            json={"action": "submit"},
+        )
+        self._crear(app_client)
+
+        cola = app_client.get(
+            "/api/v1/revisions",
+            headers=self._headers("jefa", "reviewer"),
+            params={"projectId": "planta-norte", "state": "in_review"},
+        )
+        assert cola.status_code == 200
+        assert [r["revisionId"] for r in cola.json()["revisions"]] == [pendiente]
+
+    def test_una_revision_inexistente_devuelve_404(self, app_client: TestClient) -> None:
+        # TEST-API-031: distinguible de «lo pediste mal».
+        response = app_client.post(
+            "/api/v1/revisions/00000000-0000-0000-0000-000000000000/actions",
+            headers=self._headers("jefa", "reviewer"),
+            json={"action": "approve"},
+        )
+        assert response.status_code == 404
+
+    def test_sin_identidad_no_se_abre_ninguna_revision(self, app_client: TestClient) -> None:
+        # TEST-API-032: la identidad llega por cabeceras en esta versión, pero
+        # su ausencia no puede significar «anónimo con permisos».
+        response = app_client.post(
+            "/api/v1/revisions",
+            json={"projectId": "p", "summary": "s", "sections": {}, "contentDigest": "d"},
+        )
+        assert response.status_code in (401, 403)
+
+    def test_las_transiciones_quedan_en_la_auditoria(self, app_client: TestClient) -> None:
+        # TEST-API-033: «quién aprobó esto» se responde con el registro, y el
+        # registro se lee por la API con su permiso.
+        revision_id = self._crear(app_client)
+        app_client.post(
+            f"/api/v1/revisions/{revision_id}/actions",
+            headers=self._headers("tecnico", "editor"),
+            json={"action": "submit"},
+        )
+
+        # Sin «x-planta»: el registro abarca toda la instalación y una
+        # concesión limitada a una planta no puede leerlo, que se comprueba en
+        # su propia prueba.
+        registro = app_client.get(
+            "/api/v1/audit", headers={"x-usuario": "jefa", "x-rol": "administrator"}
+        )
+        assert registro.status_code == 200
+        acciones = [event["action"] for event in registro.json()["events"]]
+        assert "revision.created" in acciones
+        assert "revision.submitted" in acciones
+        assert registro.json()["chainValid"] is True
+
+    def test_una_concesion_con_ambito_no_lee_el_registro_global(self, app_client: TestClient) -> None:
+        # TEST-API-034: los eventos del registro no llevan planta, de modo que
+        # no se puede recortar por ámbito. Servirlo a quien sólo tiene una
+        # planta concedida le mostraría lo que ocurre en las demás, así que se
+        # deniega y se dice por qué. Antes se denegaba también, pero con un
+        # motivo que hablaba de un recurso que la petición no tenía.
+        response = app_client.get(
+            "/api/v1/audit", headers=self._headers("jefa", "administrator")
+        )
+
+        assert response.status_code == 403
+        assert "ámbito" in response.json()["message"]
+
+    def test_un_revisor_con_ambito_si_lista_la_cola(self, app_client: TestClient) -> None:
+        # TEST-API-035: es el caso normal en una instalación con varias
+        # plantas, y antes quedaba denegado: la comprobación de ámbito se hacía
+        # contra un recurso vacío, que ninguna concesión con ámbito cubre.
+        self._crear(app_client)
+        cola = app_client.get(
+            "/api/v1/revisions",
+            headers=self._headers("jefa", "reviewer"),
+            params={"projectId": "planta-norte"},
+        )
+
+        assert cola.status_code == 200
+        assert len(cola.json()["revisions"]) == 1

@@ -27,9 +27,19 @@ from pydantic import BaseModel, Field
 
 from .access_model import MODEL_FINGERPRINT, OPERATIONS
 from .audit import AuditEvent, AuditLog
-from .security import AccessError, Grant, Resource, Scope, can_perform, effective_operations
+from .security import (
+    AccessError,
+    Grant,
+    Resource,
+    Scope,
+    can_perform,
+    can_perform_anywhere,
+    effective_operations,
+    is_global,
+)
 from .config import load_mappings, load_settings
 from .influx import InfluxReader
+from .review import ReviewError, ReviewStore, Revision
 from .telemetry import (
     MappingSpec,
     TelemetryReader,
@@ -74,6 +84,52 @@ class HistoryOut(BaseModel):
     errorMessage: str | None = None
 
 
+class RevisionIn(BaseModel):
+    """Borrador que abre un autor.
+
+    Se piden los resúmenes por sección y no el proyecto: el servicio coordina
+    la revisión y no guarda el trabajo de nadie, que es el diseño local-first
+    del producto. Con los resúmenes basta para detectar solapes (X17).
+    """
+
+    projectId: str = Field(min_length=1, max_length=64)
+    summary: str = Field(min_length=1, max_length=2000)
+    sections: dict[str, str] = Field(default_factory=dict)
+    contentDigest: str = Field(min_length=1, max_length=128)
+
+
+class RevisionActionIn(BaseModel):
+    """Transición pedida sobre una revisión."""
+
+    action: str = Field(min_length=1, max_length=32)
+    comment: str = Field(default="", max_length=2000)
+
+
+class ConflictOut(BaseModel):
+    """Sección que dos revisiones cambiaron de forma distinta."""
+
+    section: str
+    base: str | None
+    incoming: str
+    published: str | None
+
+
+class RevisionOut(BaseModel):
+    """Estado de una revisión."""
+
+    revisionId: str
+    projectId: str
+    authorId: str
+    state: str
+    summary: str
+    baseRevisionId: str | None
+    approvedBy: str | None
+    comments: list[str]
+    createdAt: str
+    updatedAt: str
+    conflicts: list[ConflictOut] = Field(default_factory=list)
+
+
 class SampleOut(BaseModel):
     """Lectura tal como la recibe el visor.
 
@@ -111,6 +167,7 @@ def create_app(
     mappings: dict[str, MappingSpec] | None = None,
     reader: TelemetryReader | None = None,
     audit: AuditLog | None = None,
+    reviews: ReviewStore | None = None,
     environment: str = "test",
     allowed_origins: tuple[str, ...] = (),
 ) -> FastAPI:
@@ -145,6 +202,7 @@ def create_app(
         known_mappings = mappings or {}
 
     audit_log = audit or AuditLog()
+    review_store = reviews or ReviewStore(audit_log)
 
     app = FastAPI(
         title="INDUSTRIAL TWINS 360",
@@ -399,9 +457,22 @@ def create_app(
         grants: list[Grant] = Depends(current_grants),
     ) -> dict[str, object]:
         """Lee el registro de auditoría. Exige el permiso correspondiente."""
-        decision = can_perform(operation="audit.read", grants=grants)
+        decision = can_perform_anywhere(operation="audit.read", grants=grants)
         if not decision.allowed:
             raise AccessError(decision.reason, operation="audit.read")
+
+        # El registro es de toda la instalación y sus eventos no llevan planta,
+        # de modo que no se puede recortar por ámbito. Servirlo a quien sólo
+        # tiene concedida una planta le mostraría lo que pasa en las demás, así
+        # que se deniega con el motivo en lugar de devolver de más. Recortarlo
+        # exige que los eventos lleven ámbito, que es trabajo del propio
+        # registro y no de esta ruta.
+        if not any(is_global(grant) for grant in grants):
+            raise AccessError(
+                "El registro de auditoría abarca toda la instalación: su concesión "
+                "está limitada a un ámbito y todavía no se puede recortar el registro por ámbito",
+                operation="audit.read",
+            )
 
         events = audit_log.events[-max(1, min(limit, 1000)) :]
         valid, broken_at = audit_log.verify_chain()
@@ -424,6 +495,81 @@ def create_app(
             "chainValid": valid,
             "chainBrokenAt": broken_at,
         }
+
+    @app.post(f"{API_PREFIX}/revisions", response_model=RevisionOut, tags=["revisión"])
+    async def create_revision(
+        body: RevisionIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> RevisionOut:
+        """Abre un borrador sobre la última revisión publicada (X16)."""
+        actor = grants[0].user_id
+        try:
+            revision = review_store.create(
+                project_id=body.projectId,
+                author_id=actor,
+                summary=body.summary,
+                sections=dict(body.sections),
+                content_digest=body.contentDigest,
+                allowed_operations=effective_operations(grants),
+            )
+        except ReviewError as error:
+            raise _review_http(error) from error
+        return _revision_out(revision, review_store)
+
+    @app.get(f"{API_PREFIX}/revisions", tags=["revisión"])
+    async def list_revisions(
+        projectId: str = Query(min_length=1, max_length=64),
+        state: str | None = Query(default=None, max_length=32),
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Cola de revisión de un proyecto."""
+        # Sin recurso: la cola es de un proyecto, y este servicio no sabe a qué
+        # planta pertenece cada proyecto, de modo que no hay ámbito que
+        # comprobar. Comprobarlo contra un recurso vacío denegaría a todo
+        # usuario con ámbito, que son casi todos.
+        decision = can_perform_anywhere(operation="project.read", grants=grants)
+        if not decision.allowed:
+            raise AccessError(decision.reason, operation="project.read")
+
+        revisions = review_store.list_for_project(projectId, state=state)
+        return {
+            "revisions": [_revision_out(revision, review_store).model_dump() for revision in revisions],
+            "published": (
+                None
+                if review_store.published_revision(projectId) is None
+                else review_store.published_revision(projectId).revision_id  # type: ignore[union-attr]
+            ),
+        }
+
+    @app.post(
+        f"{API_PREFIX}/revisions/{{revision_id}}/actions",
+        response_model=RevisionOut,
+        tags=["revisión"],
+    )
+    async def act_on_revision(
+        revision_id: str,
+        body: RevisionActionIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> RevisionOut:
+        """Aplica una transición: enviar, aprobar, pedir cambios, publicar o retirar.
+
+        Una sola ruta para las cinco acciones porque las cinco comparten
+        exactamente las mismas comprobaciones —estado, permiso y separación de
+        funciones— y repartirlas en cinco rutas es la forma de que una de ellas
+        acabe sin una de las tres.
+        """
+        actor = grants[0].user_id
+        try:
+            revision = review_store.act(
+                revision_id=revision_id,
+                action=body.action,
+                actor_id=actor,
+                allowed_operations=effective_operations(grants),
+                comment=body.comment,
+            )
+        except ReviewError as error:
+            raise _review_http(error) from error
+        return _revision_out(revision, review_store)
 
     @app.post(f"{API_PREFIX}/access/check", tags=["acceso"])
     async def check_access(
@@ -455,6 +601,58 @@ def create_app(
     app.state.audit_log = audit_log
     app.state.mappings = known_mappings
     return app
+
+
+def _revision_out(revision: Revision, store: ReviewStore) -> RevisionOut:
+    """Pasa una revisión a la respuesta, con sus conflictos al día.
+
+    Los conflictos se calculan al responder y no al guardar: lo publicado puede
+    haber cambiado desde entonces, y un conflicto caducado es peor que ninguno
+    porque manda a resolver algo que ya no existe.
+    """
+    return RevisionOut(
+        revisionId=revision.revision_id,
+        projectId=revision.project_id,
+        authorId=revision.author_id,
+        state=revision.state,
+        summary=revision.summary,
+        baseRevisionId=revision.base_revision_id,
+        approvedBy=revision.approved_by,
+        comments=list(revision.comments),
+        createdAt=revision.created_at.isoformat(),
+        updatedAt=revision.updated_at.isoformat(),
+        conflicts=[
+            ConflictOut(
+                section=conflict.section,
+                base=conflict.base,
+                incoming=conflict.incoming,
+                published=conflict.published,
+            )
+            for conflict in store.conflicts_for(revision)
+        ],
+    )
+
+
+def _review_http(error: ReviewError) -> HTTPException:
+    """Traduce el motivo del rechazo al código HTTP que le corresponde.
+
+    La distinción no es cosmética: un 409 le dice al cliente «vuelve a leer y
+    reintenta», y un 403 «no insistas». Devolver 400 para todo obliga a leer el
+    texto del mensaje para decidir, que es lo que ningún cliente hace bien.
+    """
+    codes = {
+        "not_found": status.HTTP_404_NOT_FOUND,
+        "permission_denied": status.HTTP_403_FORBIDDEN,
+        "separation_of_duties": status.HTTP_403_FORBIDDEN,
+        "invalid_transition": status.HTTP_409_CONFLICT,
+        "conflict": status.HTTP_409_CONFLICT,
+        "summary_required": status.HTTP_400_BAD_REQUEST,
+        "unknown_action": status.HTTP_400_BAD_REQUEST,
+    }
+    return HTTPException(
+        status_code=codes.get(error.code, status.HTTP_400_BAD_REQUEST),
+        detail={"code": error.code, "message": error.reason},
+    )
 
 
 def _parse_instant(raw: str, field: str) -> datetime:

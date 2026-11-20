@@ -162,6 +162,57 @@ def can_perform(
     return Decision(False, "Ninguno de los roles del usuario permite esta operación")
 
 
+def can_perform_anywhere(
+    *,
+    operation: str,
+    grants: list[Grant],
+    now: datetime | None = None,
+) -> Decision:
+    """Decide una operación que no es sobre un recurso concreto.
+
+    Hace falta porque ``can_perform`` sin recurso compara el ámbito de la
+    concesión con un recurso vacío, y entonces **toda** concesión con ámbito
+    queda fuera: un revisor con permiso sobre la planta norte —el caso normal
+    en una instalación con varias plantas— no podía listar la cola de revisión,
+    y el motivo que recibía («el recurso queda fuera del ámbito concedido»)
+    hablaba de un recurso que no existía en la petición.
+
+    Esta función responde a la pregunta que de verdad se hace una ruta así:
+    ¿alguna concesión activa de este usuario permite la operación en algún
+    ámbito? Lo que **no** hace es filtrar por ámbito lo que se devuelva: eso es
+    responsabilidad de la ruta, y donde no se pueda filtrar hay que denegar en
+    lugar de devolver de más.
+    """
+    if operation not in OPERATIONS:
+        return Decision(False, f"Operación desconocida: {operation}")
+
+    moment = now or datetime.now(timezone.utc)
+    if not grants:
+        return Decision(False, "El usuario no tiene ninguna concesión de acceso")
+
+    active = [grant for grant in grants if is_active(grant, moment)]
+    if not active:
+        return Decision(False, "Todas las concesiones del usuario han caducado")
+
+    for grant in active:
+        permissions = ROLE_PERMISSIONS.get(grant.role)
+        if permissions is not None and operation in permissions:
+            return Decision(True, f"Concedido por el rol {grant.role}", via_role=grant.role)
+
+    return Decision(False, "Ninguno de los roles del usuario permite esta operación")
+
+
+def is_global(grant: Grant) -> bool:
+    """`True` si la concesión no está limitada a planta, unidad ni área.
+
+    Lo usan las rutas que devuelven información de toda la instalación y no
+    pueden filtrarla por ámbito, como el registro de auditoría: sus eventos no
+    llevan planta, de modo que servirlos a un usuario con ámbito de una sola
+    planta le mostraría lo que ocurre en las demás.
+    """
+    return grant.scope.plant_id is None and grant.scope.unit_id is None and grant.scope.area_id is None
+
+
 def require(
     *,
     operation: str,
