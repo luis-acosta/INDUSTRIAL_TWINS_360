@@ -57,9 +57,27 @@ bien; crearlos desde cero requiere editar el proyecto por otra vía.
 
 No está. Los *skins* se aplican si vienen en el proyecto.
 
-### Correo y móvil (P07, P09)
+### Correo (P07)
 
-Sin empezar.
+Sin empezar. No hay notificaciones por correo electrónico.
+
+### Notas desde el móvil: identificación sin autenticación (P09)
+
+Las notas del proyecto se pueden consultar y comentar desde un teléfono: el
+recorrido publicado las pide al servicio, que las sirve recortadas por la
+concesión de quien pregunta —incluido el ámbito por categoría—. Desde el móvil
+se comenta y se mueve el estado de trabajo; **no** se resuelve ni se archiva,
+porque resolver exige escribir cómo se resolvió y eso es del responsable del
+proyecto.
+
+La identidad llega por cabeceras y **no se valida**, igual que en el resto del
+servicio: el dispositivo guarda el identificador que la persona escribe y la
+pantalla lo dice con esas palabras. Hasta que la integración con el directorio
+del cliente esté hecha, esto sirve en la red de la planta y no fuera de ella.
+
+Las notas que el servicio sirve son la copia que le manda el editor al abrir el
+proyecto y al cambiar algo: el servicio no lee archivos de proyecto. Si el
+editor no está abierto, lo que el móvil ve es la última copia publicada.
 
 ---
 

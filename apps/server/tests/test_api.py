@@ -714,3 +714,158 @@ class TestAmbitosDelUsuario:
         assert "project.update" in body["operations"]
         assert body["total"] > 0
         assert "aviso" in body
+
+
+class TestNotasMoviles:
+    """Notas servidas a un cliente móvil (P09).
+
+    Lo que se comprueba aquí es la mitad que no está en `test_notes.py`: que el
+    recorte y los permisos se apliquen **en la ruta**, con la identidad que
+    llega en la petición. Un almacén correcto detrás de una ruta que no le pasa
+    el ámbito protege lo mismo que nada.
+    """
+
+    @staticmethod
+    def _cargar(client: TestClient) -> None:
+        response = client.put(
+            "/api/v1/notes",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+            json={
+                "projectId": "planta-norte",
+                "notes": [
+                    {
+                        "id": "n1",
+                        "title": "Fuga en la brida",
+                        "categoryId": "safety",
+                        "status": "open",
+                        "updatedAt": "2026-03-01T09:00:00Z",
+                    },
+                    {
+                        "id": "n2",
+                        "title": "Rodamiento con ruido",
+                        "categoryId": "maintenance",
+                        "status": "open",
+                        "updatedAt": "2026-03-01T09:00:00Z",
+                    },
+                ],
+            },
+        )
+        assert response.status_code == 200
+
+    def test_lista_las_notas_del_proyecto(self, client: TestClient) -> None:
+        # TEST-API-N09-001
+        self._cargar(client)
+
+        response = client.get(
+            "/api/v1/notes",
+            params={"projectId": "planta-norte"},
+            headers={"x-usuario": "tecnico.ruiz", "x-rol": "editor"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert {note["id"] for note in body["notes"]} == {"n1", "n2"}
+        # Los estados que el cliente puede poner vienen del servicio: si la
+        # interfaz los repitiera, acabaría ofreciendo uno que el servicio
+        # rechaza.
+        assert body["fieldStatuses"] == ["open", "inProgress", "blocked"]
+
+    def test_la_cabecera_de_categorias_recorta_la_lista(self, client: TestClient) -> None:
+        # TEST-API-N09-002: es el control que esta etapa traslada al servidor.
+        # Con el recorte sólo en la interfaz, esta misma petición devolvía las
+        # notas internas de mantenimiento a un contratista.
+        self._cargar(client)
+
+        response = client.get(
+            "/api/v1/notes",
+            params={"projectId": "planta-norte"},
+            headers={
+                "x-usuario": "contrata.perez",
+                "x-rol": "editor",
+                "x-categorias-nota": "safety",
+            },
+        )
+
+        assert [note["id"] for note in response.json()["notes"]] == ["n1"]
+
+    def test_comentar_queda_en_la_auditoria(
+        self, client: TestClient, audit: AuditLog
+    ) -> None:
+        # TEST-API-N09-003: participar desde un teléfono no puede ser la vía
+        # por la que algo cambia sin rastro.
+        self._cargar(client)
+
+        response = client.post(
+            "/api/v1/notes/n1/comments",
+            headers={"x-usuario": "tecnico.ruiz", "x-rol": "editor"},
+            json={"body": "Sigue goteando", "authorName": "Ruiz"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["note"]["comments"][0]["body"] == "Sigue goteando"
+        assert any(event.action == "note.comment" for event in audit.events)
+
+    def test_una_nota_que_no_se_puede_ver_responde_404(self, client: TestClient) -> None:
+        # TEST-API-N09-004: el mismo código que una nota inexistente.
+        # Distinguirlos diría al contratista que el proyecto tiene notas de
+        # mantenimiento, que es parte de lo que el ámbito oculta.
+        self._cargar(client)
+
+        response = client.post(
+            "/api/v1/notes/n2/comments",
+            headers={
+                "x-usuario": "contrata.perez",
+                "x-rol": "editor",
+                "x-categorias-nota": "safety",
+            },
+            json={"body": "visto"},
+        )
+
+        assert response.status_code == 404
+
+    def test_resolver_desde_el_movil_se_rechaza(self, client: TestClient) -> None:
+        # TEST-API-N09-005: resolver exige escribir cómo se resolvió, y eso no
+        # cabe en esta superficie.
+        self._cargar(client)
+
+        response = client.post(
+            "/api/v1/notes/n1/status",
+            headers={"x-usuario": "tecnico.ruiz", "x-rol": "editor"},
+            json={"status": "resolved"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "STATUS_NOT_ALLOWED"
+
+    def test_un_lector_no_puede_comentar(self, client: TestClient) -> None:
+        # TEST-API-N09-006
+        self._cargar(client)
+
+        response = client.post(
+            "/api/v1/notes/n1/comments",
+            headers={"x-usuario": "visita.lopez", "x-rol": "viewer"},
+            json={"body": "una cosa"},
+        )
+
+        assert response.status_code == 403
+
+    def test_cargar_notas_exige_poder_actualizar_el_proyecto(
+        self, client: TestClient
+    ) -> None:
+        # TEST-API-N09-007: sustituye lo que el servicio sirve. Con `note.read`
+        # bastando, cualquiera que pueda leer podría vaciar la lista de los
+        # demás.
+        response = client.put(
+            "/api/v1/notes",
+            headers={"x-usuario": "visita.lopez", "x-rol": "viewer"},
+            json={"projectId": "planta-norte", "notes": []},
+        )
+
+        assert response.status_code == 403
+
+    def test_sin_identidad_no_se_listan(self, client: TestClient) -> None:
+        # TEST-API-N09-008: la superficie del visor publicado es sólo
+        # telemetría de lectura; las notas no están en ella.
+        response = client.get("/api/v1/notes", params={"projectId": "planta-norte"})
+
+        assert response.status_code == 403

@@ -113,6 +113,7 @@ import { TelemetryModule } from './modules/TelemetryModule';
 import { ReviewModule } from './modules/ReviewModule';
 import { HttpReviewClient } from './review/review-client';
 import { UNRESTRICTED, fetchAccessProfile, type AccessProfile } from './access/access-client';
+import { notesFingerprint, syncNotes } from './notes/notes-sync';
 import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModule';
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
@@ -367,6 +368,48 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
   const [autoConnect, setAutoConnect] = useState(false);
 
   const { push } = useToast();
+
+  /**
+   * Publica las notas en el servicio para que se puedan consultar desde un
+   * móvil (P09).
+   *
+   * Se manda al abrir el proyecto y cuando cambia algo que el servicio sirve,
+   * no en cada guardado: el proyecto se guarda en cada tecla, y mandar las
+   * notas en cada una convertiría el servicio en el cuello de botella del
+   * editor. Un fallo se cuenta una vez y no bloquea nada: que la planta no
+   * pueda consultarlas desde el móvil es un problema; que el editor se quede
+   * esperando a un servicio caído es peor.
+   */
+  const lastNotesFingerprint = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (serviceEndpoint === null) return undefined;
+
+    const fingerprint = notesFingerprint(store.project.notes);
+    if (lastNotesFingerprint.current === fingerprint) return undefined;
+
+    const timer = globalThis.setTimeout(() => {
+      lastNotesFingerprint.current = fingerprint;
+      void syncNotes(
+        serviceEndpoint,
+        reviewIdentity,
+        store.project.id,
+        store.project.notes,
+      ).then((result) => {
+        if (result.ok) return;
+        /* Se avisa una sola vez por fallo y con lo que implica, no con el
+           código: el autor necesita saber que su equipo de planta no verá las
+           notas hasta que el servicio responda. */
+        push({
+          tone: 'warning',
+          title: 'Las notas no se publicaron en el servicio',
+          description: `${result.error.message}${result.error.recovery === undefined ? '' : ` ${result.error.recovery}`}`,
+        });
+      });
+    }, 1500);
+
+    return () => globalThis.clearTimeout(timer);
+  }, [serviceEndpoint, store.project.notes, store.project.id, reviewIdentity, push]);
 
   /* ---------------------------------------------------------------- *
    * Atajos de teclado

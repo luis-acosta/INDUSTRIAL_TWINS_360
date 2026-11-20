@@ -73,6 +73,8 @@ import {
 import type { LoadedTour } from './manifest';
 import { mediaUrl, mediaUrlIndex } from './manifest';
 import { FieldNotePanel } from './FieldNotePanel';
+import { ProjectNotesPanel } from './ProjectNotesPanel';
+import type { NotesClient, NotesIdentity } from './notes-client';
 import { WindowHost } from './WindowHost';
 import {
   documentWindow,
@@ -120,9 +122,28 @@ export interface TourViewerProps {
    * historial.
    */
   readonly initialHash?: string;
+  /**
+   * Fábrica del cliente de notas del proyecto (P09).
+   *
+   * Opcional porque un recorrido publicado en una intranet abierta, o abierto
+   * desde un paquete sin conexión, no tiene servicio al que preguntar. Sin
+   * ella el botón no aparece: uno que llevase a una lista vacía haría creer que
+   * el proyecto no tiene notas.
+   *
+   * Es una fábrica porque la identidad se pide dentro del panel: en un teléfono
+   * no hay sesión, y exigirla antes de abrirlo dejaría el botón oculto a quien
+   * todavía no se ha identificado, que son todos la primera vez.
+   */
+  readonly notesClient?: ((identity: NotesIdentity) => NotesClient) | null;
+  readonly projectId?: string;
 }
 
-export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element {
+export function TourViewer({
+  tour,
+  initialHash,
+  notesClient,
+  projectId,
+}: TourViewerProps): JSX.Element {
   const manifest = tour.manifest;
   const mediaUrls = useMemo(() => mediaUrlIndex(tour), [tour]);
 
@@ -180,6 +201,7 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
    * ejecutarse cuando aparece o desaparece.
    */
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [projectNotesOpen, setProjectNotesOpen] = useState(false);
   /* Si la sesión inmersiva está presentando, en una referencia: la elección de
      versión de vídeo se hace al abrir la ventana y no puede depender del orden
      en que se declaran los ganchos (V04). */
@@ -1257,6 +1279,22 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
             onClick={() => setNotesOpen(true)}
           />
         </Tooltip>
+        {/* Consultar y participar en las notas del proyecto (P09). Separado de
+            las notas de campo a propósito: aquello crea observaciones sin
+            servicio, esto lee las que el responsable gestiona y exige
+            identidad. */}
+        {notesClient != null && projectId !== undefined && (
+          <Tooltip content="Consultar las notas del proyecto">
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              icon={<IconNote size={15} />}
+              aria-label="Notas del proyecto"
+              onClick={() => setProjectNotesOpen(true)}
+            />
+          </Tooltip>
+        )}
         {/* El botón sólo existe si el equipo puede entrar: un «Entrar en VR»
             que lleva a una pantalla negra no se vuelve a pulsar nunca. */}
         {vr.capabilities?.immersiveVrSupported === true && (
@@ -1529,6 +1567,17 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
         }
         frameOrigins={manifest.frameOrigins ?? []}
       />
+
+      {notesClient != null && projectId !== undefined && (
+        <ProjectNotesPanel
+          open={projectNotesOpen}
+          onClose={() => setProjectNotesOpen(false)}
+          makeClient={notesClient}
+          projectId={projectId}
+          sceneId={scene?.id ?? null}
+          sceneTitle={scene?.title ?? 'esta escena'}
+        />
+      )}
 
       <FieldNotePanel
         open={notesOpen}

@@ -1350,3 +1350,100 @@
   height: 100%;
   display: block;
 }
+
+/* ------------------------------------------------------------------ *
+ * Notas del proyecto en el recorrido (P09)
+ *
+ * Pensado para un pulgar: los objetivos no bajan de 44 px, que es el mínimo
+ * con el que una mano con guante acierta, y la lista ocupa todo el ancho porque
+ * en un teléfono no hay sitio para dos columnas.
+ * ------------------------------------------------------------------ */
+
+.project-notes {
+  display: grid;
+  gap: var(--it-space-3);
+}
+
+.project-notes__filters {
+  display: flex;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.project-notes__empty {
+  margin: 0;
+  color: var(--it-color-text-secondary);
+  font-size: var(--it-text-sm);
+}
+
+.project-notes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--it-space-2);
+  /* Alto acotado y desplazamiento propio: en un teléfono en horizontal, una
+     lista larga empuja el botón de cerrar fuera de la pantalla. */
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.project-notes__item {
+  width: 100%;
+  min-height: 44px;
+  display: grid;
+  gap: var(--it-space-1);
+  text-align: left;
+  padding: var(--it-space-2) var(--it-space-3);
+  background: var(--it-color-surface-raised);
+  border: 1px solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-md);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.project-notes__item:hover {
+  border-color: var(--it-color-border-strong);
+}
+
+.project-notes__title {
+  font-weight: var(--it-weight-semibold);
+  font-size: var(--it-text-sm);
+}
+
+.project-notes__meta {
+  display: flex;
+  gap: var(--it-space-2);
+  flex-wrap: wrap;
+}
+
+.project-notes__detail {
+  display: grid;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  border: 1px solid var(--it-color-border-subtle);
+  border-top: none;
+  border-radius: 0 0 var(--it-radius-md) var(--it-radius-md);
+}
+
+.project-notes__body {
+  margin: 0;
+  font-size: var(--it-text-sm);
+  color: var(--it-color-text-secondary);
+}
+
+.project-notes__comments {
+  margin: 0;
+  padding-left: var(--it-space-4);
+  display: grid;
+  gap: var(--it-space-1);
+  font-size: var(--it-text-sm);
+}
+
+.project-notes__actions {
+  display: flex;
+  gap: var(--it-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}

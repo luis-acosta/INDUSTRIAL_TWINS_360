@@ -24,3 +24,4 @@ export * from './PlanView';
 export * from './WindowHost';
 export * from './InfoWindowBody';
 export * from './SkinRenderer';
+export * from './notes-client';

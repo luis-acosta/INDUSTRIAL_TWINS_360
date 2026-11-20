@@ -40,6 +40,13 @@ from .security import (
 )
 from .config import load_mappings, load_settings
 from .influx import InfluxReader
+from .notes import (
+    AUDIT_ACTION as NOTE_AUDIT_ACTION,
+    FIELD_STATUSES,
+    NoteError,
+    NoteStore,
+    ServedNote,
+)
 from .review import ReviewError, ReviewStore, Revision
 from .telemetry import (
     MappingSpec,
@@ -106,6 +113,43 @@ class RevisionActionIn(BaseModel):
     comment: str = Field(default="", max_length=2000)
 
 
+class NoteCommentIn(BaseModel):
+    """Comentario que se añade a una nota desde un cliente móvil (P09)."""
+
+    body: str = Field(min_length=1, max_length=5000)
+    #: Nombre con el que firma. Si falta, se firma con el identificador: una
+    #: nota sin firma no sirve para preguntarle nada a nadie después.
+    authorName: str = Field(default="", max_length=200)
+
+
+class NoteStatusIn(BaseModel):
+    """Estado de trabajo que se pide (P09)."""
+
+    status: str = Field(min_length=1, max_length=32)
+
+
+class NoteLoadItem(BaseModel):
+    """Nota tal como la entrega la aplicación de escritorio (P09)."""
+
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="", max_length=200)
+    body: str = Field(default="", max_length=20000)
+    categoryId: str = Field(default="", max_length=64)
+    status: str = Field(default="open", max_length=32)
+    priority: str = Field(default="normal", max_length=32)
+    sceneId: str | None = None
+    assetId: str | None = None
+    assigneeId: str | None = None
+    assigneeName: str | None = None
+    dueDate: str | None = None
+    updatedAt: str = Field(default="", max_length=64)
+
+
+class NotesLoadIn(BaseModel):
+    projectId: str = Field(min_length=1, max_length=64)
+    notes: list[NoteLoadItem] = Field(default_factory=list)
+
+
 class ConflictOut(BaseModel):
     """Sección que dos revisiones cambiaron de forma distinta."""
 
@@ -169,6 +213,7 @@ def create_app(
     reader: TelemetryReader | None = None,
     audit: AuditLog | None = None,
     reviews: ReviewStore | None = None,
+    notes_store: NoteStore | None = None,
     environment: str = "test",
     allowed_origins: tuple[str, ...] = (),
 ) -> FastAPI:
@@ -204,6 +249,7 @@ def create_app(
 
     audit_log = audit or AuditLog()
     review_store = reviews or ReviewStore(audit_log)
+    note_store = notes_store or NoteStore()
 
     app = FastAPI(
         title="INDUSTRIAL TWINS 360",
@@ -417,6 +463,7 @@ def create_app(
         usuario: str | None = Header(default=None, alias="x-usuario"),
         rol: str | None = Header(default=None, alias="x-rol"),
         planta: str | None = Header(default=None, alias="x-planta"),
+        categorias: str | None = Header(default=None, alias="x-categorias-nota"),
     ) -> list[Grant]:
         """Concesiones del usuario de la petición.
 
@@ -431,7 +478,19 @@ def create_app(
             raise AccessError(
                 "La petición no identifica al usuario", operation="project.read"
             )
-        return [Grant(user_id=usuario, role=rol, scope=Scope(plant_id=planta))]
+        # Las categorías de nota concedidas viajan como el resto del ámbito y
+        # con la misma advertencia: esto no autentica nada. Vacío o ausente
+        # significa «sin restricción», igual que en todo el modelo de acceso.
+        note_categories = frozenset(
+            part.strip() for part in (categorias or "").split(",") if part.strip()
+        )
+        return [
+            Grant(
+                user_id=usuario,
+                role=rol,
+                scope=Scope(plant_id=planta, note_category_ids=note_categories),
+            )
+        ]
 
     @app.get(f"{API_PREFIX}/me/operations", tags=["acceso"])
     async def my_operations(
@@ -607,6 +666,154 @@ def create_app(
             raise _review_http(error) from error
         return _revision_out(revision, review_store)
 
+    @app.get(f"{API_PREFIX}/notes", tags=["notas"])
+    async def list_notes(
+        projectId: str = Query(min_length=1, max_length=64),
+        status: str | None = Query(default=None, max_length=32),
+        sceneId: str | None = Query(default=None, max_length=64),
+        mine: bool = Query(default=False),
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Notas que esta identidad puede ver (P09).
+
+        El recorte por categoría se hace **aquí** y no en la interfaz. Que el
+        editor lo haga en su pantalla está bien para no mostrar lo que no toca;
+        que sea lo único que lo haga significa que cualquiera que llame a la API
+        lo salta, y entonces el ámbito por categoría no protege nada.
+        """
+        actor = grants[0].user_id
+        try:
+            notes = note_store.list_for_project(
+                projectId,
+                allowed_operations=effective_operations(grants),
+                allowed_categories=_allowed_categories(grants),
+                status=status,
+                scene_id=sceneId,
+                assignee_id=actor if mine else None,
+            )
+        except NoteError as error:
+            raise _note_http(error) from error
+
+        return {
+            "notes": [_note_out(note) for note in notes],
+            # Los estados que este cliente puede poner, para que la interfaz no
+            # tenga que repetir la regla y acabe ofreciendo uno que el servicio
+            # rechaza.
+            "fieldStatuses": list(FIELD_STATUSES),
+        }
+
+    @app.post(f"{API_PREFIX}/notes/{{note_id}}/comments", tags=["notas"])
+    async def comment_note(
+        note_id: str,
+        body: NoteCommentIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Añade un comentario a una nota (P09)."""
+        actor = grants[0].user_id
+        try:
+            note = note_store.add_comment(
+                note_id,
+                author_id=actor,
+                author_name=body.authorName or actor,
+                body=body.body,
+                allowed_operations=effective_operations(grants),
+                allowed_categories=_allowed_categories(grants),
+            )
+        except NoteError as error:
+            raise _note_http(error) from error
+
+        audit_log.append(
+            AuditEvent(
+                event_id=f"note-comment-{len(audit_log.events) + 1}",
+                action=NOTE_AUDIT_ACTION["comment"],
+                actor_id=actor,
+                actor_name=body.authorName or actor,
+                occurred_at=datetime.now(timezone.utc),
+                entity="note",
+                entity_id=note_id,
+                detail={"comments": len(note.comments), "client": "mobile"},
+            )
+        )
+        return {"note": _note_out(note)}
+
+    @app.post(f"{API_PREFIX}/notes/{{note_id}}/status", tags=["notas"])
+    async def set_note_status(
+        note_id: str,
+        body: NoteStatusIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Mueve la nota entre los estados de trabajo (P09).
+
+        Resolver y archivar no están: resolver exige escribir cómo se resolvió y
+        archivar es una decisión del responsable del proyecto. Permitirlos aquí
+        convertiría «ya está» en un toque de pantalla y la nota se cerraría sin
+        que nadie pueda saber después qué se hizo.
+        """
+        actor = grants[0].user_id
+        try:
+            note = note_store.set_status(
+                note_id,
+                status=body.status,
+                allowed_operations=effective_operations(grants),
+                allowed_categories=_allowed_categories(grants),
+            )
+        except NoteError as error:
+            raise _note_http(error) from error
+
+        audit_log.append(
+            AuditEvent(
+                event_id=f"note-status-{len(audit_log.events) + 1}",
+                action=NOTE_AUDIT_ACTION["status"],
+                actor_id=actor,
+                actor_name=actor,
+                occurred_at=datetime.now(timezone.utc),
+                entity="note",
+                entity_id=note_id,
+                detail={"status": note.status, "client": "mobile"},
+            )
+        )
+        return {"note": _note_out(note)}
+
+    @app.put(f"{API_PREFIX}/notes", tags=["notas"])
+    async def load_notes(
+        body: NotesLoadIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Carga las notas de un proyecto en el servicio (P09).
+
+        La llama la aplicación de escritorio al abrir el proyecto: el servicio
+        no lee archivos de proyecto —no sabe dónde están ni debe— así que su
+        copia es la que le entrega quien sí lo tiene. Exige `project.update`
+        porque sustituye lo que el servicio sirve: con `note.read` bastando,
+        cualquiera que pueda leer podría vaciar la lista de los demás.
+        """
+        decision = can_perform_anywhere(operation="project.update", grants=grants)
+        if not decision.allowed:
+            raise AccessError(decision.reason, operation="project.update")
+
+        note_store.replace_project(
+            body.projectId,
+            [
+                ServedNote(
+                    note_id=note.id,
+                    project_id=body.projectId,
+                    title=note.title,
+                    body=note.body,
+                    category_id=note.categoryId,
+                    status=note.status,
+                    priority=note.priority,
+                    scene_id=note.sceneId,
+                    asset_id=note.assetId,
+                    assignee_id=note.assigneeId,
+                    assignee_name=note.assigneeName,
+                    due_date=note.dueDate,
+                    updated_at=note.updatedAt,
+                )
+                for note in body.notes
+            ],
+        )
+        return {"loaded": len(body.notes)}
+
     @app.post(f"{API_PREFIX}/access/check", tags=["acceso"])
     async def check_access(
         operation: str,
@@ -666,6 +873,79 @@ def _revision_out(revision: Revision, store: ReviewStore) -> RevisionOut:
             )
             for conflict in store.conflicts_for(revision)
         ],
+    )
+
+
+def _allowed_categories(grants: list[Grant]) -> tuple[str, ...] | None:
+    """Categorías de nota que estas concesiones permiten ver (P09).
+
+    `None` es «sin restricción», y lo decide una sola concesión sin categorías:
+    el conjunto vacío significa «todas» en todo el modelo de acceso, igual que
+    en `scope_covers`. Si aquí significara «ninguna», un administrador con
+    permisos generales se quedaría sin ver una sola nota.
+    """
+    now = datetime.now(timezone.utc)
+    active = [grant for grant in grants if is_active(grant, now)]
+    if any(not grant.scope.note_category_ids for grant in active):
+        return None
+
+    categories: set[str] = set()
+    for grant in active:
+        categories.update(grant.scope.note_category_ids)
+    return tuple(sorted(categories))
+
+
+def _note_out(note: ServedNote) -> dict[str, object]:
+    """Nota tal como la ve un cliente móvil.
+
+    No lleva los adjuntos: en una pantalla de teléfono y con la red de una
+    planta, una lista que arrastra fotografías no acaba de cargar. Se piden al
+    abrir la nota, cuando exista esa pantalla.
+    """
+    return {
+        "id": note.note_id,
+        "title": note.title,
+        "body": note.body,
+        "categoryId": note.category_id,
+        "status": note.status,
+        "priority": note.priority,
+        "sceneId": note.scene_id,
+        "assetId": note.asset_id,
+        "assigneeId": note.assignee_id,
+        "assigneeName": note.assignee_name,
+        "dueDate": note.due_date,
+        "updatedAt": note.updated_at,
+        "comments": [
+            {
+                "id": comment.comment_id,
+                "authorId": comment.author_id,
+                "authorName": comment.author_name,
+                "body": comment.body,
+                "createdAt": comment.created_at,
+            }
+            for comment in note.comments
+        ],
+    }
+
+
+def _note_http(error: NoteError) -> HTTPException:
+    """Código HTTP del fallo de una nota.
+
+    «No existe» y «no puede verla» comparten el 404 a propósito: distinguirlos
+    diría a un contratista que el proyecto tiene notas de categorías que no
+    puede ver, y cuántas, que es parte de lo que el ámbito por categoría oculta.
+    """
+    codes = {
+        "NOT_FOUND": status.HTTP_404_NOT_FOUND,
+        "FORBIDDEN": status.HTTP_403_FORBIDDEN,
+        "STATUS_NOT_ALLOWED": status.HTTP_403_FORBIDDEN,
+        "CLOSED": status.HTTP_409_CONFLICT,
+        "EMPTY": status.HTTP_400_BAD_REQUEST,
+        "TOO_LONG": status.HTTP_400_BAD_REQUEST,
+    }
+    return HTTPException(
+        status_code=codes.get(error.code, status.HTTP_400_BAD_REQUEST),
+        detail={"code": error.code, "message": str(error)},
     )
 
 

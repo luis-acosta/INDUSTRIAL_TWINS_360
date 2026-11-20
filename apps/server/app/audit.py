@@ -43,6 +43,11 @@ ACTIONS: Final[tuple[str, ...]] = (
     "note.created",
     "note.resolved",
     "note.deleted",
+    # Participación desde un cliente móvil (P09). La lista es de sólo añadir
+    # como el propio registro: un registro cuya lista de acciones se reescribe
+    # deja eventos antiguos que ya no se pueden validar.
+    "note.comment",
+    "note.status",
     "user.invited",
     "user.removed",
     "role.granted",

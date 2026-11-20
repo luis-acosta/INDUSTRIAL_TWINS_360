@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.54.0",
-  "updatedAt": "2026-11-21T01:40:00Z",
+  "version": "0.55.0",
+  "updatedAt": "2026-11-21T02:20:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -284,7 +284,7 @@
     "P06": "done",
     "P07": "pending",
     "P08": "done",
-    "P09": "pending",
+    "P09": "done",
     "L01": "done",
     "L02": "done",
     "L03": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "S07": "Exportación del recorrido a vídeo, para mandárselo a quien no va a abrir el paquete: una inducción de seguridad para contratas, una reunión de arranque, el anexo de un informe. Se graba con lo que trae el navegador —`captureStream` del lienzo y `MediaRecorder`—, así que no hace falta transcodificador ni un programa aparte. Lo que entra en el vídeo se dice antes de grabar y no después: el lienzo, es decir la panorámica o el modelo con sus marcadores; los paneles de la interfaz son HTML encima y no entran, y el audio de las narraciones tampoco. Detalles que deciden si el archivo sirve: la tasa de bits se calcula por píxeles y fotogramas en lugar de dejar la del navegador, que apunta a videollamada y deshace en bloques los rótulos de los equipos —que es lo que alguien va a mirar—; el trozo vacío que algunos navegadores entregan al parar se descarta, porque deja un archivo que ciertos reproductores rechazan; las pistas del lienzo se paran al terminar, o el lienzo sigue produciendo fotogramas para un flujo que nadie lee; y el lienzo se busca al empezar a grabar y no se recuerda, porque el visor lo desmonta al pasar de una escena panorámica a una de modelo y grabar el viejo daría un vídeo en negro que sólo se descubre al abrirlo. La capacidad se consulta antes de ofrecer el botón: uno que falla al pulsarlo, después de preparar la escena, desperdicia el trabajo y no explica por qué."
+      "P09": "Consulta y participación en las notas desde un teléfono, de punta a punta. Lo que esto traslada al servidor es un control que hasta ahora sólo hacía una pantalla del editor: el ámbito por categoría de nota —la pieza que permite que un contratista trabaje sobre el mismo proyecto y no vea las notas internas de mantenimiento— existía en el modelo desde la etapa 11 y se aplicaba en la interfaz. Un recorte que vive en la interfaz lo salta cualquiera que llame a la API: eso no es un control, es una cortesía. Ahora el servicio sirve las notas ya recortadas, y «no existe» y «no puede verla» comparten el 404 porque distinguirlos diría al contratista cuántas notas de otras categorías hay. Desde el móvil se comenta y se mueve el estado de trabajo; resolver y archivar no están, y no por falta de tiempo: resolver exige escribir cómo se resolvió, y con un toque de pantalla la nota se cerraría sin que nadie pueda saber después qué se hizo. La pantalla está hecha para un pulgar —objetivos de 44 px, tres filtros y nada más— y los estados que ofrece los dice el servicio, para que no acabe ofreciendo uno que el servicio rechaza. La identificación se pide en el dispositivo y se recuerda, y la pantalla dice con esas palabras que identifica y no autentica: escribir «inicie sesión» haría creer que algo comprueba quién es quién y alguien expondría el servicio fuera de la planta. El editor publica las notas en el servicio con una huella de lo que de verdad viaja, porque el proyecto se guarda en cada tecla y un envío por tecla convertiría el servicio en el cuello de botella del editor; y un servicio caído avisa una vez sin bloquear nada, porque no poder consultar desde el móvil es un problema y no poder editar es peor."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
