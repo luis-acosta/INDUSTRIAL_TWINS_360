@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.42.0",
-  "updatedAt": "2026-11-20T13:45:00Z",
+  "version": "0.43.0",
+  "updatedAt": "2026-11-20T15:40:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -249,10 +249,10 @@
     "J01": "done",
     "J02": "done",
     "J03": "done",
-    "J04": "partial",
+    "J04": "done",
     "J05": "done",
-    "J06": "partial",
-    "J07": "modeled",
+    "J06": "done",
+    "J07": "done",
     "J08": "done",
     "J09": "partial",
     "J10": "done",
@@ -339,8 +339,9 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "B04": "Las proyecciones se aplican de verdad: esférica, cúbica (seis caras y atlas 3×2), cilíndrica, Mercator y estereográfica, cada una con su geometría y con una frase que dice para qué sirve. Antes el servicio validaba la elección contra una lista y cosía en esférica siempre, de modo que el campo no cambiaba nada. 20 pruebas con panorámicas sintéticas donde la respuesta correcta se conoce de antemano.",
-      "B07": "Puntos de control implementados y marcados experimental: homografía por par estimada a partir de las marcas, composición con lienzo que abarca las dos imágenes y detección del punto mal marcado por exclusión. El campo existía en la petición desde el primer día y no se usaba en ninguna parte: marcar veinte puntos daba el mismo fallo que no marcar ninguno. 17 pruebas."
+      "J04": "Temporizadores y acciones por inactividad disparados de verdad: el retardo se cuenta desde la entrada en la escena, no se repite por fotograma, no se arrastra a la escena siguiente y se detiene con el recorrido en pausa. El umbral de inactividad es un ajuste del proyecto —una formación guiada y un panel de sala de control tienen ritmos distintos— y viaja en el manifiesto. 22 pruebas de la máquina y una en navegador real.",
+      "J06": "Encadenado al terminar un medio: el fin de la narración de una parada dispara las acciones de «mediaEnd», con filtro por medio para que en una escena con locución y vídeo el final de uno no dispare lo del otro. Antes el autor tenía que medir a mano cuánto duraba la grabación y poner un temporizador, que se descuadraba al cambiarla. El cierre de ventana ya funcionaba.",
+      "J07": "Entrada y salida del foco visual: el visor avisa de los cambios de mirada sostenida y la máquina dispara los dos eventos en el mismo salto, porque la mirada pasa de un marcador al siguiente sin pasar por el vacío."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -387,7 +388,11 @@
       "El servicio de cosido validaba la proyección pedida contra una lista y la ignoraba: cv2.Stitcher de alto nivel no expone el deformador, así que cosía en esférica siempre. Ahora se cose en esférica —donde converge el ajuste— y se reproyecta el resultado, que para una panorámica completa es equivalente.",
       "Las métricas de cobertura se calculaban sobre la imagen entregada: con una cúbica (3:2) o una estereográfica (1:1) habrían dicho que una panorámica completa cubre 270° o 180°. Ahora se miden sobre la equirectangular, antes de reproyectar.",
       "Con exactamente cuatro puntos de control la homografía encaja de forma exacta sea cual sea su posición, de modo que una marca mal puesta no se puede detectar: el servicio pide cinco para poder avisar de cuál revisar.",
-      "Identificar la marca equivocada por su residuo no funciona —el ajuste por mínimos cuadrados reparte el error y el residuo mayor suele caer en un punto correcto—: se reestima dejando cada punto fuera, que sí lo encuentra."
+      "Identificar la marca equivocada por su residuo no funciona —el ajuste por mínimos cuadrados reparte el error y el residuo mayor suele caer en un punto correcto—: se reestima dejando cada punto fuera, que sí lo encuentra.",
+      "El vocabulario de eventos del dominio tiene diecisiete entradas y el editor las ofrecía todas; el visor publicado disparaba cuatro. «timer», «idle», «mediaEnd», «sceneEnter», «sceneExit», «focusExit», «tourStart», «tourEnd» y «projectStart» se podían configurar y no ocurrían nunca.",
+      "«focusExit» no podía dispararse en ningún caso: la mirada sostenida sólo se medía en marcadores que tuvieran una acción de «focusEnter», de modo que uno con sólo acción de salida no entraba nunca en foco.",
+      "Un temporizador no marcado «una sola vez» se habría disparado en cada evaluación del reloj: a 60 fps, sesenta veces por segundo. Los eventos de disparo único se distinguen ahora de los que sí pueden repetirse —fin de medio y foco—, y «idle» se rearma con la actividad del visitante en lugar de gastarse una vez por escena.",
+      "Las marcas de «una sola vez» se perdían al pasar por una escena que no contenía la acción, porque el registro se filtraba por las acciones de la escena de destino: el aviso volvía a salir en la siguiente vuelta. Ahora hay dos registros con caducidades distintas."
     ],
     "geometria": "Etapa 02: el esquema admitía seis formas de marcador y ninguna se podía configurar — el marcador nacía icono y se quedaba así. Ahora hay pestaña de geometría con las propiedades de cada forma, lista de vértices editable en grados (azimut y elevación, no coordenadas de textura), esquinas nombradas para la imagen proyectada y rotación en tres ejes. Cambiar de forma avisa antes de lo que se pierde y conserva la posición: un polígono convertido en icono deja el icono en el centro del contorno, no en el origen de la panorámica. Los ejes que no se van a notar se muestran deshabilitados con el motivo y el camino para activarlos, en lugar de esconderse (parecería que no existen) o quedarse activos (el autor los mueve y concluye que la aplicación está rota).",
     "integracionContinua": "El proyecto está en https://github.com/luis-acosta/INDUSTRIAL_TWINS_360 y la verificación completa pasa en GitHub Actions: TypeScript y pruebas, servidor y cosido, extremo a extremo, e instalador de Windows (artefacto de 12 MB). La primera ejecución falló en sus cuatro trabajos y ninguno era un falso positivo: cada uno señalaba algo que esta máquina no podía ver. (1) `sha256` entregaba a `digest` un `ArrayBuffer` desnudo, que Node 22 acepta y Node 20.11 —el que fija el proyecto— rechaza bajo jsdom por venir de otro reino de JavaScript; el cálculo era correcto pero no había ni una prueba que lo cubriera, y ahora hay 15 con los vectores publicados del estándar. (2) `tauri.conf.json` declaraba cinco iconos que nunca existieron, así que el instalador no podía compilar. (3) El flujo instalaba los paquetes de Python sin su extra «dev», donde vive pytest. (4) Chrome bloquea WebGL por software salvo autorización explícita, y sin WebGL el visor entra —correctamente— en «equipo no compatible» y deja de dibujar marcadores, de modo que las dos pruebas que pulsan un marcador fallaban por falta de dibujo. (5) Ya en la segunda ejecución: `fsync_path` y `shell_info` estaban definidos e invocados en la raíz de la biblioteca de Rust, y las macros de comando y de manejador generan el mismo nombre auxiliar en ese ámbito (E0255); pasaron a `shell.rs`, como los otros cinco comandos. Se instalaron las bibliotecas de GTK en el contenedor para poder compilarlo de verdad en lugar de por inspección.",

@@ -41,6 +41,14 @@ export interface TourPlaybackHost {
   readonly runActions: (actions: readonly Action[]) => void;
   /** URL del audio de narración, o `null` si no hay o no está en el paquete. */
   readonly audioUrl: (mediaId: string | null) => string | null;
+  /**
+   * Avisa de que un medio terminó de reproducirse (J06).
+   *
+   * Opcional porque la reproducción de un recorrido guiado funciona sin
+   * encadenar nada; quien quiera los disparadores de fin de medio lo
+   * proporciona.
+   */
+  readonly mediaEnded?: (mediaId: string) => void;
 }
 
 export interface TourPlayback {
@@ -136,6 +144,12 @@ export function useTourPlayback(host: TourPlaybackHost): TourPlayback {
       audioRef.current = audio;
       audio.onended = () => {
         setNarrating(false);
+        // El fin del medio es un evento del recorrido (J06): es lo que permite
+        // encadenar «al acabar la locución, abre la ficha» sin que el autor
+        // tenga que medir a mano cuánto dura la grabación.
+        if (waypoint.audioMediaId !== null) {
+          hostRef.current.mediaEnded?.(waypoint.audioMediaId);
+        }
         if (waypoint.waitForAudio) dispatch({ type: 'dwellComplete' });
       };
 

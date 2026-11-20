@@ -285,7 +285,31 @@ async function buildProject(): Promise<{ project: Project; files: Map<string, Ui
       },
       model: null,
       hotspots: [],
-      actions: [],
+      // La tercera escena lleva un temporizador y una acción de entrada: es
+      // lo que permite comprobar en un navegador real que los disparadores
+      // del recorrido ocurren de verdad. Hasta esta iteración el editor los
+      // ofrecía y el visor publicado no disparaba ninguno.
+      // La segunda escena lleva un temporizador que abre la ficha del equipo:
+      // es un uso real —«a los pocos segundos de llegar, muestra la ficha»— y
+      // es lo que permite comprobar en un navegador real que los
+      // disparadores del recorrido ocurren de verdad. Hasta esta iteración el
+      // editor los ofrecía y el visor publicado no disparaba ninguno.
+      actions:
+        index === 1
+          ? [
+              {
+                id: newUuid(),
+                event: 'timer' as const,
+                config: { type: 'openInfoWindow' as const, windowId: infoWindowId, modal: false },
+                order: 0,
+                delayMs: 700,
+                focusDwellMs: 1200,
+                once: false,
+                requiresScore: null,
+                enabled: true,
+              },
+            ]
+          : [],
       order: index,
       group: 'Unidad U-200',
       tags: [],

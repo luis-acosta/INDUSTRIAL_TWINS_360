@@ -81,6 +81,20 @@ export const projectSettingsSchema = z.object({
    * declara no triviales y exige revisión humana de sus resultados.
    */
   experimentalFeatures: z.boolean().default(false),
+  /**
+   * Inactividad antes de disparar las acciones de `idle`, en milisegundos
+   * (J04).
+   *
+   * Es un ajuste del proyecto y no una constante porque el ritmo depende del
+   * recorrido: una formación guiada quiere recuperar la atención en veinte
+   * segundos, y un panel de sala de control que alguien mira de reojo durante
+   * un turno, no. Treinta segundos por omisión es lo que distingue «está
+   * leyendo» de «se levantó de la mesa».
+   *
+   * Campo opcional con valor por omisión: un proyecto guardado por una versión
+   * anterior se abre sin migración.
+   */
+  idleTimeoutMs: z.number().int().min(5_000).max(600_000).default(30_000),
   /** Escena de entrada del recorrido. */
   entrySceneId: uuidSchema.nullable().default(null),
   /** Skin aplicado por defecto. */
@@ -254,6 +268,16 @@ export const manifestSchema = z.object({
    * lugar de dejar un hueco que el navegador bloqueó en silencio.
    */
   frameOrigins: z.array(z.string().max(300)).default([]),
+  /**
+   * Inactividad antes de disparar las acciones de `idle`, en ms (J04).
+   *
+   * Viaja en el manifiesto porque el visor publicado es quien las dispara, y
+   * es un ajuste del recorrido: sin él, el visor tendría que suponer un valor
+   * y el que el autor configuró en el editor no se aplicaría. Lleva valor por
+   * omisión para que un paquete publicado por una versión anterior siga
+   * abriéndose.
+   */
+  idleTimeoutMs: z.number().int().min(5_000).max(600_000).default(30_000),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;
@@ -805,6 +829,10 @@ export function toManifest(project: Project, options: ManifestOptions): Manifest
     offlineCapable: options.offlineCapable,
     checksumsSha256: null,
     frameOrigins: [],
+    // El visor publicado es quien dispara las acciones por inactividad (J04),
+    // de modo que el ajuste tiene que viajar con el paquete: si no, el valor
+    // que el autor configuró se quedaría en el editor.
+    idleTimeoutMs: project.settings.idleTimeoutMs,
   });
 }
 

@@ -308,6 +308,36 @@ export function SettingsModule({ store }: SettingsModuleProps): JSX.Element {
             </div>
           </Panel>
 
+          <Panel title="Disparadores del recorrido" level="raised">
+            {/* El umbral de inactividad gobierna las acciones de «idle» (J04)
+                en el recorrido publicado, y el ritmo depende del recorrido:
+                una formación guiada quiere recuperar la atención en veinte
+                segundos; un panel de sala de control que alguien mira de
+                reojo durante un turno, no. */}
+            <Field
+              label="Inactividad antes de reaccionar"
+              hint="Tras este tiempo sin gestos del visitante, el recorrido ejecuta las acciones configuradas «por inactividad»."
+              inline
+            >
+              {() => (
+                <NumberInput
+                  aria-label="Segundos de inactividad"
+                  min={5}
+                  max={600}
+                  step={5}
+                  decimals={0}
+                  unit="s"
+                  value={Math.round(settings.idleTimeoutMs / 1000)}
+                  onValueChange={(value) =>
+                    setSettings('Cambiar la inactividad del recorrido', {
+                      idleTimeoutMs: Math.round(value) * 1000,
+                    })
+                  }
+                />
+              )}
+            </Field>
+          </Panel>
+
           <Panel
             title={
               <span style={{ display: 'inline-flex', gap: 'var(--it-space-2)', alignItems: 'center' }}>

@@ -665,3 +665,36 @@ test('la preferencia de movimiento reducido apaga el efecto ambiental', async ({
 
   await expect(page.locator('.ambient-layer')).toHaveCount(0);
 });
+
+test('un temporizador de escena dispara su acción', async ({ page }) => {
+  // TEST-E2E-017: el editor ofrecía diecisiete eventos y el visor publicado
+  // disparaba cuatro. Un autor podía programar «a los diez segundos, muestra
+  // la ficha», probarlo, no ver nada y concluir que la plataforma no sirve.
+  //
+  // Esto se comprueba en un navegador real porque lo que falla en este terreno
+  // es el reloj y la plomería —intervalos que no se instalan, efectos que se
+  // reinstalan y reinician la cuenta, acciones que se disparan en la escena
+  // equivocada—, y eso no lo reproduce ningún reloj falso.
+  await page.goto('/');
+  const barra = page.getByRole('banner');
+  await expect(barra.getByText('Sala de bombas')).toBeVisible();
+
+  // La primera escena no tiene temporizador: la ficha no debe abrirse sola.
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'A la plataforma' }).click();
+  await expect(barra.getByText('Plataforma superior')).toBeVisible();
+
+  // En la segunda sí: a los 700 ms de llegar se abre la ficha del equipo.
+  const ficha = page.getByRole('dialog');
+  await expect(ficha).toBeVisible({ timeout: 4000 });
+  await expect(ficha).toContainText('Plataforma superior');
+
+  // Y una sola vez: un temporizador que se rearma al redibujar abriría la
+  // ficha sin parar, y cerrarla sería imposible.
+  await ficha.getByRole('button', { name: /Cerrar/i }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

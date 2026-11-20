@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useVrSession } from './useVrSession';
 import { prefersReducedMotion } from './useSceneTransition';
+import { useTriggers } from './useTriggers';
 import {
   CONDITION_LABELS,
   DATA_QUALITY_LABELS,
@@ -452,6 +453,30 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     });
   }, []);
 
+  /**
+   * Escena anterior, para poder ejecutar sus acciones de salida.
+   *
+   * Se guarda en una referencia y no en el estado: cambiarla no debe provocar
+   * un redibujado, y lo único que la consulta es el gancho de disparadores
+   * cuando ya está ocurriendo el cambio de escena.
+   */
+  const previousSceneRef = useRef<{ id: string | null; actions: readonly Action[] }>({
+    id: null,
+    actions: [],
+  });
+
+  const triggers = useTriggers({
+    sceneId: scene?.id ?? null,
+    sceneActions: scene?.actions ?? [],
+    previousActions: previousSceneRef.current.actions,
+    run: runActions,
+    idleMs: manifest.idleTimeoutMs,
+  });
+
+  useEffect(() => {
+    previousSceneRef.current = { id: scene?.id ?? null, actions: scene?.actions ?? [] };
+  }, [scene?.id, scene?.actions]);
+
   const playback = useTourPlayback({
     goTo: (targetSceneId, targetView) => {
       setSceneId(targetSceneId);
@@ -459,6 +484,10 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
     },
     runActions: (actions) => runActions(actions, 'waypointReached'),
     audioUrl: (mediaId) => (mediaId === null ? null : (mediaUrls.get(mediaId) ?? null)),
+    // El fin de la narración de una parada es un fin de medio del recorrido
+    // (J06): las acciones que el autor encadenó a él se ejecutan con las de la
+    // escena actual, que es donde las declaró.
+    mediaEnded: (mediaId) => triggers.notifyMediaEnd(mediaId, scene?.actions ?? []),
   });
 
   /**
@@ -1018,6 +1047,11 @@ export function TourViewer({ tour, initialHash }: TourViewerProps): JSX.Element 
               if (pendingView !== null) setPendingView(null);
             }}
             onHotspotActivate={activateHotspot}
+            onFocusChange={(previousId, nextId) =>
+              triggers.notifyFocus(previousId, nextId, (hotspotId) =>
+                scene?.hotspots.find((h) => h.id === hotspotId)?.actions ?? [],
+              )
+            }
             onHotspotHover={hoverHotspot}
           />
         )}

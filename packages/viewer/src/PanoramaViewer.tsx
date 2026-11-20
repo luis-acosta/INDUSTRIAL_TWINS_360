@@ -75,6 +75,16 @@ export interface PanoramaViewerProps {
   readonly view?: CameraView;
   readonly onViewChange?: (view: CameraView) => void;
   readonly onHotspotActivate?: (hotspot: Hotspot, trigger: 'click' | 'focus') => void;
+  /**
+   * Cambio del foco visual sostenido (J07).
+   *
+   * Se avisa de la entrada **y de la salida** porque son dos eventos del
+   * vocabulario y el segundo no se podía disparar: la mirada sostenida sólo se
+   * medía en marcadores con una acción de `focusEnter`, de modo que uno con
+   * sólo `focusExit` no entraba nunca en foco y su acción no se ejecutaba
+   * jamás.
+   */
+  readonly onFocusChange?: (previousId: string | null, nextId: string | null) => void;
   readonly onHotspotHover?: (hotspot: Hotspot | null) => void;
   /** Clic sobre el panorama, con la dirección: lo usa el editor para colocar. */
   readonly onCanvasPick?: (yaw: number, pitch: number) => void;
@@ -136,6 +146,7 @@ export function PanoramaViewer({
   view: controlledView,
   onViewChange,
   onHotspotActivate,
+  onFocusChange,
   onHotspotHover,
   onCanvasPick,
   interactive = true,
@@ -165,6 +176,8 @@ export function PanoramaViewer({
   const lastFrameMsRef = useRef(0);
   const dragStateRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const dwellRef = useRef<FocusDwellState>(IDLE_DWELL);
+  /** Marcador que tiene el foco sostenido ahora mismo (J07). */
+  const focusedRef = useRef<string | null>(null);
 
   const [capabilities, setCapabilities] = useState<RendererCapabilities | null>(null);
   const [status, setStatus] = useState<ViewerStatus>({ phase: 'idle' });
@@ -561,11 +574,23 @@ export function PanoramaViewer({
     if (!interactive || hoveredId === null) {
       dwellRef.current = IDLE_DWELL;
       setDwell(IDLE_DWELL);
+      // Apartar la mirada es salir del foco: sin esto, la acción de salida se
+      // quedaría pendiente hasta que el visitante mirase otro marcador.
+      if (focusedRef.current !== null) {
+        const previous = focusedRef.current;
+        focusedRef.current = null;
+        onFocusChange?.(previous, null);
+      }
       return undefined;
     }
 
     const hotspot = visibleHotspots.find((h) => h.id === hoveredId);
-    const focusAction = hotspot?.actions.find((a) => a.event === 'focusEnter' && a.enabled);
+    // Sirve cualquiera de los dos eventos de foco: un marcador con sólo
+    // «al salir del foco» tiene que poder entrar en foco, o su acción no se
+    // ejecutaría nunca.
+    const focusAction = hotspot?.actions.find(
+      (a) => (a.event === 'focusEnter' || a.event === 'focusExit') && a.enabled,
+    );
     if (hotspot === undefined || focusAction === undefined) return undefined;
 
     let raf = 0;
@@ -579,7 +604,14 @@ export function PanoramaViewer({
       dwellRef.current = next;
       setDwell(next);
       if (next.triggered) {
-        onHotspotActivate?.(hotspot, 'focus');
+        const previous = focusedRef.current;
+        focusedRef.current = hoveredId;
+        onFocusChange?.(previous, hoveredId);
+        // La activación por mirada sigue siendo cosa de `focusEnter`: un
+        // marcador con sólo acción de salida entra en foco pero no se activa.
+        if (hotspot.actions.some((a) => a.event === 'focusEnter' && a.enabled)) {
+          onHotspotActivate?.(hotspot, 'focus');
+        }
         return;
       }
       raf = requestAnimationFrame(tick);
@@ -587,7 +619,7 @@ export function PanoramaViewer({
     raf = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(raf);
-  }, [hoveredId, interactive, visibleHotspots, onHotspotActivate]);
+  }, [hoveredId, interactive, visibleHotspots, onHotspotActivate, onFocusChange]);
 
   /* ---------------------------------------------------------------- *
    * Presentación
