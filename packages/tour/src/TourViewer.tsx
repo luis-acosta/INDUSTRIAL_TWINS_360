@@ -37,6 +37,7 @@ import {
   type TelemetrySample,
   brandingView,
   findSkinNode,
+  previewFor,
   readSelectionContext,
   viewForEntering,
   type SelectionContext,
@@ -982,6 +983,13 @@ export function TourViewer({
       id: scene.id,
       title: scene.title,
       textureUrl: scene.mediaId !== null ? (mediaUrls.get(scene.mediaId) ?? null) : null,
+      /* Vista previa de la panorámica, si el paquete la trae (S08): la escena
+         se puede mirar en el primer segundo en lugar de esperar frente a una
+         pantalla en negro lo que tarde la imagen completa. */
+      previewUrl: (() => {
+        const path = previewFor(manifest.previews, scene.mediaId);
+        return path === null ? null : mediaUrl(tour.baseUrl, path);
+      })(),
       coverage: media?.panorama?.coverage ?? {
         horizontalDeg: 360,
         verticalDeg: 180,

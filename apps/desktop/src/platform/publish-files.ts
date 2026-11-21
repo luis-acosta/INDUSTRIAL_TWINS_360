@@ -130,6 +130,8 @@ export async function publishProject(
     // Las copias reducidas para visor inmersivo ya están escritas; el
     // exportador sólo las declara en el manifiesto (N12).
     vrPanoramas: prepared.vrPanoramas,
+    // Vistas previas ya escritas; el exportador sólo las declara (S08).
+    previews: prepared.previews,
     ...(request.includeDocuments === true ? { includeDocuments: true } : {}),
     ...(request.includeUnreviewed === true ? { includeUnreviewed: true } : {}),
     ...(request.telemetryEndpoint !== undefined

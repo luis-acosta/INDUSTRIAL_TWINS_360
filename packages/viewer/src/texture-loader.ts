@@ -13,7 +13,7 @@
  *  3. **Memoria de GPU.** Las texturas se cuentan y se liberan; una caché sin
  *     tope termina cerrando la pestaña en un recorrido grande.
  */
-import { domainError, err, ok, type Result } from '@it360/domain';
+import { domainError, err, ok, type DomainError, type Result } from '@it360/domain';
 import { LinearFilter, Texture } from 'three';
 
 export interface LoadedTexture {
@@ -217,4 +217,68 @@ export class TextureCache {
   get stats(): { entries: number; bytes: number } {
     return { entries: this.entries.size, bytes: this.estimatedBytes() };
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Carga progresiva (S08)
+ * ------------------------------------------------------------------ */
+
+export interface ProgressiveHandlers<T> {
+  /** La vista previa está lista y la imagen completa sigue llegando. */
+  onPreview(value: T): void;
+  onFull(value: T): void;
+  /** La imagen completa falló; `withPreview` dice si hay algo mirable. */
+  onFullFailed(error: DomainError, withPreview: boolean): void;
+  onProgress?(fraction: number, withPreview: boolean): void;
+}
+
+/**
+ * Carga la vista previa y la imagen completa a la vez, y resuelve el orden.
+ *
+ * Está aquí fuera y no dentro del componente porque las tres reglas que lo
+ * gobiernan son justo las que se pueden equivocar sin que se note en una red
+ * rápida, y en una red de planta arruinan la función:
+ *
+ *  1. **Las dos cargas se lanzan a la vez, no en cadena.** Encadenarlas
+ *     retrasaría la imagen completa exactamente lo que tarde la vista previa:
+ *     la escena entraría antes y acabaría de cargar después.
+ *  2. **Una vista previa que llega tarde no pisa la imagen completa.** Con una
+ *     vista previa en caché y una imagen completa rápida, el orden de llegada
+ *     se invierte, y sin esta regla la escena se vería borrosa para siempre.
+ *  3. **Si la imagen completa falla con la vista previa puesta, la escena sigue
+ *     siendo utilizable.** Pasar a una pantalla de error se llevaría por
+ *     delante lo que sí funciona.
+ */
+export async function loadProgressive<T>(
+  loadPreview: (() => Promise<Result<T, DomainError>>) | null,
+  loadFull: (onProgress: (fraction: number) => void) => Promise<Result<T, DomainError>>,
+  handlers: ProgressiveHandlers<T>,
+): Promise<void> {
+  let fullArrived = false;
+  let previewShown = false;
+
+  const preview =
+    loadPreview === null
+      ? Promise.resolve()
+      : loadPreview().then((result) => {
+          if (fullArrived || !result.ok) return;
+          previewShown = true;
+          handlers.onPreview(result.value);
+        });
+
+  const full = loadFull((fraction) => handlers.onProgress?.(fraction, previewShown)).then(
+    (result) => {
+      if (!result.ok) {
+        handlers.onFullFailed(result.error, previewShown);
+        return;
+      }
+      fullArrived = true;
+      handlers.onFull(result.value);
+    },
+  );
+
+  // Se espera a las dos: si sólo se esperara a la completa, una vista previa
+  // que llegue después de ella quedaría viva y pisaría la imagen buena en
+  // cuanto resolviese —el caso de la regla 2, pero fuera de este alcance—.
+  await Promise.all([preview, full]);
 }

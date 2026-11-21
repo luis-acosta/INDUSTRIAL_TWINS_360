@@ -41,7 +41,12 @@ import { AmbientLayer, projectFlareSource } from './AmbientLayer';
 import type { AmbientState } from './ambient-effects';
 import { CameraController } from './camera-controller';
 import { detectCapabilities, PanoramaRenderer, type RendererCapabilities } from './panorama-renderer';
-import { loadPanoramaTexture, TextureCache } from './texture-loader';
+import {
+  loadPanoramaTexture,
+  loadProgressive,
+  TextureCache,
+  type LoadedTexture,
+} from './texture-loader';
 import { updateFocusDwell, IDLE_DWELL, type FocusDwellState } from './action-runtime';
 import {
   baseSizePx,
@@ -63,6 +68,15 @@ export interface ViewerScene {
   readonly title: string;
   /** URL de la panorámica. */
   readonly textureUrl: string | null;
+  /**
+   * Vista previa de 1024 px, si el paquete la trae (S08).
+   *
+   * Se carga primero para que el visitante pueda mirar la escena en el primer
+   * segundo en lugar de esperar frente a una pantalla en negro los doce o
+   * veinte segundos que tarda una panorámica completa en la red de una planta.
+   * La imagen completa la sustituye en cuanto llega.
+   */
+  readonly previewUrl?: string | null;
   readonly coverage: PanoramaCoverage;
   readonly camera: CameraControl;
   readonly hotspots: readonly Hotspot[];
@@ -135,6 +149,17 @@ export interface ViewerStatus {
   readonly message?: string;
   readonly progress?: number;
   readonly downscaled?: boolean;
+  /**
+   * Se está mostrando la vista previa y la imagen completa sigue llegando
+   * (S08).
+   *
+   * Se dice, no se esconde: quien mire una escena borrosa sin explicación
+   * pensará que el panorama se publicó mal y lo buscará en el editor, donde
+   * está bien. Y se distingue de `downscaled`, que es una reducción
+   * **definitiva** por los límites de la tarjeta gráfica: ahí no hay nada que
+   * esperar.
+   */
+  readonly preview?: boolean;
 }
 
 /** Caché compartida: una sola por documento, como el contexto WebGL. */
@@ -310,33 +335,70 @@ export function PanoramaViewer({
     const abort = new AbortController();
     setStatus({ phase: 'loading', progress: 0 });
 
-    void loadPanoramaTexture(scene.textureUrl, {
-      maxTextureSize: capabilities.maxTextureSize,
-      signal: abort.signal,
-      onProgress: (progress) => setStatus({ phase: 'loading', progress }),
-    }).then((result) => {
-      if (abort.signal.aborted) return;
-
-      if (!result.ok) {
-        if (result.error.code === 'CANCELLED') return;
-        setStatus({
-          phase: 'error',
-          message: result.error.recovery ?? result.error.message,
-        });
-        return;
-      }
-
-      if (scene.textureUrl !== null) sharedCache.set(scene.textureUrl, result.value);
-      renderer.setTexture(result.value.texture, scene.coverage);
-      setStatus({ phase: 'ready', downscaled: result.value.downscaled });
-      requestDraw();
-    });
+    /* Carga progresiva (S08): la vista previa entra primero y la imagen
+       completa la sustituye. Las reglas de orden viven en `loadProgressive`,
+       donde se pueden probar sin WebGL; aquí sólo se dice qué hacer con cada
+       resultado. */
+    void loadProgressive<LoadedTexture>(
+      scene.previewUrl == null
+        ? null
+        : () =>
+            loadPanoramaTexture(scene.previewUrl as string, {
+              maxTextureSize: capabilities.maxTextureSize,
+              signal: abort.signal,
+            }),
+      (onProgress) =>
+        loadPanoramaTexture(scene.textureUrl as string, {
+          maxTextureSize: capabilities.maxTextureSize,
+          signal: abort.signal,
+          onProgress,
+        }),
+      {
+        onPreview: (value) => {
+          if (abort.signal.aborted) return;
+          renderer.setTexture(value.texture, scene.coverage);
+          setStatus({ phase: 'ready', preview: true });
+          requestDraw();
+        },
+        onFull: (value) => {
+          if (abort.signal.aborted) return;
+          if (scene.textureUrl !== null) sharedCache.set(scene.textureUrl, value);
+          renderer.setTexture(value.texture, scene.coverage);
+          setStatus({ phase: 'ready', downscaled: value.downscaled });
+          requestDraw();
+        },
+        onFullFailed: (error, withPreview) => {
+          if (abort.signal.aborted || error.code === 'CANCELLED') return;
+          /* Con la vista previa puesta, la escena sigue siendo utilizable:
+             pasar a la pantalla de error se llevaría por delante lo que sí
+             funciona. */
+          setStatus(
+            withPreview
+              ? {
+                  phase: 'ready',
+                  preview: true,
+                  message: 'No se pudo cargar la imagen completa; está viendo la vista previa.',
+                }
+              : { phase: 'error', message: error.recovery ?? error.message },
+          );
+        },
+        onProgress: (fraction, withPreview) => {
+          if (abort.signal.aborted) return;
+          /* Mientras se ve la vista previa, el progreso no puede volver a
+             «cargando»: la escena ya está mirable y una pantalla de carga
+             encima sería quitarla. */
+          setStatus((current) =>
+            withPreview ? { ...current, progress: fraction } : { phase: 'loading', progress: fraction },
+          );
+        },
+      },
+    );
 
     // Cancelar al cambiar de escena evita que la textura abandonada llegue
     // tarde y sustituya a la correcta.
     return () => abort.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene.textureUrl, scene.coverage, capabilities]);
+  }, [scene.textureUrl, scene.previewUrl, scene.coverage, capabilities]);
 
   /* ---------------------------------------------------------------- *
    * Bucle de dibujo bajo demanda
@@ -692,6 +754,16 @@ export function PanoramaViewer({
       {status.downscaled === true && (
         <p className="it-viewer__notice" role="status">
           La imagen se ha reducido para caber en esta tarjeta gráfica.
+        </p>
+      )}
+
+      {/* Vista previa en curso (S08). Se dice para que nadie piense que el
+          panorama se publicó mal y lo vaya a buscar en el editor, donde está
+          bien. Y si la imagen completa falló, el texto lo dice en lugar de
+          dejar una escena borrosa sin explicación para siempre. */}
+      {status.preview === true && (
+        <p className="it-viewer__notice" role="status">
+          {status.message ?? 'Vista previa: la imagen completa se está cargando.'}
         </p>
       )}
 

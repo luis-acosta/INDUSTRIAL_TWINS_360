@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.56.0",
-  "updatedAt": "2026-11-21T02:55:00Z",
+  "version": "0.57.0",
+  "updatedAt": "2026-11-21T03:30:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -313,7 +313,7 @@
     "S04": "partial",
     "S05": "done",
     "S07": "done",
-    "S08": "pending",
+    "S08": "done",
     "S09": "done",
     "S10": "done",
     "N01": "experimental",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "P07": "Avisos por correo al asignar una nota. Queda PARCIAL a propósito y no se declara completo: los avisos de vencimiento próximo están compuestos y probados pero no los dispara nadie —hace falta un proceso periódico, que llega con la persistencia—, y la cola es en memoria. Lo que sí está, completo: el correo **no lleva el contenido de la nota**, y eso es una decisión y no una limitación —las notas de planta describen fugas e incumplimientos, y un correo atraviesa servidores que nadie en el proyecto controla, se reenvía y se queda en bandejas durante años; el aviso dice que hay una nota, con qué urgencia y dónde, y el contenido se lee en el proyecto, que es donde el acceso está controlado—. El asunto empieza por la urgencia y la planta para poder triarlo desde la lista del cliente de correo, que es como se leen los correos de pie en una planta. Sin SMTP configurado los avisos se encolan, se cuentan y se declaran no entregados, y el editor se lo dice al autor en ese momento: aceptar un aviso que no sale haría creer avisado a alguien que no lo está, que es el daño que esta función existe para evitar. La auditoría guarda el identificador del destinatario y no su dirección, porque el registro es de sólo añadir y se exporta. Y un destinatario que falla no detiene a los demás: en una lista de quince avisos, una dirección que ya no existe dejaría sin avisar a los catorce restantes."
+      "S08": "Paquetes que entran rápido. Lo que se sufría: una panorámica de planta pesa entre ocho y veinte megabytes, y hasta que llega entera la escena está en negro —dos segundos en una oficina, quince o veinte en la red de una planta con el teléfono en el mismo punto de acceso que los terminales de mantenimiento— y eso ocurre en CADA cambio de escena, que es lo que se hace todo el tiempo en un recorrido. Ahora cada panorámica grande viaja con una vista previa de 1024 px que llega en el primer segundo: el visitante ya está dentro de la escena y puede girar, y la imagen completa la sustituye cuando acaba de llegar. Las tres reglas de orden viven en «loadProgressive», fuera del componente, porque son las que se pueden equivocar sin que se note en una red rápida: las dos cargas se lanzan a la vez y no en cadena —encadenadas retrasarían la completa justo lo que tarda la previa—, una vista previa que llega tarde no pisa la imagen completa ya puesta —ocurre de verdad con la previa en caché, y sin la regla la escena se quedaría borrosa para siempre—, y si la completa falla con la previa puesta la escena sigue siendo utilizable en lugar de convertirse en una pantalla de error. La interfaz dice que lo que se ve es una vista previa: una escena borrosa sin explicación hace pensar que el panorama se publicó mal y buscarlo en el editor, donde está bien. No se escribe copia de una panorámica que ya es pequeña, ni una «vista previa» que pese más que su original. El teselado sigue planificado y sin escribir, y queda declarado en LIMITACIONES con su motivo: sirve para otra cosa —ver una zona a máxima resolución sin cargar el resto— y el visor carga la imagen completa por diseño."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -410,7 +410,6 @@
     "enlaces": "El visor ignoraba por completo la dirección: todos los enlaces abrían la escena de entrada. Ahora un enlace abre la escena y la orientación que indique. Tres decisiones que vienen de cómo se usan estos enlaces: van en el fragmento y no en la consulta, porque el fragmento no viaja al servidor y la escena que alguien mira no tiene por qué quedar anotada en el registro de accesos del cliente —y así el enlace funciona igual abierto como archivo local—; la escena va por identificador y no por título, porque un título se cambia y el enlace guardado en un correo dejaría de funcionar; y un enlace roto abre la escena de entrada diciéndolo, para que quien lo recibió no crea que le mandaron mal la dirección. La dirección se actualiza con `replaceState` y no `pushState`: cada parada de un recorrido automático añadiría una entrada al historial y el botón de atrás dejaría de servir para salir del recorrido.",
     "parcialesExplicados": {
       "L07": "El marcador sigue a su pieza, gira con ella y se esconde cuando queda detrás de la geometría, pero se dibuja de pie frente a la cámara, no tumbado sobre la superficie como una calcomanía. Para eso hay que dibujarlo dentro de la escena y se perdería el texto legible y el acceso por teclado; queda pendiente de decidir.",
-      "S08": "El teselado se planifica y no se escribe: el visor carga la imagen completa, así que escribir la pirámide abultaría el paquete sin que nadie la lea. Se escribirá cuando el visor la pida.",
       "N01": "Experimental, no terminado: la sesión inmersiva está implementada de punta a punta —petición de sesión, espacio de referencia con reserva, bucle de fotogramas del visor, recogida al quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la especificación de WebXR (10 pruebas). Lo que NO se ha podido verificar es lo único que importa de verdad en VR: que se vea bien y no produzca malestar. Eso exige un visor físico. Se deja marcado experimental en lugar de completo porque la plataforma no debe afirmar que algo funciona en un dispositivo donde nadie lo ha ejecutado.",
       "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
       "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio.",

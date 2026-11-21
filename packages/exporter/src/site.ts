@@ -75,6 +75,15 @@ export interface SiteOptions extends PlanOptions {
    * escena en negro dentro de las gafas.
    */
   readonly vrPanoramas?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /**
+   * Vistas previas ya escritas, por identificador de medio (S08).
+   *
+   * Igual que las variantes de VR: se filtran por las que de verdad vienen
+   * entre los archivos, porque una entrada que apunte a un archivo ausente
+   * haría que cada escena empezara con un 404 y perdiera el tiempo que la
+   * vista previa ahorra.
+   */
+  readonly previews?: Readonly<Record<string, string>>;
 }
 
 export interface SiteResult {
@@ -248,6 +257,7 @@ export function buildSite(project: Project, options: SiteOptions): SiteResult {
       logoPath,
       faviconPath,
       vrPanoramas: vrPanoramasPresent(options.vrPanoramas ?? {}, options.mediaFiles, plan.media),
+      previews: previewsPresent(options.previews ?? {}, options.mediaFiles, plan.media),
     },
   );
 
@@ -360,6 +370,29 @@ function vrPanoramasPresent(
       forMedia[profile] = path;
       kept[mediaId] = forMedia;
     }
+  }
+
+  return kept;
+}
+
+/**
+ * Recorta el mapa de vistas previas a lo que el paquete lleva de verdad (S08).
+ *
+ * Mismo criterio que las variantes de VR: el archivo tiene que estar entre los
+ * medios que se escriben y su panorama tiene que seguir en el plan.
+ */
+function previewsPresent(
+  map: Readonly<Record<string, string>>,
+  mediaFiles: ReadonlyMap<string, Uint8Array>,
+  planned: readonly Media[],
+): Readonly<Record<string, string>> {
+  const plannedIds = new Set<string>(planned.map((entry) => entry.id));
+  const kept: Record<string, string> = {};
+
+  for (const [mediaId, path] of Object.entries(map)) {
+    if (!plannedIds.has(mediaId)) continue;
+    if (!mediaFiles.has(path)) continue;
+    kept[mediaId] = path;
   }
 
   return kept;

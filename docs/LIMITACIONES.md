@@ -189,6 +189,26 @@ que alguien lo abre en el dispositivo equivocado.
 
 ---
 
+### Teselado: planificado y no escrito (S08)
+
+El contrato lleva un campo de teselas por medio y el plan de publicación las
+calcula, pero **la pirámide no se escribe en el paquete**, porque el visor carga
+la imagen completa por diseño. Escribirla abultaría la entrega con archivos que
+nadie lee.
+
+Lo que sí hace que el paquete sea más rápido es otra cosa, y está hecha: cada
+panorámica grande viaja con una **vista previa de 1024 px** que el visor carga
+primero, de modo que la escena se puede mirar en el primer segundo en lugar de
+esperar frente a una pantalla en negro los quince o veinte segundos que tarda
+una imagen de doce megabytes en la red de una planta. La imagen completa la
+sustituye en cuanto llega, y mientras tanto la interfaz dice que lo que se ve es
+una vista previa.
+
+El teselado tiene sentido para otra cosa —ver una zona a máxima resolución sin
+cargar el resto— y se escribirá cuando el visor sepa pedirla.
+
+---
+
 ## 3. Límites por diseño
 
 Estas no son carencias: son decisiones, y están así a propósito.

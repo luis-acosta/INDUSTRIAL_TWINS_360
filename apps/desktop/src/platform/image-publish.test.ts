@@ -125,6 +125,7 @@ describe('publishSummary', () => {
       notes: [],
       originalBytes: 100_000_000,
       vrPanoramas: {},
+      previews: {},
       publishedBytes: 40_000_000,
     });
 
@@ -142,6 +143,7 @@ describe('publishSummary', () => {
       notes: [],
       originalBytes: 40_000_000,
       vrPanoramas: {},
+      previews: {},
       publishedBytes: 60_000_000,
     });
 
@@ -155,6 +157,7 @@ describe('publishSummary', () => {
       notes: [],
       originalBytes: 0,
       vrPanoramas: {},
+      previews: {},
       publishedBytes: 0,
     });
 

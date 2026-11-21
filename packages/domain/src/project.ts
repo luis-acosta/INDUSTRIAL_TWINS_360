@@ -290,6 +290,18 @@ export const manifestSchema = z.object({
    * Lleva valor por omisión para que un paquete anterior siga abriéndose.
    */
   vrPanoramas: z.record(z.string(), z.record(z.string(), z.string().max(400))).default({}),
+  /**
+   * Vistas previas de las panorámicas, por identificador de medio (S08).
+   *
+   * El visor las carga primero para que la escena se pueda mirar en el primer
+   * segundo, y las sustituye por la imagen completa cuando llega. Sólo lleva
+   * las que de verdad están en el paquete: una entrada que apuntara a un
+   * archivo ausente haría que cada escena empezara con un 404 y perdiera el
+   * tiempo que esto ahorra.
+   *
+   * Con valor por omisión para que un paquete anterior siga abriéndose.
+   */
+  previews: z.record(z.string(), z.string().max(400)).default({}),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;
@@ -798,6 +810,8 @@ export interface ManifestOptions {
    * manifiesto no debe prometerlas.
    */
   readonly vrPanoramas?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Vistas previas ya escritas, por identificador de medio (S08). */
+  readonly previews?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -938,6 +952,7 @@ export function toManifest(project: Project, options: ManifestOptions): Manifest
     // Lo rellena el exportador cuando ha escrito de verdad las copias; aquí no
     // se puede saber qué archivos se han generado.
     vrPanoramas: options.vrPanoramas ?? {},
+    previews: options.previews ?? {},
   });
 }
 

@@ -16,6 +16,7 @@ export * from './media-sniff';
 export * from './info-window';
 export * from './model-hotspot';
 export * from './model-space';
+export * from './preview-images';
 export * from './publish-plan';
 export * from './video-renditions';
 export * from './vr-publish';

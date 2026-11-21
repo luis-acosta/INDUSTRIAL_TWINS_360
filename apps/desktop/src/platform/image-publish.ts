@@ -26,6 +26,7 @@
 
 import {
   planImage,
+  planPreviews,
   planVrVariants,
   VR_VARIANT_PROFILES,
   type ImagePlan,
@@ -69,6 +70,13 @@ export interface PreparedMedia {
    * entrega. Entra en el manifiesto tal cual, y sólo con lo que se escribió.
    */
   readonly vrPanoramas: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /**
+   * Vistas previas escritas, por identificador de medio (S08).
+   *
+   * Como las variantes de VR: son copias de entrega y no medios del proyecto,
+   * y sólo entran en el manifiesto las que de verdad se escribieron.
+   */
+  readonly previews: Readonly<Record<string, string>>;
 }
 
 const isEncodable = (format: PublishImageFormat): format is EncodableFormat =>
@@ -226,6 +234,45 @@ export async function prepareMediaForPublish(
     }
   }
 
+  /* Vistas previas de las panorámicas (S08). Una escena entra con su vista
+     previa en el primer segundo en lugar de quedarse en negro quince, que es
+     lo que pasa en la red de una planta con una imagen de doce megabytes. */
+  const previews: Record<string, string> = {};
+  const previewPlan = planPreviews(media, project.scenes);
+
+  if (previewPlan.previews.length > 0 && !canEncode) {
+    notes.push(
+      'No se preparó ninguna vista previa: la versión web no puede reescalar. Cada escena tardará en abrirse lo que tarde su panorámica completa.',
+    );
+  } else if (previewPlan.note !== null) {
+    notes.push(previewPlan.note);
+  }
+
+  if (canEncode) {
+    for (const plan of previewPlan.previews) {
+      const published = media.find((entry) => entry.id === plan.mediaId);
+      if (published === undefined) continue;
+      const source = files.get(published.relativePath);
+      if (source === undefined) continue;
+
+      const reduced = await encodeOne(source, {
+        format: 'jpeg',
+        quality: plan.quality,
+        maxEdgePx: plan.maxEdgePx,
+      });
+      if (reduced === null) continue;
+
+      /* Sólo se declara si de verdad ahorra. Una «vista previa» más grande que
+         su original existe cuando el original está muy comprimido, y cargarla
+         primero sería descargar más para ver antes menos. */
+      if (reduced.bytes.byteLength >= source.byteLength) continue;
+
+      files.set(plan.relativePath, reduced.bytes);
+      publishedBytes += reduced.bytes.byteLength;
+      previews[plan.mediaId] = plan.relativePath;
+    }
+  }
+
   onProgress?.(project.media.length, project.media.length);
 
   if (quality.tiled && project.media.some((entry) => entry.kind === 'image')) {
@@ -241,6 +288,7 @@ export async function prepareMediaForPublish(
     originalBytes,
     publishedBytes,
     vrPanoramas,
+    previews,
   };
 }
 

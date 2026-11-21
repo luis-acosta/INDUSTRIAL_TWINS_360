@@ -667,3 +667,34 @@ describe('marca propia en el paquete (S10)', () => {
     expect(site.files.some((file) => file.path === logo.relativePath)).toBe(true);
   });
 });
+
+describe('vistas previas en el paquete (S08)', () => {
+  it('declara sólo las vistas previas que vienen entre los archivos', () => {
+    // TEST-PUB-S08-001: una entrada que apunte a un archivo ausente haría que
+    // cada escena empezara con un 404, perdiendo justo el tiempo que la vista
+    // previa existe para ahorrar.
+    const base = projectFixture();
+    const pano = base.media[0]!;
+    const site = buildSite(base, {
+      ...SITE_OPTIONS,
+      mediaFiles: new Map([
+        ...SITE_OPTIONS.mediaFiles,
+        ['media/preview/escena-1.jpg', encoder.encode('previa')],
+      ]),
+      previews: {
+        [pano.id]: 'media/preview/escena-1.jpg',
+        // Esta no se escribió: el contenedor no estaba disponible.
+        [base.media[1]?.id ?? 'x']: 'media/preview/escena-2.jpg',
+      },
+    });
+
+    expect(site.manifest.previews).toEqual({ [pano.id]: 'media/preview/escena-1.jpg' });
+  });
+
+  it('un paquete sin vistas previas lleva el mapa vacío, no ausente', () => {
+    // TEST-PUB-S08-002: el visor lo consulta en cada cambio de escena; si
+    // faltara, tendría que distinguir «no hay» de «paquete antiguo» y la
+    // distinción no le sirve de nada.
+    expect(buildSite(projectFixture(), SITE_OPTIONS).manifest.previews).toEqual({});
+  });
+});
