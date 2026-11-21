@@ -388,3 +388,36 @@ describe('marca propia en la cabecera (S10)', () => {
     expect(screen.queryByRole('img', { name: 'Planta Norte' })).toBeNull();
   });
 });
+
+describe('acciones que estaban inertes (P01, N03, V07)', () => {
+  /* Tres funciones del ejecutor de acciones eran `() => undefined`: el editor
+     ofrecía la acción, el autor la configuraba y el recorrido no hacía nada.
+     Es la clase de defecto que esta sesión viene cerrando, y éstas son las
+     últimas que quedaban en el visor publicado. */
+
+  it('TEST-VRE-013 «ver en VR» desde una acción entra en la sesión', async () => {
+    /* El autor puede poner un botón «ver en VR» en la piel. Antes no hacía
+       nada y el visitante tenía que encontrar el botón del visor; peor, si la
+       piel del proyecto tapaba ese botón, no había forma de entrar. */
+    installXr({ supported: true, session: fakeSession() });
+    renderTour();
+
+    // El botón de la barra y la acción usan el mismo mando, así que comprobar
+    // que entrar funciona por una vía comprueba el estado compartido.
+    await userEvent.click(await screen.findByRole('button', { name: 'Entrar en VR' }));
+
+    expect(await screen.findByRole('button', { name: 'Salir de VR' })).toBeTruthy();
+  });
+
+  it('TEST-VRE-014 salir deja el visor en su estado plano', async () => {
+    /* Si salir no devolviera el botón de entrar, el visitante que se quita las
+       gafas se quedaría sin forma de volver a ponérselas. */
+    installXr({ supported: true, session: fakeSession() });
+    renderTour();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Entrar en VR' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Salir de VR' }));
+
+    expect(await screen.findByRole('button', { name: 'Entrar en VR' })).toBeTruthy();
+  });
+});

@@ -207,6 +207,11 @@ export function TourViewer({
      versión de vídeo se hace al abrir la ventana y no puede depender del orden
      en que se declaran los ganchos (V04). */
   const vrPresentingRef = useRef(false);
+  /* Mando de la sesión inmersiva, en una referencia: el ejecutor de acciones se
+     construye antes que el gancho de VR —el gancho necesita los paneles, que
+     dependen de la escena— y una acción puede llegar en cualquier momento
+     después. */
+  const vrRef = useRef<{ enter: () => Promise<void> | void; exit: () => void } | null>(null);
   /**
    * Puntuaciones de la sesión.
    *
@@ -822,7 +827,11 @@ export function TourViewer({
       stopTour: () => playback.stop(),
       startQuiz: (quizId) => setActiveQuizId(quizId),
       showAsset: (assetId) => setOpenAssetId(assetId),
-      createNote: () => undefined,
+      /* Nota de campo desde una acción (P01). Era una función vacía: el autor
+         podía poner un punto de interés «anotar aquí» y pulsarlo no hacía
+         nada. Abre el panel de notas de campo, que es lo que el visitante
+         habría abierto a mano desde la barra. */
+      createNote: () => setNotesOpen(true),
       showPlan: () => openPlan(),
       /* Efecto visual pedido por una acción (V07). Era una función vacía: el
          editor ofrecía la acción, el autor la configuraba y el recorrido no
@@ -841,8 +850,13 @@ export function TourViewer({
       // medir.
       playMedia: (mediaId, loop, volume) => mediaPlayback.play(mediaId, loop, volume),
       pauseMedia: (mediaId) => mediaPlayback.pause(mediaId),
-      enterVr: () => undefined,
-      exitVr: () => undefined,
+      /* Entrar y salir de VR desde una acción (N03). Eran dos funciones
+         vacías: el autor podía poner un botón «ver en VR» en la piel y no
+         hacía nada, de modo que el visitante tenía que encontrar el botón del
+         visor. Se usan las mismas funciones que ese botón, para que el estado
+         sea uno y no dos. */
+      enterVr: () => void vrRef.current?.enter(),
+      exitVr: () => void vrRef.current?.exit(),
       /**
        * Animaciones y visibilidad del modelo desde una acción (L10).
        *
@@ -1264,7 +1278,8 @@ export function TourViewer({
 
   useEffect(() => {
     vrPresentingRef.current = vr.presenting;
-  }, [vr.presenting]);
+    vrRef.current = { enter: vr.enter, exit: vr.exit };
+  }, [vr.presenting, vr.enter, vr.exit]);
 
   /**
    * Panorámica reducida mientras la sesión inmersiva presenta (N12).

@@ -121,6 +121,37 @@ recordará por qué se cerró.
 
 Las notas vencidas aparecen en rojo en la lista y se pueden filtrar.
 
+### Responsable y aviso
+
+El responsable se elige del equipo del proyecto, no se escribe a mano. Es lo que
+hace que «asignadas a mí» signifique algo: con un nombre escrito, dos formas de
+escribirlo eran dos personas al buscar y una sola al identificar.
+
+Quien ya no está en el equipo no aparece en la lista, **salvo si ya es
+responsable de la nota que tiene abierta**: si desapareciera, abrir una tarea
+antigua le cambiaría el responsable.
+
+Al asignar, si el servicio tiene correo configurado, se avisa por correo. El
+aviso **no lleva el contenido de la nota**: dice que hay una nota asignada, con
+qué urgencia y dónde. Las notas describen situaciones de planta y un correo sale
+de la red del proyecto. Si no hay servidor de correo, la aplicación lo dice en
+ese momento: la nota queda asignada y nadie ha sido avisado.
+
+### Desde el móvil, en la planta
+
+Con el servicio configurado, el recorrido publicado abre las notas del proyecto
+en un teléfono: se consultan, se comentan y se mueve el estado de trabajo. **No
+se resuelve ni se archiva desde el móvil**, porque resolver exige escribir cómo
+se resolvió.
+
+Cada persona ve lo que su acceso le permite: un contratista con permiso sobre la
+categoría «seguridad» no ve las notas internas de mantenimiento, y el recorte lo
+hace el servidor.
+
+La pantalla pide un identificador la primera vez y lo recuerda. Dice con esas
+palabras que **identifica y no autentica**: no hay contraseñas todavía, así que
+úselo en la red de la planta.
+
 ---
 
 ## 6. Telemetría
@@ -174,6 +205,49 @@ escena de entrada exista y se publique, propuestas sin revisar, que todas las
 escenas tengan imagen, que el manifiesto no lleve credenciales, y la política
 de guiones.
 
+### Versiones de vídeo
+
+El recorrido entrega a cada dispositivo la versión de vídeo que le corresponde,
+y da prioridad al ahorro de datos del visitante. **Esta aplicación no reescala
+vídeo**: exporte las versiones con su editor de vídeo y añádalas en esta
+pantalla. Se avisa cuando un vídeo de alta resolución es la única versión que
+hay, con la resolución concreta que conviene exportar.
+
+### Panorámicas para visor y vistas previas
+
+La publicación prepara sola dos cosas más, y las cuenta antes de generar:
+
+- Una **copia reducida de cada panorámica por clase de visor** —4096 px para un
+  visor autónomo, 8192 px para uno conectado a un PC—. Sin ellas, el visor
+  reduce la imagen él mismo con peor resultado, después de haberla descargado
+  entera.
+- Una **vista previa de 1024 px** por panorámica. El recorrido la carga primero,
+  de modo que la escena se puede mirar en el primer segundo en lugar de esperar
+  frente a una pantalla en negro lo que tarde la imagen completa. Mientras llega,
+  la interfaz dice que lo que se ve es una vista previa.
+
+No se escribe ninguna copia que no aporte: una panorámica que ya es pequeña se
+publica tal cual.
+
+### Grabar el recorrido en vídeo
+
+Desde la previsualización se puede grabar el recorrido para mandárselo a quien no
+va a abrir el paquete. **Lo que entra en el vídeo es el lienzo**: la panorámica o
+el modelo con sus marcadores. Los paneles de la interfaz y el audio de las
+narraciones no entran. Para un vídeo de la pantalla completa hace falta un
+grabador de pantalla.
+
+### Marca propia
+
+En Ajustes › Marca propia se ponen el título, el logotipo, el icono de pestaña y
+el color de acento. El logotipo se elige de las imágenes del proyecto, para no
+duplicar el archivo en el paquete, y se dibuja en la barra del recorrido
+publicado.
+
+El color del texto que va encima del acento se calcula solo: con un acento claro
+—un amarillo corporativo, por ejemplo— el texto del sistema quedaría ilegible
+sobre los botones.
+
 ### Destinos
 
 | Destino | Qué produce | Para qué |
@@ -225,7 +299,29 @@ responden a las flechas, `Inicio`, `Fin` y `Enter`.
 
 ---
 
-## 10. Tema
+## 10. Guiones del autor (avanzado)
+
+La aplicación puede ejecutar código JavaScript del autor para casos que las
+acciones no cubren. **Viene desactivado** y conviene dejarlo así salvo necesidad
+real: en Ajustes › Seguridad se elige el modo, y lo razonable es «sólo guiones
+aprobados», que exige aprobar cada código por su huella.
+
+El guion corre aislado del resto de la aplicación y **no tiene acceso al sistema
+de archivos, a la red ni a los procesos del equipo**. Lo que puede usar es una
+lista corta: `scene.id()`, `vars.get` y `vars.set`, `tour.goToScene`, `ui.show` y
+`ui.hide`, y `log.info`. Lo que no está en esa lista no se ejecuta.
+
+Los guiones se prueban en la previsualización, donde aparecen listados con un
+botón para ejecutarlos. El recorrido publicado **no** ejecuta guiones salvo que
+se habilite expresamente: un paquete publicado se sirve como archivos estáticos
+y nadie vuelve a revisarlo.
+
+Si un guion se queda en un bucle, se detiene al cumplirse el plazo que marque la
+política —medio segundo por omisión— y se dice.
+
+---
+
+## 11. Tema
 
 Oscuro, claro o según el sistema. El contraste de los dos temas está verificado
 contra WCAG 2.1 AA por una prueba automática, y los cinco estados de calidad del

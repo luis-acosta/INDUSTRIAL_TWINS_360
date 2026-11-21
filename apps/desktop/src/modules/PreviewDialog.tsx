@@ -66,6 +66,13 @@ export function PreviewDialog({
   appVersion,
   onClose,
 }: PreviewDialogProps): JSX.Element {
+  /* Escena que la previsualización está mostrando. Arranca en la que el autor
+     tenía abierta y puede cambiarla un guion con `tour.goToScene` (J09). */
+  const [previewSceneId, setPreviewSceneId] = useState<string | null>(sceneId);
+  /* Variables de la prueba de guiones, en memoria: no son las puntuaciones del
+     recorrido ni se guardan en el proyecto. */
+  const scriptVarsRef = useRef(new Map<string, string | number | boolean>());
+
   const tour = useMemo<LoadedTour>(() => {
     const manifest = toManifest(project, {
       publishedAt: new Date().toISOString(),
@@ -86,11 +93,11 @@ export function PreviewDialog({
 
   /* Escena por la que entrar: la que se edita, si de verdad se publica. */
   const target = useMemo<Scene | null>(() => {
-    if (sceneId === null) return null;
-    return tour.manifest.scenes.find((candidate) => candidate.id === sceneId) ?? null;
-  }, [tour.manifest.scenes, sceneId]);
+    if (previewSceneId === null) return null;
+    return tour.manifest.scenes.find((candidate) => candidate.id === previewSceneId) ?? null;
+  }, [tour.manifest.scenes, previewSceneId]);
 
-  const editing = project.scenes.find((candidate) => candidate.id === sceneId) ?? null;
+  const editing = project.scenes.find((candidate) => candidate.id === previewSceneId) ?? null;
   const excluded = editing !== null && target === null;
 
   /* El enlace profundo es la vía por la que el visor acepta una escena y una
@@ -125,6 +132,7 @@ export function PreviewDialog({
   const { push } = useToast();
 
   const support = useMemo(() => captureSupport(), []);
+
 
   /**
    * Guiones que el proyecto lleva, buscados en las acciones de sus puntos de
@@ -203,14 +211,32 @@ export function PreviewDialog({
       const result = await runSandboxed(source, {
         timeoutMs: project.settings.scripting.timeoutMs,
         api: {
-          getSceneId: () => sceneId,
-          // Las variables del recorrido no se exponen a la previsualización
-          // todavía: devolver `null` es decir «no hay», que es verdad, en lugar
-          // de inventar un valor que el autor tomaría por real.
-          getVariable: () => null,
-          setVariable: () => undefined,
-          goToScene: () => undefined,
-          setNodeVisible: () => undefined,
+          getSceneId: () => previewSceneId,
+          /* Variables en memoria, propias de esta prueba. No son las
+             puntuaciones del recorrido publicado y no se guardan en el
+             proyecto: lo que el autor comprueba aquí es que su guion lee lo que
+             escribe y en qué orden, que es donde están los fallos de un guion.
+             Devolver siempre `null` —como antes— hacía que cualquier guion que
+             leyera una variable pareciera roto. */
+          getVariable: (name) => scriptVarsRef.current.get(name) ?? null,
+          setVariable: (name, value) => {
+            scriptVarsRef.current.set(name, value);
+          },
+          /* Navegar sí cambia la escena de la previsualización: es la mitad de
+             lo que un guion de recorrido hace, y no poder probarlo obligaría al
+             autor a publicar para saber si funciona. */
+          goToScene: (id) => setPreviewSceneId(id),
+          /* La visibilidad de un nodo de la piel no se aplica aquí: la
+             previsualización dibuja la piel del proyecto y esta pantalla no
+             tiene su estado. Se dice en lugar de fingirlo, porque un guion que
+             esconde un panel y no ve el cambio es un guion que el autor
+             reescribirá buscando un error que no está en su código. */
+          setNodeVisible: (nodeId, visible) =>
+            push({
+              tone: 'info',
+              title: 'Guion',
+              description: `Pidió ${visible ? 'mostrar' : 'ocultar'} «${nodeId}». La visibilidad de la piel no se aplica en la previsualización; compruébelo en el recorrido publicado.`,
+            }),
           log: (message) => push({ tone: 'info', title: 'Guion', description: message }),
         },
       });
@@ -223,7 +249,7 @@ export function PreviewDialog({
         });
       }
     },
-    [project.settings.scripting, sceneId, push],
+    [project.settings.scripting, previewSceneId, push],
   );
 
 

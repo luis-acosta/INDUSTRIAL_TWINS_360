@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.64.0",
-  "updatedAt": "2026-11-21T13:35:00Z",
+  "version": "0.65.0",
+  "updatedAt": "2026-11-21T14:05:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "V07": "La acción «aplicar efecto visual» deja de ser una función vacía. Estaba en el contrato desde la etapa 02 y en el recorrido era literalmente «() => undefined»: el editor la ofrecía, el autor la configuraba y no pasaba nada. Ahora lluvia, polvo, nieve y destello se imponen desde una acción y sustituyen al efecto de la escena mientras se está en ella; al cambiar de escena vuelve a mandar el que el autor configuró allí, porque el proyecto es del autor y una acción del recorrido no debe reescribirlo. El movimiento reducido del sistema gana también sobre el efecto impuesto: si no, bastaría poner la acción en la entrada de la escena para imponer movimiento periférico a quien lo tiene desactivado por mareo. Sube de «modelado» a «parcial» y no a completo porque el desenfoque de movimiento —uno de los cinco valores de la lista— no se dibuja: su cálculo está y está probado (umbral por abajo para que la imagen parada no quede sucia, tope por arriba para que al parar no tarde segundos en volver a verse, corrección por el coseno del cabeceo sin la cual mirar hacia arriba disparaba el desenfoque sin que nada se moviera, camino corto al cruzar el norte), pero la acumulación de fotogramas en la GPU es otra tubería de dibujado y no se ha validado en una tarjeta de verdad. Mientras no esté, una acción que pida desenfoque deja la escena sin efecto ambiental —la verdad— en lugar de dibujar lluvia en su lugar."
+      "cierre": "Barrido final de superficies declaradas que no hacían nada, que es el defecto que esta sesión ha venido cerrando una a una. Quedaban tres en el visor publicado, todas «() => undefined»: «createNote» —el autor podía poner un punto de interés «anotar aquí» y pulsarlo no hacía nada— ahora abre el panel de notas de campo; «enterVr» y «exitVr» —el autor podía poner un botón «ver en VR» en la piel y, si la piel tapaba el botón del visor, no había forma de entrar— usan ahora el mismo mando que ese botón, de modo que el estado es uno y no dos. En la previsualización, la API de guiones devolvía «null» en todas las variables y no navegaba: cualquier guion que leyera una variable parecía roto. Ahora las variables son un almacén en memoria propio de la prueba y «tour.goToScene» cambia de escena de verdad; lo único que no se aplica —la visibilidad de la piel— se dice al autor en lugar de fingirse, porque un guion que esconde un panel y no ve el cambio es un guion que se reescribe buscando un error que no está en el código. El manual documenta además todo lo que esta sesión añadió: responsable y aviso de las notas, notas desde el móvil, versiones de vídeo, panorámicas para visor y vistas previas, grabación en vídeo, marca propia y guiones del autor. Una función que el manual no menciona es una función que nadie encuentra."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
