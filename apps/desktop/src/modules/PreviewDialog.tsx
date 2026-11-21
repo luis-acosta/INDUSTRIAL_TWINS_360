@@ -31,7 +31,20 @@ import {
 } from '@it360/domain';
 import { Button, Callout, Dialog, Tooltip, useToast } from '@it360/ui';
 import { TourViewer, type LoadedTour } from '@it360/tour';
-import { captureFileName, captureSupport, startCapture, type CaptureHandle } from '@it360/viewer';
+import {
+  captureFileName,
+  captureSupport,
+  runSandboxed,
+  startCapture,
+  type CaptureHandle,
+} from '@it360/viewer';
+import {
+  decideScriptExecution,
+  scriptDigest,
+  SCRIPTING_MODE_LABELS,
+  type Action,
+  type SkinNode,
+} from '@it360/domain';
 import { saveBinaryFile } from '../platform/save-file';
 
 export interface PreviewDialogProps {
@@ -112,6 +125,107 @@ export function PreviewDialog({
   const { push } = useToast();
 
   const support = useMemo(() => captureSupport(), []);
+
+  /**
+   * Guiones que el proyecto lleva, buscados en las acciones de sus puntos de
+   * interés y de su piel (J09).
+   *
+   * Se buscan en lugar de guardarse en una lista aparte: una lista aparte se
+   * desincroniza con las acciones reales, y entonces el autor probaría un
+   * guion que ya no está en ninguna acción.
+   */
+  const scriptActions = useMemo(() => {
+    const found: { readonly source: string; readonly purpose: string }[] = [];
+    const visit = (actions: readonly Action[]): void => {
+      for (const action of actions) {
+        if (action.config.type === 'runScript') {
+          found.push({ source: action.config.source, purpose: action.config.purpose });
+        }
+      }
+    };
+
+    for (const scene of project.scenes) {
+      for (const hotspot of scene.hotspots) visit(hotspot.actions);
+    }
+    const walkSkin = (nodes: readonly SkinNode[]): void => {
+      for (const node of nodes) {
+        visit(node.actions);
+        walkSkin(node.children);
+      }
+    };
+    for (const skin of project.skins) walkSkin(skin.root);
+
+    return found;
+  }, [project.scenes, project.skins]);
+
+  /**
+   * Ejecución de guiones del autor en la previsualización (J09).
+   *
+   * Pasa por la política antes de ejecutar nada, y ése es el orden que importa:
+   * la decisión está escrita en el dominio desde la etapa 02 y hasta ahora no
+   * la usaba nadie, de modo que el ajuste de seguridad no gobernaba nada.
+   *
+   * Se ejecuta aquí y no en el recorrido publicado: la previsualización es
+   * donde el autor prueba su guion, y un paquete publicado es de sólo lectura y
+   * se sirve como archivos estáticos —añadirle código del autor amplía su
+   * superficie sin que nadie vuelva a revisarlo—.
+   */
+  const runAuthorScript = useCallback(
+    async (source: string): Promise<void> => {
+      const sha256 = await scriptDigest(source, globalThis.crypto?.subtle);
+      if (sha256 === null) {
+        /* Sin SHA-256 no se puede distinguir un guion aprobado de uno que no
+           lo está, y no hay reserva aceptable: una huella de los primeros
+           bytes dejaría pasar cualquier guion que empezara igual que uno
+           aprobado. */
+        push({
+          tone: 'alarm',
+          title: 'Guion no ejecutado',
+          description:
+            'Este entorno no ofrece SHA-256, así que no se puede comprobar si el guion está aprobado.',
+        });
+        return;
+      }
+
+      const decision = decideScriptExecution(project.settings.scripting, sha256, {
+        published: false,
+        // En local, el administrador es quien usa el equipo: el modelo de
+        // acceso del servicio no gobierna la aplicación de escritorio, y
+        // fingir que sí lo hace daría una falsa sensación de control.
+        isAdministrator: true,
+      });
+
+      if (!decision.allowed) {
+        push({ tone: 'warning', title: 'Guion no ejecutado', description: decision.message });
+        return;
+      }
+
+      const result = await runSandboxed(source, {
+        timeoutMs: project.settings.scripting.timeoutMs,
+        api: {
+          getSceneId: () => sceneId,
+          // Las variables del recorrido no se exponen a la previsualización
+          // todavía: devolver `null` es decir «no hay», que es verdad, en lugar
+          // de inventar un valor que el autor tomaría por real.
+          getVariable: () => null,
+          setVariable: () => undefined,
+          goToScene: () => undefined,
+          setNodeVisible: () => undefined,
+          log: (message) => push({ tone: 'info', title: 'Guion', description: message }),
+        },
+      });
+
+      if (!result.ok) {
+        push({
+          tone: 'alarm',
+          title: 'El guion falló',
+          description: `${result.error.message}${result.error.recovery === undefined ? '' : ` ${result.error.recovery}`}`,
+        });
+      }
+    },
+    [project.settings.scripting, sceneId, push],
+  );
+
 
   useEffect(() => {
     if (!recording) return undefined;
@@ -208,6 +322,26 @@ export function PreviewDialog({
       }
     >
       <div className="preview">
+        {/* Guiones del autor (J09). Se listan los que el proyecto tiene y se
+            ejecutan aquí, que es donde el autor los prueba; el recorrido
+            publicado no ejecuta código del autor salvo que se habilite
+            expresamente. */}
+        {scriptActions.length > 0 && (
+          <div className="preview__scripts">
+            <p className="preview__scripts-title">
+              Guiones del proyecto ({SCRIPTING_MODE_LABELS[project.settings.scripting.mode]})
+            </p>
+            {scriptActions.map((entry, index) => (
+              <div key={`${entry.purpose}-${index}`} className="preview__scripts-row">
+                <code>{entry.purpose || 'sin descripción'}</code>
+                <Button size="sm" variant="secondary" onClick={() => void runAuthorScript(entry.source)}>
+                  Ejecutar
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {capture.recording && (
           <Callout tone="info" title="Grabando la vista del recorrido">
             Se graba el lienzo: la panorámica o el modelo con sus marcadores. Los paneles de la

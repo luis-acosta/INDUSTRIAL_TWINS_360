@@ -5,6 +5,7 @@ import {
   decideScriptExecution,
   DEFAULT_SCRIPTING_POLICY,
   SCRIPT_API_SURFACE,
+  scriptDigest,
   scriptPreview,
   type ScriptApproval,
   type ScriptingPolicy,
@@ -213,5 +214,35 @@ describe('revisión previa de scripts', () => {
     expect(scriptPreview('\n\n// comentario\nui.hide("x");')).toBe('ui.hide("x");');
     expect(scriptPreview('')).toBe('');
     expect(scriptPreview(`${'a'.repeat(200)};`, 50)).toHaveLength(50);
+  });
+});
+
+describe('scriptDigest', () => {
+  it('calcula el SHA-256 del código tal cual', () => {
+    // TEST-SCR-D01: sin normalizar ni recortar. Un espacio de más es otro
+    // código, y «aprobé algo muy parecido» no es aprobar.
+    return scriptDigest('it360.log("hola");', globalThis.crypto.subtle).then((digest) => {
+      expect(digest).toMatch(/^[0-9a-f]{64}$/);
+      return scriptDigest('it360.log("hola"); ', globalThis.crypto.subtle).then((otro) => {
+        expect(otro).not.toBe(digest);
+      });
+    });
+  });
+
+  it('devuelve null cuando no hay SHA-256, en lugar de una reserva', async () => {
+    // TEST-SCR-D02: es la decisión de seguridad del módulo. Una reserva que
+    // mirara los primeros bytes haría que dos guiones con el mismo comienzo
+    // compartieran huella: bastaría copiar el principio de un guion aprobado y
+    // añadirle detrás lo que se quisiera. Sin SHA-256, lo correcto es no
+    // ejecutar, y de eso se encarga quien recibe este `null`.
+    expect(await scriptDigest('x', undefined)).toBeNull();
+  });
+
+  it('el mismo código da la misma huella', async () => {
+    // TEST-SCR-D03: si no, una aprobación valdría para una sola ejecución.
+    const a = await scriptDigest('const x = 1;', globalThis.crypto.subtle);
+    const b = await scriptDigest('const x = 1;', globalThis.crypto.subtle);
+
+    expect(a).toBe(b);
   });
 });

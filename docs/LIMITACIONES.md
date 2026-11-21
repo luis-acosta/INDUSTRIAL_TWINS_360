@@ -211,6 +211,36 @@ Lo que sí hay, y cubre la mayor parte del caso:
 Lo que falta para el requisito tal como está escrito es el empaquetado en un
 binario por proyecto. Queda pendiente y declarado.
 
+### Guiones del autor: aislados y sólo en el editor (J09)
+
+Las especificaciones califican esta función de riesgo alto, y así está tratada.
+El guion del autor corre en un `iframe` con `sandbox="allow-scripts"` y **sin**
+`allow-same-origin`: un documento así tiene origen opaco, de modo que no puede
+leer el DOM de la aplicación, ni sus cookies, ni su almacenamiento, ni hacer
+peticiones a nombre de nadie. El aislamiento lo da el navegador y no una
+promesa nuestra; intentarlo con `with`, `Proxy` o una lista de globales
+borrados se rompe siempre.
+
+La superficie es una **lista blanca de operaciones por nombre** —las cinco
+capacidades que el contrato declara: `scene`, `vars`, `tour`, `ui`, `log`— y una
+prueba comprueba que la lista del aislamiento y la del contrato no se separen.
+**No hay acceso al sistema de archivos, a la red, a procesos ni a las API de
+Tauri.** El plazo se cumple destruyendo el marco: un bucle infinito no se
+interrumpe desde fuera con una variable.
+
+Lo que queda fuera por decisión:
+
+- **El recorrido publicado no ejecuta guiones** salvo que se habilite
+  expresamente en la política del proyecto. Un paquete publicado es de sólo
+  lectura y se sirve como archivos estáticos; añadirle código del autor amplía
+  su superficie sin que nadie vuelva a revisarlo.
+- Los guiones se prueban en la previsualización del editor, que es donde el
+  autor los escribe.
+- Sin SHA-256 en el entorno, no se ejecuta nada: la huella es lo que distingue
+  un guion aprobado de uno que no lo está, y una reserva que mirase los
+  primeros bytes dejaría pasar cualquier guion que empezara igual que uno
+  aprobado.
+
 ### Teselado: planificado y no escrito (S08)
 
 El contrato lleva un campo de teselas por medio y el plan de publicación las

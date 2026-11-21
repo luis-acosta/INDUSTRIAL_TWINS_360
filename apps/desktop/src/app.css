@@ -2581,3 +2581,38 @@ body {
   overflow: hidden;
   border: 1px solid var(--it-color-border-subtle);
 }
+
+/* ------------------------------------------------------------------ *
+ * Guiones del proyecto en la previsualización (J09)
+ * ------------------------------------------------------------------ */
+
+.preview__scripts {
+  display: grid;
+  gap: var(--it-space-2);
+  padding: var(--it-space-3);
+  border: 1px solid var(--it-color-border-subtle);
+  border-radius: var(--it-radius-md);
+  background: var(--it-color-surface-raised);
+}
+
+.preview__scripts-title {
+  margin: 0;
+  font-size: var(--it-text-xs);
+  color: var(--it-color-text-tertiary);
+}
+
+.preview__scripts-row {
+  display: flex;
+  gap: var(--it-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.preview__scripts-row code {
+  font-size: var(--it-text-xs);
+  /* El propósito lo escribe el autor y puede ser largo: se recorta en lugar de
+     empujar el botón fuera del diálogo. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

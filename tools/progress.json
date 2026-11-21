@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.59.0",
-  "updatedAt": "2026-11-21T11:10:00Z",
+  "version": "0.60.0",
+  "updatedAt": "2026-11-21T11:45:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -254,7 +254,7 @@
     "J06": "done",
     "J07": "done",
     "J08": "done",
-    "J09": "partial",
+    "J09": "done",
     "J10": "done",
     "X01": "done",
     "X02": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "X20": "Instalación privada, local o en nube, con los archivos que hacen falta y no sólo con instrucciones: compose con base de datos, servicio y servidor web, imagen del servicio, configuración del proxy y un «.env.example» que documenta cada variable con su motivo. El recorrido y la API comparten origen a través del proxy, así que no hay CORS que configurar —una configuración de CORS que nadie revisa es una de las formas más comunes de dejar una API abierta de más—; ni la base ni el servicio publican puerto, porque publicar el 5432 «para mirar con el cliente gráfico» es cómo acaba una base de planta expuesta a la red corporativa; el servicio no corre como root y las imágenes llevan versión exacta, no «latest» ni una etiqueta mayor que cambia sola. La pieza que más va a servir con el tiempo es una prueba: compara las variables del «.env.example» con las que el código lee de verdad, extraídas de sus propias llamadas. Ya encontró dos sin documentar —IT360_MAPPINGS_FILE, que es la lista blanca de variables de proceso, y el plazo de SMTP—; una variable mal escrita en la documentación hace que el servicio arranque, la ignore y se comporte como si no estuviera configurada, que es el fallo de despliegue más difícil de encontrar de todo el producto. Y la advertencia que decide si el despliegue es seguro está en el compose y en el manual, con su prueba: la autenticación de usuarios está pendiente, la identidad llega por cabeceras y no se valida, así que esto va detrás de la VPN o de la red de planta y nunca con el puerto publicado en Internet."
+      "J09": "Ejecución aislada de guiones del autor. La política —desactivado por omisión, aprobación por huella, nunca en el recorrido publicado— estaba en el dominio desde la etapa 02 y «decideScriptExecution» no tenía un solo llamante: el ajuste de seguridad no gobernaba nada porque no había ejecución que gobernar. Ahora la hay, construida sobre cuatro reglas: el aislamiento lo da el navegador —iframe con sandbox y SIN allow-same-origin, origen opaco, nada de DOM, cookies, almacenamiento ni peticiones a nombre de nadie— y no una promesa nuestra, porque aislar con «with», «Proxy» o una lista de globales borrados se rompe siempre; la superficie es una lista blanca de operaciones por nombre y no un filtro de lo peligroso, de modo que una operación nueva del anfitrión no queda expuesta por olvido; cada ejecución lleva credencial de un solo uso, porque cualquier otro marco de la página —un vídeo incrustado, una página del cliente enmarcada— puede enviar mensajes; y el plazo se cumple destruyendo el marco, porque un bucle infinito no se interrumpe desde fuera con una variable. El código del autor va incrustado como texto de datos y se lee con «textContent» en lugar de interpolarse en el guion de arranque, que es exactamente cómo un guion se sale de su función. La superficie del aislamiento se alineó con la que el contrato ya declaraba —scene, vars, tour, ui, log— y hay una prueba que impide que se separen: si lo hicieran, el manual diría una cosa y el aislamiento permitiría otra, y la que manda es la segunda. Y sin SHA-256 en el entorno no se ejecuta nada: una reserva que mirase los primeros bytes dejaría pasar cualquier guion que empezara igual que uno aprobado."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

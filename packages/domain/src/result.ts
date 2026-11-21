@@ -90,6 +90,11 @@ export const ERROR_CODES = [
   'NETWORK_UNAVAILABLE',
   'EMBED_BLOCKED',
   'SCRIPT_DISABLED',
+  /* Un guion del autor falló o superó su plazo (J09). Se distinguen porque el
+     autor hace cosas distintas con cada uno: corregir el código, o buscar el
+     bucle sin salida. */
+  'SCRIPT_FAILED',
+  'SCRIPT_TIMEOUT',
   'EXPERIMENTAL_DISABLED',
   'XR_UNAVAILABLE',
   'CIRCULAR_REFERENCE',

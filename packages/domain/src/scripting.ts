@@ -281,3 +281,38 @@ export function scriptPreview(source: string, maxLength = 120): string {
     ? `${firstMeaningful.slice(0, maxLength - 1)}…`
     : firstMeaningful;
 }
+
+/* ------------------------------------------------------------------ *
+ * Huella de un guion (J09)
+ * ------------------------------------------------------------------ */
+
+/**
+ * SHA-256 del código de un guion, en hexadecimal.
+ *
+ * Devuelve `null` cuando el entorno no ofrece SHA-256 de verdad, y esa
+ * devolución es una decisión de seguridad, no una comodidad: **aquí no puede
+ * haber reserva**. La huella es lo que distingue un guion aprobado de uno que
+ * no lo está; una reserva que mire sólo los primeros bytes haría que dos
+ * guiones con el mismo comienzo compartieran huella, y entonces bastaría
+ * copiar el principio de un guion aprobado y añadirle lo que se quisiera
+ * detrás. Sin SHA-256, lo correcto es no ejecutar.
+ *
+ * El contenido se compara byte a byte, sin normalizar ni recortar: un espacio
+ * de más es otro código, y «aprobé algo muy parecido» no es aprobar.
+ */
+export async function scriptDigest(
+  source: string,
+  subtle: SubtleCrypto | undefined,
+): Promise<string | null> {
+  /* El `subtle` se pasa, no se lee de un global con valor por omisión: con un
+     valor por omisión, pasar `undefined` adrede —que es como se prueba el caso
+     sin SHA-256— vuelve a caer en el global y el caso no se puede ejercitar. Y
+     en cada llamada queda a la vista de qué depende esto. */
+  if (subtle === undefined) return null;
+
+  const bytes = new TextEncoder().encode(source);
+  const digest = await subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
