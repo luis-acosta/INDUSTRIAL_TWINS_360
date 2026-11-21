@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.60.0",
-  "updatedAt": "2026-11-21T11:45:00Z",
+  "version": "0.61.0",
+  "updatedAt": "2026-11-21T12:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -274,7 +274,7 @@
     "X16": "done",
     "X17": "done",
     "X18": "done",
-    "X19": "partial",
+    "X19": "done",
     "X20": "done",
     "P01": "done",
     "P02": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "J09": "Ejecución aislada de guiones del autor. La política —desactivado por omisión, aprobación por huella, nunca en el recorrido publicado— estaba en el dominio desde la etapa 02 y «decideScriptExecution» no tenía un solo llamante: el ajuste de seguridad no gobernaba nada porque no había ejecución que gobernar. Ahora la hay, construida sobre cuatro reglas: el aislamiento lo da el navegador —iframe con sandbox y SIN allow-same-origin, origen opaco, nada de DOM, cookies, almacenamiento ni peticiones a nombre de nadie— y no una promesa nuestra, porque aislar con «with», «Proxy» o una lista de globales borrados se rompe siempre; la superficie es una lista blanca de operaciones por nombre y no un filtro de lo peligroso, de modo que una operación nueva del anfitrión no queda expuesta por olvido; cada ejecución lleva credencial de un solo uso, porque cualquier otro marco de la página —un vídeo incrustado, una página del cliente enmarcada— puede enviar mensajes; y el plazo se cumple destruyendo el marco, porque un bucle infinito no se interrumpe desde fuera con una variable. El código del autor va incrustado como texto de datos y se lee con «textContent» en lugar de interpolarse en el guion de arranque, que es exactamente cómo un guion se sale de su función. La superficie del aislamiento se alineó con la que el contrato ya declaraba —scene, vars, tour, ui, log— y hay una prueba que impide que se separen: si lo hicieran, el manual diría una cosa y el aislamiento permitiría otra, y la que manda es la segunda. Y sin SHA-256 en el entorno no se ejecuta nada: una reserva que mirase los primeros bytes dejaría pasar cualquier guion que empezara igual que uno aprobado."
+      "X19": "API propia con contrato verificado. El servicio ya exponía OpenAPI, pero una API para integraciones no la hace el esquema: la hace la garantía de que no va a cambiar bajo los pies de quien la use. Lo que rompe una integración escrita hace dos años no es un cambio grande y anunciado, es un parámetro que pasa a ser obligatorio, un campo que se renombra o una ruta que se mueve, hechos con la mejor intención. Ahora «contract/openapi-surface.json» guarda la forma de las dieciséis operaciones —rutas, métodos, parámetros con su obligatoriedad y campos del cuerpo con la suya— y una prueba la compara con la que el servicio genera: la API se puede cambiar, pero a propósito y en el mismo cambio, de modo que aparece en la revisión en lugar de descubrirse en producción. No se vigilan los textos de los mensajes, que se mejoran a menudo y no rompen a nadie; sí el «code». La prueba encontró algo al escribirla: la telemetría no acepta las cabeceras de identidad. Era deliberado —la consulta el recorrido publicado, que no tiene ninguna, y lo que puede devolver está limitado por la lista blanca de variables— y ahora la lista de superficies anónimas es cerrada y comprobada, para que otra operación no se vuelva anónima sin que nadie lo note. Hay además una prueba de que ninguna ruta de telemetría escribe, que es lo que las especificaciones exigen. «docs/API.md» documenta lo que un esquema no puede decir: qué es estable, qué no —los textos de error—, y qué no va a existir nunca."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

@@ -1,0 +1,179 @@
+{
+  "contrato": "superficie pública del servicio INDUSTRIAL TWINS 360 (X19)",
+  "version": "v1",
+  "operaciones": {
+    "POST /api/v1/access/check": {
+      "parameters": [
+        "area_id:query",
+        "note_category_id:query",
+        "operation:query!",
+        "plant_id:query",
+        "unit_id:query",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "GET /api/v1/audit": {
+      "parameters": [
+        "limit:query",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "GET /api/v1/health": {
+      "parameters": [],
+      "body": []
+    },
+    "GET /api/v1/me/operations": {
+      "parameters": [
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "GET /api/v1/notes": {
+      "parameters": [
+        "mine:query",
+        "projectId:query!",
+        "sceneId:query",
+        "status:query",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "PUT /api/v1/notes": {
+      "parameters": [
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "notes",
+        "projectId!"
+      ]
+    },
+    "POST /api/v1/notes/{note_id}/comments": {
+      "parameters": [
+        "note_id:path!",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "authorName",
+        "body!"
+      ]
+    },
+    "POST /api/v1/notes/{note_id}/status": {
+      "parameters": [
+        "note_id:path!",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "status!"
+      ]
+    },
+    "GET /api/v1/notifications": {
+      "parameters": [
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "POST /api/v1/notifications": {
+      "parameters": [
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "link",
+        "noteId",
+        "noteTitle",
+        "plant",
+        "priority",
+        "projectTitle!",
+        "reason!",
+        "recipientAddress!",
+        "recipientId!",
+        "recipientName"
+      ]
+    },
+    "GET /api/v1/revisions": {
+      "parameters": [
+        "projectId:query!",
+        "state:query",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": []
+    },
+    "POST /api/v1/revisions": {
+      "parameters": [
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "contentDigest!",
+        "projectId!",
+        "sections",
+        "summary!"
+      ]
+    },
+    "POST /api/v1/revisions/{revision_id}/actions": {
+      "parameters": [
+        "revision_id:path!",
+        "x-categorias-nota:header",
+        "x-planta:header",
+        "x-rol:header",
+        "x-usuario:header"
+      ],
+      "body": [
+        "action!",
+        "comment"
+      ]
+    },
+    "POST /api/v1/telemetry/latest": {
+      "parameters": [],
+      "body": [
+        "mappingIds!"
+      ]
+    },
+    "GET /api/v1/telemetry/ping": {
+      "parameters": [],
+      "body": []
+    },
+    "GET /api/v1/telemetry/{mapping_id}/history": {
+      "parameters": [
+        "from:query!",
+        "mapping_id:path!",
+        "to:query!",
+        "window:query"
+      ],
+      "body": []
+    }
+  }
+}
