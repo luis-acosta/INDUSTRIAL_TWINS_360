@@ -12,11 +12,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   EFFECT_PROFILES,
+  MOTION_BLUR_FULL_RAD_PER_S,
+  MOTION_BLUR_MAX_MIX,
+  MOTION_BLUR_THRESHOLD_RAD_PER_S,
   advanceAmbient,
+  angularSpeed,
   ambientForScene,
   createAmbient,
   flareElements,
   makeRandom,
+  motionBlurMix,
   normalizeAngle,
   particleCount,
   projectFlareSource,
@@ -331,5 +336,142 @@ describe('luz declarada del destello', () => {
 
     expect(mirandoALaLuz.visible).toBe(true);
     expect(mirandoAlOtroLado.visible).toBe(false);
+  });
+});
+
+describe('desenfoque de movimiento (V07)', () => {
+  it('no desenfoca cuando la cámara está prácticamente parada', () => {
+    // TEST-AMB-V07-001: la mano no se queda quieta del todo sobre un ratón ni
+    // sobre una pantalla táctil. Sin umbral, la imagen quedaría
+    // permanentemente algo sucia y eso se lee como un panorama mal publicado.
+    expect(motionBlurMix(0, 1)).toBe(0);
+    expect(motionBlurMix(MOTION_BLUR_THRESHOLD_RAD_PER_S, 1)).toBe(0);
+    expect(motionBlurMix(MOTION_BLUR_THRESHOLD_RAD_PER_S * 0.9, 1)).toBe(0);
+  });
+
+  it('crece con la velocidad y se acota por arriba', () => {
+    // TEST-AMB-V07-002: una mezcla cercana a uno deja la imagen irreconocible
+    // y, al parar, tarda segundos en volver a verse: el visitante cree que el
+    // visor se ha colgado.
+    const medio = motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S / 2, 1);
+    const rapido = motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S, 1);
+    const absurdo = motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S * 20, 1);
+
+    expect(medio).toBeGreaterThan(0);
+    expect(rapido).toBeGreaterThan(medio);
+    expect(rapido).toBeCloseTo(MOTION_BLUR_MAX_MIX, 6);
+    expect(absurdo).toBe(rapido);
+  });
+
+  it('la intensidad del autor escala el resultado', () => {
+    // TEST-AMB-V07-003: es el único control que el autor tiene sobre esto.
+    expect(motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S, 0.5)).toBeCloseTo(
+      MOTION_BLUR_MAX_MIX / 2,
+      6,
+    );
+    expect(motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S, 0)).toBe(0);
+  });
+
+  it('con movimiento reducido no desenfoca a ninguna velocidad', () => {
+    // TEST-AMB-V07-004: el desenfoque de movimiento es énfasis del movimiento,
+    // que es justo lo que esa preferencia pide no hacer.
+    expect(motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S * 3, 1, { reducedMotion: true })).toBe(0);
+  });
+
+  it('da igual el sentido del giro', () => {
+    // TEST-AMB-V07-005: girar a la izquierda desenfoca lo mismo que girar a la
+    // derecha. Sin el valor absoluto, media de las dos direcciones no
+    // desenfocaría nada.
+    expect(motionBlurMix(-MOTION_BLUR_FULL_RAD_PER_S, 1)).toBeCloseTo(
+      motionBlurMix(MOTION_BLUR_FULL_RAD_PER_S, 1),
+      9,
+    );
+  });
+
+  it('un valor no finito no produce NaN en la mezcla', () => {
+    // TEST-AMB-V07-006: un «dt» de cero en el primer fotograma daría infinito,
+    // y un NaN en la opacidad de la acumulación deja la pantalla en negro.
+    expect(motionBlurMix(Number.NaN, 1)).toBe(0);
+    expect(motionBlurMix(Number.POSITIVE_INFINITY, 1)).toBe(0);
+  });
+});
+
+describe('velocidad angular entre dos vistas (V07)', () => {
+  it('mide el giro horizontal y el vertical juntos', () => {
+    // TEST-AMB-V07-007: no es exactamente la hipotenusa de 0,3 y 0,4 —que
+    // sería 0,5— porque el yaw va corregido por el coseno del cabeceo medio.
+    // Esa diferencia es la corrección funcionando, y escribir 0,5 aquí la
+    // habría borrado del cálculo en la primera «simplificación».
+    const corregido = Math.hypot(0.3 * Math.cos(0.2), 0.4);
+    const speed = angularSpeed({ yaw: 0, pitch: 0 }, { yaw: 0.3, pitch: 0.4 }, 1);
+
+    expect(speed).toBeCloseTo(corregido, 9);
+    expect(speed).toBeLessThan(0.5);
+  });
+
+  it('toma el camino corto al cruzar el norte', () => {
+    // TEST-AMB-V07-008: de 350° a 10° son 20 grados, no 340. Sin esto, cruzar
+    // el norte produciría un desenfoque máximo en un movimiento mínimo —y
+    // ocurre en cada vuelta completa que da el visitante—.
+    const speed = angularSpeed(
+      { yaw: Math.PI - 0.1, pitch: 0 },
+      { yaw: -Math.PI + 0.1, pitch: 0 },
+      1,
+    );
+
+    expect(speed).toBeCloseTo(0.2, 6);
+  });
+
+  it('corrige el yaw por el coseno del cabeceo', () => {
+    // TEST-AMB-V07-009: cerca del cenit, los meridianos se juntan y un gran
+    // cambio de yaw mueve muy poco la imagen. Sin la corrección, el desenfoque
+    // se dispararía al mirar hacia arriba sin que nada se moviera en pantalla.
+    const horizonte = angularSpeed({ yaw: 0, pitch: 0 }, { yaw: 1, pitch: 0 }, 1);
+    const cenit = angularSpeed({ yaw: 0, pitch: 1.4 }, { yaw: 1, pitch: 1.4 }, 1);
+
+    expect(cenit).toBeLessThan(horizonte / 4);
+  });
+
+  it('un intervalo de cero no divide por cero', () => {
+    // TEST-AMB-V07-010: ocurre en el primer fotograma y al volver de una
+    // pestaña en segundo plano.
+    expect(angularSpeed({ yaw: 0, pitch: 0 }, { yaw: 1, pitch: 0 }, 0)).toBe(0);
+  });
+});
+
+describe('efecto impuesto por una acción (V07)', () => {
+  /* La acción «setVisualEffect» existía en el contrato desde la etapa 02 y en
+     el recorrido era una función vacía: el autor la configuraba y no pasaba
+     nada. Lo que se fija aquí es la sustitución, que es lo que el visor hace
+     ahora con lo que la acción pide. */
+
+  it('el efecto pedido sustituye al de la escena', () => {
+    // TEST-AMB-V07-011
+    const escena = { ambientEffect: { effect: 'none', intensity: 0 } } as Parameters<
+      typeof ambientForScene
+    >[0];
+    const impuesto = {
+      ambientEffect: { ...escena.ambientEffect, effect: 'rain' as const, intensity: 0.8 },
+    } as Parameters<typeof ambientForScene>[0];
+
+    expect(ambientForScene(escena)).toBeNull();
+    expect(ambientForScene(impuesto)?.kind).toBe('rain');
+  });
+
+  it('el movimiento reducido gana también sobre el efecto pedido', () => {
+    // TEST-AMB-V07-012: una acción del autor no puede saltarse una preferencia
+    // de accesibilidad del sistema. Si pudiera, bastaría poner la acción en la
+    // entrada de la escena para imponer movimiento periférico a quien lo tiene
+    // desactivado por mareo.
+    const impuesto = {
+      ambientEffect: {
+        effect: 'snow' as const,
+        intensity: 1,
+        lightYaw: 0,
+        lightPitch: 0,
+      },
+    } as Parameters<typeof ambientForScene>[0];
+
+    expect(ambientForScene(impuesto, { reducedMotion: true })).toBeNull();
   });
 });

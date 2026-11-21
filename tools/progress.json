@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.63.0",
-  "updatedAt": "2026-11-21T13:05:00Z",
+  "version": "0.64.0",
+  "updatedAt": "2026-11-21T13:35:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -205,7 +205,7 @@
     "V04": "done",
     "V05": "done",
     "V06": "done",
-    "V07": "modeled",
+    "V07": "partial",
     "V08": "done",
     "D01": "done",
     "D02": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "B06": "Panorámica en vivo: una escena puede traer un bucle de vídeo que sustituye a la fotografía. En una planta eso no es decoración —el vapor moviéndose, la llama parpadeando, las aspas girando dicen que la unidad está en marcha, y una fotografía fija de una unidad en operación puede parecer una unidad parada—. Queda PARCIAL porque Adaptive HDR, la otra mitad del requisito, no está: necesita el mapa de ganancia aplicado en el sombreador y el manejo de pantallas HDR, y el visor dibuja en sRGB —es otra tubería de color, no un ajuste—. Declarado en LIMITACIONES. De lo que sí está, lo que importa son las condiciones para NO reproducir, comprobadas antes de pedir el archivo porque pedir veinte megabytes para descubrir que no se puede decodificar es gastar la red de la planta para nada: movimiento reducido del sistema —y ésa no se negocia, porque el movimiento ocupa los 360 grados y quien tiene la preferencia activada por mareo no puede esquivarlo mirando a otro lado—, ahorro de datos del visitante, y un códec que el dispositivo no admite. El orden de las comprobaciones también está fijado: las del visitante primero, porque al revés un dispositivo sin el códec informaría de un problema de códec a alguien que de todas formas había pedido no ver movimiento. Y la regla que lo sostiene: la imagen fija es obligatoria y el vídeo es un añadido, así que un autoplay rechazado, un códec que el navegador declara y no reproduce o una red que se corta dejan la escena en la fotografía y no en negro."
+      "V07": "La acción «aplicar efecto visual» deja de ser una función vacía. Estaba en el contrato desde la etapa 02 y en el recorrido era literalmente «() => undefined»: el editor la ofrecía, el autor la configuraba y no pasaba nada. Ahora lluvia, polvo, nieve y destello se imponen desde una acción y sustituyen al efecto de la escena mientras se está en ella; al cambiar de escena vuelve a mandar el que el autor configuró allí, porque el proyecto es del autor y una acción del recorrido no debe reescribirlo. El movimiento reducido del sistema gana también sobre el efecto impuesto: si no, bastaría poner la acción en la entrada de la escena para imponer movimiento periférico a quien lo tiene desactivado por mareo. Sube de «modelado» a «parcial» y no a completo porque el desenfoque de movimiento —uno de los cinco valores de la lista— no se dibuja: su cálculo está y está probado (umbral por abajo para que la imagen parada no quede sucia, tope por arriba para que al parar no tarde segundos en volver a verse, corrección por el coseno del cabeceo sin la cual mirar hacia arriba disparaba el desenfoque sin que nada se moviera, camino corto al cruzar el norte), pero la acumulación de fotogramas en la GPU es otra tubería de dibujado y no se ha validado en una tarjeta de verdad. Mientras no esté, una acción que pida desenfoque deja la escena sin efecto ambiental —la verdad— en lugar de dibujar lluvia en su lugar."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -414,7 +414,8 @@
       "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio.",
       "P07": "El correo de asignación funciona de punta a punta —composición sin contenido de nota, cola con motivo, entrega por SMTP, aviso al autor cuando no sale—. Faltan los avisos de vencimiento próximo, que están compuestos y probados y necesitan un proceso periódico que los dispare, y la persistencia de la cola.",
       "S04": "El paquete es autónomo y, con el manifiesto incrustado, llega más lejos abierto desde un USB; la aplicación de escritorio recorre el proyecto sin conexión. Falta el empaquetado en un binario por proyecto, que exige una cadena de compilación en el equipo de quien publica.",
-      "B06": "La panorámica en vivo funciona de punta a punta, con la imagen fija como reserva obligatoria y las condiciones del visitante y del sistema por delante de la capacidad técnica. Adaptive HDR no está: necesita el mapa de ganancia en el sombreador y el manejo de pantallas HDR, y el visor dibuja en sRGB."
+      "B06": "La panorámica en vivo funciona de punta a punta, con la imagen fija como reserva obligatoria y las condiciones del visitante y del sistema por delante de la capacidad técnica. Adaptive HDR no está: necesita el mapa de ganancia en el sombreador y el manejo de pantallas HDR, y el visor dibuja en sRGB.",
+      "V07": "Los cuatro efectos de partículas y destello se imponen desde una acción y funcionan. El desenfoque de movimiento está calculado y probado pero no dibujado: falta la acumulación de fotogramas en la GPU y validarla en una tarjeta de verdad."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }

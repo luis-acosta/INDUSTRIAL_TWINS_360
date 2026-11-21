@@ -245,6 +245,27 @@ Lo que queda fuera por decisión:
   primeros bytes dejaría pasar cualquier guion que empezara igual que uno
   aprobado.
 
+### Desenfoque de movimiento: calculado, no dibujado (V07)
+
+La acción «aplicar efecto visual» ya funciona: lluvia, polvo, nieve y destello
+se imponen desde una acción y sustituyen al efecto de la escena mientras se está
+en ella. Antes era una función vacía —el autor la configuraba y el recorrido no
+hacía nada—.
+
+El desenfoque de movimiento es el único valor de esa lista que no se dibuja. Su
+cálculo sí está y está probado: cuánta mezcla corresponde a cada velocidad
+angular, con umbral por abajo —para que la imagen parada no quede
+permanentemente sucia—, tope por arriba —una mezcla alta deja la imagen
+irreconocible y al parar tarda segundos en volver— y la corrección por el coseno
+del cabeceo, sin la cual mirar hacia arriba disparaba el desenfoque sin que nada
+se moviera en pantalla. Con `prefers-reduced-motion` activa da cero, como todos
+los efectos de movimiento.
+
+Lo que falta es la acumulación de fotogramas en la GPU, que es otra tubería de
+dibujado, y validarla en una tarjeta de verdad. Mientras no esté, una acción que
+pida desenfoque deja la escena sin efecto ambiental —que es la verdad— en lugar
+de dibujar lluvia en su lugar.
+
 ### Teselado: planificado y no escrito (S08)
 
 El contrato lleva un campo de teselas por medio y el plan de publicación las

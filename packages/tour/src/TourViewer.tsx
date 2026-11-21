@@ -824,7 +824,17 @@ export function TourViewer({
       showAsset: (assetId) => setOpenAssetId(assetId),
       createNote: () => undefined,
       showPlan: () => openPlan(),
-      setVisualEffect: () => undefined,
+      /* Efecto visual pedido por una acción (V07). Era una función vacía: el
+         editor ofrecía la acción, el autor la configuraba y el recorrido no
+         hacía nada —ni lluvia, ni polvo, ni destello—. Ahora sustituye el
+         efecto de la escena mientras se está en ella; al cambiar de escena
+         vuelve a mandar el de la escena nueva, que es lo que el autor
+         configuró ahí. */
+      setVisualEffect: (effect, intensity) => {
+        setEffectOverride(
+          effect === 'none' ? { effect: 'none', intensity: 0 } : { effect, intensity },
+        );
+      },
       // Reproducción de medios desde una acción (F10, J06). Eran dos
       // funciones vacías: pulsar el marcador no sonaba nada y la barra de
       // reproducción de la interfaz quedaba invisible por no haber nada que
@@ -1076,9 +1086,60 @@ export function TourViewer({
    * atenúa: se apaga, porque un efecto ambiental es movimiento periférico
    * constante y es exactamente lo que molesta a quien pide esa preferencia.
    */
+  /**
+   * Efecto visual impuesto por una acción, si hay uno (V07).
+   *
+   * Se guarda aparte del efecto de la escena y no sobre él: el proyecto es del
+   * autor y una acción del recorrido no debe reescribirlo. Al cambiar de
+   * escena se descarta, porque el efecto que el autor configuró en la escena
+   * nueva es el que corresponde allí.
+   */
+  const [effectOverride, setEffectOverride] = useState<{
+    readonly effect: string;
+    readonly intensity: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setEffectOverride(null);
+  }, [scene?.id]);
+
   const ambient = useMemo(
-    () => (scene === null ? null : ambientForScene(scene, { reducedMotion: prefersReducedMotion() })),
-    [scene?.id, scene?.ambientEffect.effect, scene?.ambientEffect.intensity],
+    () =>
+      scene === null
+        ? null
+        : ambientForScene(
+            effectOverride === null
+              ? scene
+              : {
+                  ...scene,
+                  ambientEffect: {
+                    ...scene.ambientEffect,
+                    /* El desenfoque de movimiento no es un efecto de
+                       partículas y la escena no lo admite en su contrato: una
+                       acción que lo pida deja la escena sin efecto ambiental,
+                       que es la verdad, en lugar de dibujar lluvia en su
+                       lugar. El desenfoque lo aplica el visor con la velocidad
+                       de la cámara. */
+                    effect:
+                      effectOverride.effect === 'motionBlur'
+                        ? 'none'
+                        : (effectOverride.effect as typeof scene.ambientEffect.effect),
+                    intensity: effectOverride.intensity,
+                  },
+                },
+            { reducedMotion: prefersReducedMotion() },
+          ),
+    /* `scene` entero no: cambia de identidad en cada edición del proyecto y
+       recrearía las partículas, que volverían a caer desde arriba. Con el
+       efecto impuesto por una acción pasa lo mismo, así que entra por sus dos
+       campos y no por el objeto. */
+    [
+      scene?.id,
+      scene?.ambientEffect.effect,
+      scene?.ambientEffect.intensity,
+      effectOverride?.effect,
+      effectOverride?.intensity,
+    ],
   );
 
   /**

@@ -353,3 +353,90 @@ function spawn(profile: EffectProfile, random: () => number, anywhere: boolean):
 }
 
 const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
+
+/* ------------------------------------------------------------------ *
+ * Desenfoque de movimiento (V07)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Velocidad angular, en radianes por segundo, a la que el desenfoque llega a su
+ * máximo.
+ *
+ * Es aproximadamente la velocidad de un giro rápido con el ratón. Por debajo,
+ * desenfocar un barrido lento sólo produciría una imagen sucia: el desenfoque
+ * tiene que acompañar al movimiento que el ojo ya no sigue, no sustituir al que
+ * sí sigue.
+ */
+export const MOTION_BLUR_FULL_RAD_PER_S = 3.2;
+
+/**
+ * Velocidad por debajo de la cual no hay desenfoque.
+ *
+ * La mano no se queda quieta del todo sobre un ratón ni sobre una pantalla
+ * táctil. Sin umbral, la imagen quedaría permanentemente algo sucia y nadie
+ * sabría por qué; con él, parada es parada.
+ */
+export const MOTION_BLUR_THRESHOLD_RAD_PER_S = 0.25;
+
+/** Opacidad máxima de la acumulación: por encima, la imagen deja de leerse. */
+export const MOTION_BLUR_MAX_MIX = 0.55;
+
+/**
+ * Cuánto desenfoque corresponde a este movimiento.
+ *
+ * Devuelve la proporción del fotograma anterior que se mezcla con el actual,
+ * entre 0 —imagen limpia— y `MOTION_BLUR_MAX_MIX`.
+ *
+ * Tres reglas, y las tres existen por un fallo concreto:
+ *
+ *  - **Con movimiento reducido, cero.** El desenfoque de movimiento es énfasis
+ *    del movimiento: es justo lo que esa preferencia pide no hacer.
+ *  - **Por debajo del umbral, cero**, no «un poco». Si no, la imagen parada
+ *    queda permanentemente algo sucia, y eso se lee como un panorama mal
+ *    publicado.
+ *  - **Acotado por arriba.** Una mezcla cercana a uno deja la imagen
+ *    irreconocible y, al parar, tarda segundos en volver a verse: el visitante
+ *    cree que el visor se ha colgado.
+ */
+export function motionBlurMix(
+  angularSpeedRadPerS: number,
+  intensity: number,
+  options: { readonly reducedMotion?: boolean } = {},
+): number {
+  if (options.reducedMotion === true) return 0;
+
+  const speed = Math.abs(angularSpeedRadPerS);
+  if (!Number.isFinite(speed) || speed <= MOTION_BLUR_THRESHOLD_RAD_PER_S) return 0;
+
+  const span = MOTION_BLUR_FULL_RAD_PER_S - MOTION_BLUR_THRESHOLD_RAD_PER_S;
+  const fraction = Math.min(1, (speed - MOTION_BLUR_THRESHOLD_RAD_PER_S) / span);
+
+  return fraction * MOTION_BLUR_MAX_MIX * clamp01(intensity);
+}
+
+/**
+ * Velocidad angular entre dos vistas.
+ *
+ * Se compone el giro horizontal y el vertical, y el horizontal se corrige por
+ * el coseno del cabeceo: cerca del cenit, un gran cambio de yaw mueve muy poco
+ * la imagen —los meridianos se juntan—, y sin la corrección el desenfoque se
+ * dispararía al mirar hacia arriba sin que nada se moviera en pantalla.
+ */
+export function angularSpeed(
+  from: { readonly yaw: number; readonly pitch: number },
+  to: { readonly yaw: number; readonly pitch: number },
+  dtSeconds: number,
+): number {
+  if (dtSeconds <= 0) return 0;
+
+  // Diferencia de yaw por el camino corto: de 350° a 10° son 20°, no 340°.
+  let dYaw = to.yaw - from.yaw;
+  while (dYaw > Math.PI) dYaw -= 2 * Math.PI;
+  while (dYaw < -Math.PI) dYaw += 2 * Math.PI;
+
+  const meanPitch = (from.pitch + to.pitch) / 2;
+  const horizontal = dYaw * Math.cos(meanPitch);
+  const vertical = to.pitch - from.pitch;
+
+  return Math.hypot(horizontal, vertical) / dtSeconds;
+}
