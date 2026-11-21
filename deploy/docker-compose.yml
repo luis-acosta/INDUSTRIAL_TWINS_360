@@ -1,0 +1,83 @@
+# Instalación privada del cliente (X20)
+#
+# Sirve igual para un servidor en la propia planta y para una máquina en la nube
+# privada del cliente: lo único que cambia es quién termina el TLS y desde dónde
+# se llega. Lo que **no** cambia es que el servicio no se expone a Internet
+# —ver la advertencia de más abajo—.
+#
+# Tres servicios y ninguno más:
+#
+#   db        PostgreSQL. El servicio espera la base creada.
+#   servicio  Telemetría, notas y revisiones.
+#   web       Nginx. Sirve los recorridos publicados y hace de proxy del
+#             servicio para que recorrido y API compartan origen; así no hace
+#             falta CORS, que es una configuración menos que alguien pueda
+#             dejar abierta de más.
+#
+# ⚠ **La autenticación de usuarios está pendiente.** La identidad llega por
+# cabeceras HTTP y el servicio no la valida (ver `docs/LIMITACIONES.md`). Hasta
+# que la integración con el directorio del cliente esté hecha, este despliegue
+# va detrás de la VPN o de la red de planta, nunca con el puerto publicado en
+# Internet. No es una recomendación de endurecimiento: es la diferencia entre
+# controlar el acceso y no controlarlo.
+
+name: it360
+
+services:
+  db:
+    # Versión exacta: un «16» que cambie de menor solo dejaría una migración
+    # fallando un lunes sin que nadie haya tocado nada.
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: it360
+      POSTGRES_USER: it360
+      # Se lee del .env, que no entra en ningún repositorio ni en ninguna imagen.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD en .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Sin puertos publicados: a la base sólo llega el servicio, por la red
+    # interna. Publicar 5432 «para poder mirar con el cliente gráfico» es cómo
+    # acaba una base de planta expuesta a la red corporativa.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U it360 -d it360']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  servicio:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        # Se espera a que la base responda, no a que el contenedor exista: sin
+        # esto, el servicio arranca antes que la base, falla al conectar y se
+        # reinicia unas cuantas veces antes de funcionar, dejando un registro
+        # de arranque lleno de errores que no son errores.
+        condition: service_healthy
+    volumes:
+      - backups:/var/lib/it360/backups
+    # Tampoco publica puerto: se llega por el proxy, que es lo que termina el
+    # TLS y lo único que está expuesto.
+
+  web:
+    image: nginx:1.27.3-alpine
+    restart: unless-stopped
+    depends_on:
+      - servicio
+    ports:
+      - '${IT360_HTTP_PORT:-8080}:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Carpeta donde se copian los recorridos publicados. Sólo lectura: el
+      # servidor web no tiene por qué poder escribir en lo que sirve, y si
+      # alguna vez se encuentra una escritura de archivos en nginx, esto es la
+      # diferencia entre leer y plantar.
+      - ${IT360_TOURS_DIR:-./recorridos}:/usr/share/nginx/html/recorridos:ro
+
+volumes:
+  db-data:
+  backups:

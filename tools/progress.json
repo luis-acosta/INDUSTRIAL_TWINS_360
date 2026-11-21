@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.58.0",
-  "updatedAt": "2026-11-21T03:55:00Z",
+  "version": "0.59.0",
+  "updatedAt": "2026-11-21T11:10:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -275,7 +275,7 @@
     "X17": "done",
     "X18": "done",
     "X19": "partial",
-    "X20": "pending",
+    "X20": "done",
     "P01": "done",
     "P02": "done",
     "P03": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "S04": "Consulta local: el paquete llega más lejos sin servidor, y el requisito se queda PARCIAL con su motivo escrito. El manifiesto va ahora incrustado en la página además de como archivo suelto: ahorra la petición que bloquea todas las demás —hasta que el manifiesto llega no se sabe ni qué imagen pedir— y permite que un paquete abierto desde un USB llegue más lejos, porque muchos navegadores bloquean la lectura de archivos vecinos pero no el contenido de la propia página. El bloque va con un tipo que el navegador no ejecuta y con los signos «<», «>» y «&» escapados: un título de escena con «</script>» dentro cerraría el bloque y lo que siguiera se interpretaría como HTML, que es la vulnerabilidad clásica de incrustar JSON en una página. Un manifiesto incrustado ilegible o de una versión que este visor no entiende no se traga: se sigue por el archivo suelto, que puede estar bien. Lo que NO está es generar un ejecutable por proyecto: compilar un binario exige una cadena de compilación en el equipo de quien publica, y el producto no la lleva ni puede instalarla por su cuenta. Está declarado en LIMITACIONES en lugar de disimulado."
+      "X20": "Instalación privada, local o en nube, con los archivos que hacen falta y no sólo con instrucciones: compose con base de datos, servicio y servidor web, imagen del servicio, configuración del proxy y un «.env.example» que documenta cada variable con su motivo. El recorrido y la API comparten origen a través del proxy, así que no hay CORS que configurar —una configuración de CORS que nadie revisa es una de las formas más comunes de dejar una API abierta de más—; ni la base ni el servicio publican puerto, porque publicar el 5432 «para mirar con el cliente gráfico» es cómo acaba una base de planta expuesta a la red corporativa; el servicio no corre como root y las imágenes llevan versión exacta, no «latest» ni una etiqueta mayor que cambia sola. La pieza que más va a servir con el tiempo es una prueba: compara las variables del «.env.example» con las que el código lee de verdad, extraídas de sus propias llamadas. Ya encontró dos sin documentar —IT360_MAPPINGS_FILE, que es la lista blanca de variables de proceso, y el plazo de SMTP—; una variable mal escrita en la documentación hace que el servicio arranque, la ignore y se comporte como si no estuviera configurada, que es el fallo de despliegue más difícil de encontrar de todo el producto. Y la advertencia que decide si el despliegue es seguro está en el compose y en el manual, con su prueba: la autenticación de usuarios está pendiente, la identidad llega por cabeceras y no se valida, así que esto va detrás de la VPN o de la red de planta y nunca con el puerto publicado en Internet."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",

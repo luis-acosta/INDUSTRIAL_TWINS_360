@@ -1,0 +1,57 @@
+# Servicio INDUSTRIAL TWINS 360 (X20)
+#
+# Imagen del servicio de telemetría, notas y revisiones. No lleva el editor
+# —es una aplicación de escritorio— ni los recorridos publicados, que son
+# archivos estáticos y los sirve el servidor web.
+#
+# Dos decisiones que importan más de lo que parecen:
+#
+#  - **Versión exacta de Python, no «3».** Una imagen que sigue a «3» cambia de
+#    versión menor sola, y el día que eso rompa algo nadie va a sospechar del
+#    Dockerfile que no se ha tocado en meses.
+#  - **Usuario sin privilegios.** El servicio no necesita escribir en ninguna
+#    parte salvo su carpeta de respaldos, y si alguna vez se encuentra una
+#    ejecución de código en una dependencia, la diferencia entre root y un
+#    usuario sin privilegios es la diferencia entre un incidente y una tarde.
+
+FROM python:3.12.8-slim-bookworm AS base
+
+# Sin .pyc en la imagen y con salida sin almacenar: los registros de un
+# contenedor que no aparecen hasta que se llena el búfer son inservibles
+# justamente cuando hacen falta.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Las dependencias se instalan antes de copiar el código para que una capa de
+# dependencias ya construida se reutilice en cada cambio del código.
+COPY apps/server/pyproject.toml ./pyproject.toml
+RUN pip install --no-cache-dir "fastapi==0.115.6" "uvicorn[standard]==0.34.0" \
+    "httpx==0.28.1" "pydantic==2.10.4" "psycopg[binary]==3.2.3"
+
+COPY apps/server/app ./app
+
+# Carpeta de respaldos, de propiedad del usuario del servicio.
+RUN useradd --system --uid 10001 --home /app it360 \
+    && mkdir -p /var/lib/it360/backups \
+    && chown -R it360:it360 /var/lib/it360
+
+USER it360
+
+EXPOSE 8787
+
+# Comprobación de salud contra el extremo que ya existe. Dice si el proceso
+# responde, no si la telemetría está configurada: eso lo informa la propia
+# respuesta, y confundir las dos cosas haría que un despliegue sin historiador
+# —que es legítimo— se reiniciara en bucle.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8787/api/v1/health', timeout=4).status == 200 else 1)"
+
+# Un solo proceso por contenedor: la réplica se hace con más contenedores, que
+# es lo que el orquestador sabe hacer. Con varios trabajadores aquí, el registro
+# de auditoría y las colas en memoria dejarían de estar compartidos y cada
+# trabajador serviría un estado distinto.
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8787"]

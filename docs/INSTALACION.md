@@ -101,6 +101,62 @@ TLS con `IT360_INFLUX_VERIFY_TLS=false`, pero el servidor exige que declare el
 motivo en `IT360_INFLUX_TLS_EXEMPTION_REASON` y no arranca sin él. Una
 desactivación silenciosa de TLS es una puerta abierta que nadie recuerda.
 
+Las variables que el servicio lee están documentadas una por una en
+`deploy/.env.example`, y una prueba comprueba que esa lista y el código dicen lo
+mismo: una variable mal escrita en la documentación hace que el servicio
+arranque, la ignore y se comporte como si no estuviera configurada, que es el
+fallo de despliegue más difícil de encontrar de todo el producto.
+
+---
+
+## 3 bis. Instalación privada en nube o en servidor propio (X20)
+
+El mismo despliegue sirve para un servidor en la planta y para una máquina en la
+nube privada del cliente: lo único que cambia es quién termina el TLS y desde
+dónde se llega. En `deploy/` están los archivos:
+
+| Archivo | Para qué |
+|---|---|
+| `docker-compose.yml` | Base de datos, servicio y servidor web |
+| `Dockerfile.server` | Imagen del servicio |
+| `nginx.conf` | Sirve los recorridos y hace de proxy del servicio |
+| `.env.example` | Todas las variables, con su explicación |
+
+```bash
+cd deploy
+cp .env.example .env          # rellenar POSTGRES_PASSWORD y la base de datos
+mkdir -p recorridos           # aquí se copian los paquetes publicados
+docker compose up -d
+```
+
+El recorrido y la API comparten origen a través del proxy, así que **no hace
+falta configurar CORS**: una configuración de CORS que nadie revisa es una de
+las formas más comunes de dejar una API abierta de más.
+
+Ni la base de datos ni el servicio publican puerto: sólo el proxy está
+expuesto. Publicar el 5432 «para poder mirar con el cliente gráfico» es cómo
+acaba una base de planta expuesta a la red corporativa.
+
+### ⚠ Antes de exponer esto a cualquier red
+
+**La autenticación de usuarios está pendiente.** La identidad llega por
+cabeceras HTTP y el servicio no la valida (ver `docs/LIMITACIONES.md`). Hasta que
+la integración con el directorio del cliente esté hecha, este despliegue va
+detrás de la VPN o de la red de planta, **nunca con el puerto publicado en
+Internet**. No es una recomendación de endurecimiento: es la diferencia entre
+controlar el acceso y no controlarlo.
+
+### Qué respaldar
+
+| Qué | Dónde | Por qué |
+|---|---|---|
+| Base de datos | volumen `db-data` | Revisiones y auditoría |
+| Respaldos del servicio | volumen `backups` | Copias que el servicio genera |
+| Recorridos publicados | carpeta `recorridos` | Se pueden volver a publicar, pero tardan |
+
+Los proyectos **no** están aquí: viven en el equipo de quien edita, y su copia
+de seguridad es la del archivo del proyecto.
+
 ---
 
 ## 4. Servicio de cosido (opcional)
