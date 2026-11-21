@@ -138,3 +138,98 @@ export function notesFingerprint(notes: readonly Note[]): string {
     .sort()
     .join('\u0002');
 }
+
+/* ------------------------------------------------------------------ *
+ * Avisos por correo (P07)
+ * ------------------------------------------------------------------ */
+
+export interface NotifyRequest {
+  readonly reason: 'note.assigned' | 'note.due_soon' | 'note.resolved';
+  readonly noteId: string;
+  readonly recipientId: string;
+  readonly recipientAddress: string;
+  readonly recipientName: string;
+  readonly projectTitle: string;
+  readonly plant?: string | null;
+  readonly priority: string;
+  readonly noteTitle: string;
+  readonly link?: string | null;
+}
+
+export interface NotifyOutcome {
+  /** Avisos que de verdad salieron. Cero significa que nadie ha sido avisado. */
+  readonly delivered: number;
+  readonly pending: number;
+}
+
+/**
+ * Pide al servicio que avise por correo (P07).
+ *
+ * El título de la nota se manda y el servicio lo descarta: el correo no publica
+ * el contenido de una nota de planta. Viaja porque quien llama lo tiene a mano
+ * y porque dejar que el editor decida qué entra en el correo repartiría esa
+ * regla en dos sitios; con un solo sitio, cambiarla es cambiar un archivo.
+ *
+ * Lo que devuelve es cuántos **salieron**. Un servicio sin correo configurado
+ * responde cero, y quien asignó la tarea tiene que verlo: creer avisado a
+ * alguien que no lo está es el daño que esta función existe para evitar.
+ */
+export async function requestNotification(
+  baseUrl: string,
+  identity: NotesSyncIdentity,
+  request: NotifyRequest,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = TIMEOUT_MS,
+): Promise<Result<NotifyOutcome, DomainError>> {
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(`${baseUrl.replace(/\/$/, '')}/notifications`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-usuario': identity.userId,
+        'x-rol': identity.role,
+      },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+
+    if (response.status === 403) {
+      return err(
+        domainError('PERMISSION_DENIED', 'Su concesión no permite mandar avisos.', {
+          recovery: 'Avisar es parte de asignar trabajo y hace falta ese permiso.',
+        }),
+      );
+    }
+
+    if (response.status === 400) {
+      return err(
+        domainError('VALIDATION_FAILED', 'El servicio rechazó el aviso.', {
+          recovery:
+            'Compruebe que la persona tiene una dirección de correo válida en el equipo del proyecto.',
+        }),
+      );
+    }
+
+    if (!response.ok) {
+      return err(
+        domainError('INTERNAL', `El servicio respondió ${response.status}.`, {
+          recovery: 'La nota queda asignada; el aviso no se mandó.',
+        }),
+      );
+    }
+
+    const body = (await response.json()) as Partial<NotifyOutcome>;
+    return ok({ delivered: body.delivered ?? 0, pending: body.pending ?? 0 });
+  } catch {
+    return err(
+      domainError('NETWORK_UNAVAILABLE', 'No se pudo contactar con el servicio de avisos.', {
+        recovery: 'La nota queda asignada; el aviso no se mandó.',
+      }),
+    );
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+}

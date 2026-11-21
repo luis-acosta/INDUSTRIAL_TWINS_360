@@ -47,6 +47,13 @@ from .notes import (
     NoteStore,
     ServedNote,
 )
+from .notify import (
+    NotificationQueue,
+    NotifyError,
+    SmtpMailer,
+    compose,
+    is_address,
+)
 from .review import ReviewError, ReviewStore, Revision
 from .telemetry import (
     MappingSpec,
@@ -150,6 +157,26 @@ class NotesLoadIn(BaseModel):
     notes: list[NoteLoadItem] = Field(default_factory=list)
 
 
+class NotifyIn(BaseModel):
+    """Aviso que se pide mandar (P07).
+
+    Lleva el título de la nota porque quien llama ya lo tiene a mano, y el
+    compositor lo descarta a propósito: el correo no publica el contenido de una
+    nota de planta.
+    """
+
+    reason: str = Field(min_length=1, max_length=48)
+    noteId: str = Field(default="", max_length=64)
+    recipientId: str = Field(min_length=1, max_length=120)
+    recipientAddress: str = Field(min_length=3, max_length=320)
+    recipientName: str = Field(default="", max_length=200)
+    projectTitle: str = Field(min_length=1, max_length=200)
+    plant: str | None = None
+    priority: str = Field(default="normal", max_length=32)
+    noteTitle: str = Field(default="", max_length=200)
+    link: str | None = None
+
+
 class ConflictOut(BaseModel):
     """Sección que dos revisiones cambiaron de forma distinta."""
 
@@ -214,6 +241,7 @@ def create_app(
     audit: AuditLog | None = None,
     reviews: ReviewStore | None = None,
     notes_store: NoteStore | None = None,
+    notifications: NotificationQueue | None = None,
     environment: str = "test",
     allowed_origins: tuple[str, ...] = (),
 ) -> FastAPI:
@@ -232,6 +260,7 @@ def create_app(
     extremos de telemetría contestaban 503 siempre, mientras las pruebas
     pasaban porque inyectan los suyos.
     """
+    settings = None
     if mappings is None and reader is None:
         settings = load_settings()
         known_mappings = load_mappings()
@@ -250,6 +279,26 @@ def create_app(
     audit_log = audit or AuditLog()
     review_store = reviews or ReviewStore(audit_log)
     note_store = notes_store or NoteStore()
+
+    # Cola de avisos por correo (P07). Sin SMTP configurado se construye igual:
+    # los avisos se encolan y se declaran no entregados, que es lo honesto.
+    # Aceptarlos y perderlos haría creer avisado a quien no lo está.
+    if notifications is not None:
+        notify_queue = notifications
+    elif settings is not None and settings.smtp is not None:
+        notify_queue = NotificationQueue(
+            sender=settings.smtp.sender,
+            mailer=SmtpMailer(
+                host=settings.smtp.host,
+                port=settings.smtp.port,
+                use_tls=settings.smtp.use_tls,
+                username=settings.smtp.username,
+                password=settings.smtp.password,
+                timeout_seconds=settings.smtp.timeout_seconds,
+            ),
+        )
+    else:
+        notify_queue = NotificationQueue()
 
     app = FastAPI(
         title="INDUSTRIAL TWINS 360",
@@ -813,6 +862,95 @@ def create_app(
             ],
         )
         return {"loaded": len(body.notes)}
+
+    @app.post(f"{API_PREFIX}/notifications", tags=["avisos"])
+    async def notify(
+        body: NotifyIn,
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Encola un aviso y lo intenta entregar (P07).
+
+        Exige `note.assign`: avisar es parte de asignar trabajo, y quien no
+        puede asignar no debería poder mandar correos en nombre del proyecto.
+
+        La respuesta dice si **se entregó**, no si se aceptó. Sin servidor de
+        correo configurado, `delivered` es cero y `pending` dice cuántos
+        esperan: quien asigna tiene que poder saber que nadie ha sido avisado.
+        """
+        decision = can_perform_anywhere(operation="note.assign", grants=grants)
+        if not decision.allowed:
+            raise AccessError(decision.reason, operation="note.assign")
+
+        if not is_address(body.recipientAddress):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "BAD_ADDRESS",
+                    "message": "La dirección de correo del destinatario no es válida.",
+                },
+            )
+
+        try:
+            subject, text = compose(
+                reason=body.reason,
+                recipient_name=body.recipientName or body.recipientId,
+                project_title=body.projectTitle,
+                plant=body.plant,
+                priority=body.priority,
+                note_title=body.noteTitle,
+                link=body.link,
+            )
+            notify_queue.enqueue(
+                reason=body.reason,
+                recipient_id=body.recipientId,
+                recipient_address=body.recipientAddress,
+                subject=subject,
+                body=text,
+            )
+        except NotifyError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": error.code, "message": str(error)},
+            ) from error
+
+        delivered, pending = notify_queue.flush()
+
+        audit_log.append(
+            AuditEvent(
+                event_id=f"notify-{len(audit_log.events) + 1}",
+                action="notification.sent" if delivered > 0 else "notification.queued",
+                actor_id=grants[0].user_id,
+                actor_name=grants[0].user_id,
+                occurred_at=datetime.now(timezone.utc),
+                entity="note",
+                entity_id=body.noteId,
+                # El identificador del destinatario, no su dirección: el
+                # registro es de sólo añadir y se exporta, y una dirección
+                # personal dentro no se puede retirar después.
+                detail={"reason": body.reason, "recipientId": body.recipientId},
+            )
+        )
+
+        return {"delivered": delivered, "pending": pending}
+
+    @app.get(f"{API_PREFIX}/notifications", tags=["avisos"])
+    async def notifications_state(
+        grants: list[Grant] = Depends(current_grants),
+    ) -> dict[str, object]:
+        """Estado de la cola de avisos, sin direcciones (P07).
+
+        Lo consulta un administrador para saber si los avisos están saliendo.
+        Que un despliegue sin correo se note es la mitad del valor de esto.
+        """
+        decision = can_perform_anywhere(operation="audit.read", grants=grants)
+        if not decision.allowed:
+            raise AccessError(decision.reason, operation="audit.read")
+
+        return {
+            "configured": notify_queue.mailer is not None,
+            "pending": notify_queue.pending_count(),
+            "notifications": notify_queue.redacted(),
+        }
 
     @app.post(f"{API_PREFIX}/access/check", tags=["acceso"])
     async def check_access(

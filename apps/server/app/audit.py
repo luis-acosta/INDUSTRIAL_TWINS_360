@@ -48,6 +48,11 @@ ACTIONS: Final[tuple[str, ...]] = (
     # deja eventos antiguos que ya no se pueden validar.
     "note.comment",
     "note.status",
+    # Avisos por correo (P07). Se distingue «mandado» de «encolado» porque la
+    # diferencia es justo lo que alguien necesita saber: un aviso encolado no
+    # ha llegado a nadie.
+    "notification.sent",
+    "notification.queued",
     "user.invited",
     "user.removed",
     "role.granted",

@@ -24,8 +24,10 @@ import {
   type CameraView,
   type ConditionLevel,
   type Hotspot,
+  type Note,
   type Project,
   type Scene,
+  type User,
   type Uuid,
   createHotspot,
   sceneSchema,
@@ -113,7 +115,7 @@ import { TelemetryModule } from './modules/TelemetryModule';
 import { ReviewModule } from './modules/ReviewModule';
 import { HttpReviewClient } from './review/review-client';
 import { UNRESTRICTED, fetchAccessProfile, type AccessProfile } from './access/access-client';
-import { notesFingerprint, syncNotes } from './notes/notes-sync';
+import { notesFingerprint, requestNotification, syncNotes } from './notes/notes-sync';
 import { defaultModelSettings, ModelSceneModule } from './modules/ModelSceneModule';
 import { BackupPanel } from './modules/BackupPanel';
 import { PublishModule } from './modules/PublishModule';
@@ -368,6 +370,70 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
   const [autoConnect, setAutoConnect] = useState(false);
 
   const { push } = useToast();
+
+  /**
+   * Avisa por correo de una asignación (P07).
+   *
+   * Tres cosas se dicen al autor y las tres importan: que no hay servicio
+   * configurado, que la persona no tiene dirección de correo, o que el aviso no
+   * salió. Callar cualquiera de ellas dejaría al autor creyendo avisado a
+   * alguien que no lo está, que es justo lo que esta función existe para
+   * evitar.
+   */
+  const notifyAssignment = useCallback(
+    (note: Note, user: User): void => {
+      if (serviceEndpoint === null) {
+        push({
+          tone: 'warning',
+          title: `${user.displayName} no recibirá aviso`,
+          description:
+            'No hay servicio configurado, así que la asignación queda sólo en el proyecto.',
+        });
+        return;
+      }
+
+      if (user.email === null || user.email.trim().length === 0) {
+        push({
+          tone: 'warning',
+          title: `${user.displayName} no tiene correo en el equipo`,
+          description: 'Añada su dirección en Ajustes para que reciba los avisos.',
+        });
+        return;
+      }
+
+      void requestNotification(serviceEndpoint, reviewIdentity, {
+        reason: 'note.assigned',
+        noteId: note.id,
+        recipientId: user.id,
+        recipientAddress: user.email,
+        recipientName: user.displayName,
+        projectTitle: store.project.title,
+        priority: note.priority,
+        noteTitle: note.title,
+      }).then((result) => {
+        if (!result.ok) {
+          push({
+            tone: 'warning',
+            title: 'El aviso no se mandó',
+            description: `${result.error.message}${result.error.recovery === undefined ? '' : ` ${result.error.recovery}`}`,
+          });
+          return;
+        }
+
+        push(
+          result.value.delivered > 0
+            ? { tone: 'nominal', title: `Avisado por correo a ${user.displayName}` }
+            : {
+                tone: 'warning',
+                title: `${user.displayName} todavía no ha sido avisado`,
+                description:
+                  'El servicio encoló el aviso pero no tiene servidor de correo configurado.',
+              },
+        );
+      });
+    },
+    [serviceEndpoint, reviewIdentity, store.project.title, push],
+  );
 
   /**
    * Publica las notas en el servicio para que se puedan consultar desde un
@@ -724,6 +790,7 @@ export function App({ initialProject, initialMediaUrls, telemetryClient }: AppPr
                 <NotesModule
                   allowedCategories={accessProfile.noteCategoryIds}
                   currentUserId={reviewIdentity.userId}
+                  onNotifyAssignment={notifyAssignment}
                   store={store}
                   onGoToScene={(targetSceneId) => {
                     setSceneId(targetSceneId);

@@ -25,6 +25,7 @@ import {
   notePrioritySchema,
   sortNotes,
   type Note,
+  type User,
   type NoteFilter,
   type NoteSort,
   type NoteStatus,
@@ -76,6 +77,14 @@ export interface NotesModuleProps {
    * conoce.
    */
   readonly currentUserId?: string | null;
+  /**
+   * Avisa por correo de una asignación (P07).
+   *
+   * Opcional porque un editor sin servicio configurado no puede avisar de
+   * nada. Sin esto, asignar una nota a alguien que no abre el editor en tres
+   * días no es una tarea: es un apunte.
+   */
+  readonly onNotifyAssignment?: (note: Note, user: User) => void;
 }
 
 /**
@@ -91,6 +100,7 @@ export function NotesModule({
   onGoToScene,
   allowedCategories,
   currentUserId,
+  onNotifyAssignment,
 }: NotesModuleProps): JSX.Element {
   const [filter, setFilter] = useState<NoteFilter>(EMPTY_NOTE_FILTER);
   const [sort, setSort] = useState<NoteSort>('priorityThenDue');
@@ -602,6 +612,14 @@ export function NotesModule({
                         },
                         `note.assignee:${selected.id}`,
                       );
+
+                      /* Aviso por correo (P07). Se manda al asignar y no al
+                         guardar el proyecto: lo que hay que avisar es la
+                         asignación, y esperar al guardado la mandaría también
+                         cuando el autor cambia de idea dos veces seguidas. Se
+                         avisa con la nota ya asignada para que el correo no
+                         describa un estado que todavía no existe. */
+                      if (chosen !== null) onNotifyAssignment?.(assigned, chosen);
                     }}
                   >
                     <option value="">Sin asignar</option>

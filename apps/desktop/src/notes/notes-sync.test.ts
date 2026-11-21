@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeNote, testUuid } from '@it360/domain/testing';
 
-import { notesFingerprint, syncNotes } from './notes-sync';
+import { notesFingerprint, requestNotification, syncNotes } from './notes-sync';
 
 const PROJECT = testUuid(1);
 const IDENTITY = { userId: 'jefa.planta', role: 'administrator' };
@@ -169,5 +169,114 @@ describe('notesFingerprint', () => {
     expect(notesFingerprint([makeNote(80, PROJECT)])).not.toBe(
       notesFingerprint([makeNote(80, PROJECT), makeNote(81, PROJECT)]),
     );
+  });
+});
+
+describe('requestNotification', () => {
+  it('manda el aviso con la identidad y el motivo', async () => {
+    // TEST-NSY-010
+    const { impl, calls } = fakeFetch(200, { delivered: 1, pending: 0 });
+
+    const result = await requestNotification(
+      'https://planta.local/api/v1',
+      IDENTITY,
+      {
+        reason: 'note.assigned',
+        noteId: 'n1',
+        recipientId: 'tecnico.ruiz',
+        recipientAddress: 'ruiz@planta.local',
+        recipientName: 'Ruiz',
+        projectTitle: 'Planta Norte',
+        priority: 'urgent',
+        noteTitle: 'Fuga de ácido en la brida',
+      },
+      impl,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.delivered).toBe(1);
+    expect(calls[0]?.url).toBe('https://planta.local/api/v1/notifications');
+  });
+
+  it('cero entregados no es un fallo, y quien llama tiene que poder verlo', async () => {
+    // TEST-NSY-011: es la distinción que da valor a todo esto. Un servicio sin
+    // servidor de correo acepta el aviso y no lo manda; traducirlo a «hecho»
+    // dejaría al autor creyendo avisado a alguien que no lo está.
+    const { impl } = fakeFetch(200, { delivered: 0, pending: 1 });
+
+    const result = await requestNotification(
+      'https://planta.local/api/v1',
+      IDENTITY,
+      {
+        reason: 'note.assigned',
+        noteId: 'n1',
+        recipientId: 'tecnico.ruiz',
+        recipientAddress: 'ruiz@planta.local',
+        recipientName: 'Ruiz',
+        projectTitle: 'Planta Norte',
+        priority: 'normal',
+        noteTitle: 'x',
+      },
+      impl,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ delivered: 0, pending: 1 });
+  });
+
+  it('un 400 se explica apuntando al equipo del proyecto', async () => {
+    // TEST-NSY-012: el fallo más probable es una persona sin dirección de
+    // correo, y eso se arregla en Ajustes. «Petición incorrecta» no lo dice.
+    const { impl } = fakeFetch(400);
+
+    const result = await requestNotification(
+      'https://planta.local/api/v1',
+      IDENTITY,
+      {
+        reason: 'note.assigned',
+        noteId: 'n1',
+        recipientId: 'x',
+        recipientAddress: 'roto',
+        recipientName: 'X',
+        projectTitle: 'P',
+        priority: 'normal',
+        noteTitle: 'x',
+      },
+      impl,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.recovery).toMatch(/equipo del proyecto/);
+  });
+
+  it('un servicio caído deja claro que la nota sí quedó asignada', async () => {
+    // TEST-NSY-013: lo contrario haría pensar que la asignación se perdió, y
+    // el autor la repetiría.
+    const failing = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as unknown as typeof fetch;
+
+    const result = await requestNotification(
+      'https://planta.local/api/v1',
+      IDENTITY,
+      {
+        reason: 'note.assigned',
+        noteId: 'n1',
+        recipientId: 'x',
+        recipientAddress: 'x@y.es',
+        recipientName: 'X',
+        projectTitle: 'P',
+        priority: 'normal',
+        noteTitle: 'x',
+      },
+      failing,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.recovery).toMatch(/queda asignada/);
   });
 });

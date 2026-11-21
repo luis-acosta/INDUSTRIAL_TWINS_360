@@ -89,6 +89,38 @@ class InfluxSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class SmtpSettings:
+    """Servidor de correo para los avisos (P07).
+
+    Opcional en todo el servicio: muchas plantas no dejan salir SMTP de la red
+    de proceso. Cuando no está, los avisos se encolan y se declaran no
+    entregados, que es lo honesto; aceptarlos y perderlos haría creer avisado a
+    quien no lo está.
+    """
+
+    host: str
+    port: int
+    sender: str
+    username: str | None = None
+    password: str | None = None
+    #: STARTTLS. Por omisión sí: un servidor interno sin cifrado es una
+    #: decisión que hay que tomar a propósito, no por descuido.
+    use_tls: bool = True
+    timeout_seconds: int = 10
+
+    def redacted(self) -> dict[str, object]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "sender": self.sender,
+            "username": self.username,
+            "password": None if self.password is None else "[redactado]",
+            "useTls": self.use_tls,
+            "timeoutSeconds": self.timeout_seconds,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Settings:
     """Configuración completa del servicio."""
 
@@ -102,11 +134,14 @@ class Settings:
     #: Carpeta de las copias de respaldo.
     backup_dir: str
     environment: str
+    #: Servidor de correo para los avisos (P07); `None` = sin avisos.
+    smtp: SmtpSettings | None = None
 
     def redacted(self) -> dict[str, object]:
         return {
             "databaseUrl": _redact_dsn(self.database_url),
             "influx": self.influx.redacted() if self.influx is not None else None,
+            "smtp": self.smtp.redacted() if self.smtp is not None else None,
             "allowedOrigins": list(self.allowed_origins),
             "telemetryCacheSeconds": self.telemetry_cache_seconds,
             "backupDir": self.backup_dir,
@@ -164,9 +199,27 @@ def load_settings() -> Settings:
                 )
 
     origins = _get("ALLOWED_ORIGINS", "")
+    # Correo para los avisos (P07). Como la telemetría: si se declara el
+    # servidor, el remitente pasa a ser obligatorio, porque media configuración
+    # de correo es peor que ninguna —el servicio aceptaría avisos que no puede
+    # entregar y nadie se enteraría—.
+    smtp_host = _get("SMTP_HOST")
+    smtp: SmtpSettings | None = None
+    if smtp_host is not None and smtp_host.strip() != "":
+        smtp = SmtpSettings(
+            host=smtp_host.strip(),
+            port=_get_int("SMTP_PORT", 587),
+            sender=_require("SMTP_SENDER"),
+            username=_get("SMTP_USERNAME"),
+            password=_get("SMTP_PASSWORD"),
+            use_tls=_get_bool("SMTP_USE_TLS", True),
+            timeout_seconds=_get_int("SMTP_TIMEOUT_SECONDS", 10),
+        )
+
     return Settings(
         database_url=_require("DATABASE_URL"),
         influx=influx,
+        smtp=smtp,
         allowed_origins=tuple(o.strip() for o in (origins or "").split(",") if o.strip() != ""),
         telemetry_cache_seconds=_get_int("TELEMETRY_CACHE_SECONDS", 15),
         backup_dir=_get("BACKUP_DIR", "/var/lib/it360/backups") or "/var/lib/it360/backups",

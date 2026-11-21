@@ -869,3 +869,112 @@ class TestNotasMoviles:
         response = client.get("/api/v1/notes", params={"projectId": "planta-norte"})
 
         assert response.status_code == 403
+
+
+class TestAvisos:
+    """Avisos por correo desde la API (P07).
+
+    Lo que se comprueba en la ruta: que la respuesta diga si **se entregó** y no
+    si se aceptó, y que el registro de auditoría no guarde direcciones.
+    """
+
+    BODY = {
+        "reason": "note.assigned",
+        "noteId": "n1",
+        "recipientId": "tecnico.ruiz",
+        "recipientAddress": "ruiz@planta.local",
+        "recipientName": "Ruiz",
+        "projectTitle": "Planta Norte",
+        "plant": "Unidad 2",
+        "priority": "urgent",
+        "noteTitle": "Fuga de ácido en la brida",
+        "link": "https://planta.local/recorrido#nota=n1",
+    }
+
+    def test_sin_correo_configurado_responde_cero_entregados(
+        self, client: TestClient
+    ) -> None:
+        # TEST-API-P07-001: la respuesta no puede decir «aceptado» y callar que
+        # no ha salido. Quien asigna la tarea tiene que poder saber que nadie ha
+        # sido avisado.
+        response = client.post(
+            "/api/v1/notifications",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+            json=self.BODY,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"delivered": 0, "pending": 1}
+
+    def test_la_auditoria_guarda_el_destinatario_y_no_su_direccion(
+        self, client: TestClient, audit: AuditLog
+    ) -> None:
+        # TEST-API-P07-002: el registro es de sólo añadir y se exporta; una
+        # dirección personal dentro no se puede retirar después.
+        client.post(
+            "/api/v1/notifications",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+            json=self.BODY,
+        )
+
+        evento = next(
+            event for event in audit.events if event.action.startswith("notification.")
+        )
+        assert evento.action == "notification.queued"
+        assert "ruiz@planta.local" not in str(evento.detail)
+        assert evento.detail["recipientId"] == "tecnico.ruiz"
+
+    def test_quien_no_puede_asignar_no_manda_avisos(self, client: TestClient) -> None:
+        # TEST-API-P07-003: avisar es parte de asignar trabajo. Si bastara con
+        # poder leer, cualquiera podría mandar correos en nombre del proyecto.
+        response = client.post(
+            "/api/v1/notifications",
+            headers={"x-usuario": "visita.lopez", "x-rol": "viewer"},
+            json=self.BODY,
+        )
+
+        assert response.status_code == 403
+
+    def test_una_direccion_invalida_se_rechaza(self, client: TestClient) -> None:
+        # TEST-API-P07-004: encolarla haría crecer la cola con algo que nunca va
+        # a salir, y entonces el número de pendientes deja de significar «hay un
+        # problema con el correo».
+        response = client.post(
+            "/api/v1/notifications",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+            json={**self.BODY, "recipientAddress": "no-es-un-correo"},
+        )
+
+        assert response.status_code == 400
+
+    def test_el_estado_de_la_cola_dice_si_hay_correo_configurado(
+        self, client: TestClient
+    ) -> None:
+        # TEST-API-P07-005: que un despliegue sin correo se note es la mitad del
+        # valor de esta función.
+        client.post(
+            "/api/v1/notifications",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+            json=self.BODY,
+        )
+
+        response = client.get(
+            "/api/v1/notifications",
+            headers={"x-usuario": "jefa.planta", "x-rol": "administrator"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["configured"] is False
+        assert body["pending"] == 1
+        assert "ruiz@planta.local" not in response.text
+
+    def test_el_estado_exige_poder_leer_la_auditoria(self, client: TestClient) -> None:
+        # TEST-API-P07-006: la cola dice a quién se ha avisado y de qué, que es
+        # información de la misma clase que el registro de auditoría.
+        response = client.get(
+            "/api/v1/notifications",
+            headers={"x-usuario": "tecnico.ruiz", "x-rol": "editor"},
+        )
+
+        assert response.status_code == 403

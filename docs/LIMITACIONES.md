@@ -57,9 +57,23 @@ bien; crearlos desde cero requiere editar el proyecto por otra vía.
 
 No está. Los *skins* se aplican si vienen en el proyecto.
 
-### Correo (P07)
+### Correo: el aviso no lleva la nota (P07)
 
-Sin empezar. No hay notificaciones por correo electrónico.
+Al asignar una nota se avisa por correo a quien se le asigna. **El correo no
+lleva el contenido de la nota**: dice que hay una nota asignada, en qué planta y
+con qué urgencia, y un enlace para abrirla. Las notas de planta describen fugas,
+incumplimientos y riesgos; un correo atraviesa servidores que nadie en el
+proyecto controla, se reenvía y se queda en bandejas durante años.
+
+El servidor SMTP se configura con `IT360_SMTP_HOST` y compañía. **Sin él, los
+avisos se encolan y se declaran no entregados**, y el editor lo dice al autor en
+ese momento: muchas plantas no dejan salir SMTP de la red de proceso, y aceptar
+un aviso que no sale haría creer avisado a alguien que no lo está.
+
+La cola es en memoria, como el registro de auditoría: tiene la semántica que
+tendrá la tabla y se pierde al reiniciar. Los avisos de vencimiento próximo
+(`note.due_soon`) están compuestos y probados pero todavía no los dispara nadie:
+hace falta un proceso periódico, que llega con la persistencia.
 
 ### Notas desde el móvil: identificación sin autenticación (P09)
 

@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.55.0",
-  "updatedAt": "2026-11-21T02:20:00Z",
+  "version": "0.56.0",
+  "updatedAt": "2026-11-21T02:55:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -282,7 +282,7 @@
     "P04": "done",
     "P05": "done",
     "P06": "done",
-    "P07": "pending",
+    "P07": "partial",
     "P08": "done",
     "P09": "done",
     "L01": "done",
@@ -339,7 +339,7 @@
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "P09": "Consulta y participación en las notas desde un teléfono, de punta a punta. Lo que esto traslada al servidor es un control que hasta ahora sólo hacía una pantalla del editor: el ámbito por categoría de nota —la pieza que permite que un contratista trabaje sobre el mismo proyecto y no vea las notas internas de mantenimiento— existía en el modelo desde la etapa 11 y se aplicaba en la interfaz. Un recorte que vive en la interfaz lo salta cualquiera que llame a la API: eso no es un control, es una cortesía. Ahora el servicio sirve las notas ya recortadas, y «no existe» y «no puede verla» comparten el 404 porque distinguirlos diría al contratista cuántas notas de otras categorías hay. Desde el móvil se comenta y se mueve el estado de trabajo; resolver y archivar no están, y no por falta de tiempo: resolver exige escribir cómo se resolvió, y con un toque de pantalla la nota se cerraría sin que nadie pueda saber después qué se hizo. La pantalla está hecha para un pulgar —objetivos de 44 px, tres filtros y nada más— y los estados que ofrece los dice el servicio, para que no acabe ofreciendo uno que el servicio rechaza. La identificación se pide en el dispositivo y se recuerda, y la pantalla dice con esas palabras que identifica y no autentica: escribir «inicie sesión» haría creer que algo comprueba quién es quién y alguien expondría el servicio fuera de la planta. El editor publica las notas en el servicio con una huella de lo que de verdad viaja, porque el proyecto se guarda en cada tecla y un envío por tecla convertiría el servicio en el cuello de botella del editor; y un servicio caído avisa una vez sin bloquear nada, porque no poder consultar desde el móvil es un problema y no poder editar es peor."
+      "P07": "Avisos por correo al asignar una nota. Queda PARCIAL a propósito y no se declara completo: los avisos de vencimiento próximo están compuestos y probados pero no los dispara nadie —hace falta un proceso periódico, que llega con la persistencia—, y la cola es en memoria. Lo que sí está, completo: el correo **no lleva el contenido de la nota**, y eso es una decisión y no una limitación —las notas de planta describen fugas e incumplimientos, y un correo atraviesa servidores que nadie en el proyecto controla, se reenvía y se queda en bandejas durante años; el aviso dice que hay una nota, con qué urgencia y dónde, y el contenido se lee en el proyecto, que es donde el acceso está controlado—. El asunto empieza por la urgencia y la planta para poder triarlo desde la lista del cliente de correo, que es como se leen los correos de pie en una planta. Sin SMTP configurado los avisos se encolan, se cuentan y se declaran no entregados, y el editor se lo dice al autor en ese momento: aceptar un aviso que no sale haría creer avisado a alguien que no lo está, que es el daño que esta función existe para evitar. La auditoría guarda el identificador del destinatario y no su dirección, porque el registro es de sólo añadir y se exporta. Y un destinatario que falla no detiene a los demás: en una lista de quince avisos, una dirección que ya no existe dejaría sin avisar a los catorce restantes."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -413,7 +413,8 @@
       "S08": "El teselado se planifica y no se escribe: el visor carga la imagen completa, así que escribir la pirámide abultaría el paquete sin que nadie la lea. Se escribirá cuando el visor la pida.",
       "N01": "Experimental, no terminado: la sesión inmersiva está implementada de punta a punta —petición de sesión, espacio de referencia con reserva, bucle de fotogramas del visor, recogida al quitarse las gafas— y su ciclo de vida está probado con dobles fieles a la especificación de WebXR (10 pruebas). Lo que NO se ha podido verificar es lo único que importa de verdad en VR: que se vea bien y no produzca malestar. Eso exige un visor físico. Se deja marcado experimental en lugar de completo porque la plataforma no debe afirmar que algo funciona en un dispositivo donde nadie lo ha ejecutado.",
       "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
-      "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio."
+      "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio.",
+      "P07": "El correo de asignación funciona de punta a punta —composición sin contenido de nota, cola con motivo, entrega por SMTP, aviso al autor cuando no sale—. Faltan los avisos de vencimiento próximo, que están compuestos y probados y necesitan un proceso periódico que los dispare, y la persistencia de la cola."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }

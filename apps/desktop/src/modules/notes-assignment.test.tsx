@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToastProvider } from '@it360/ui';
-import type { Project } from '@it360/domain';
+import type { Note, Project, User } from '@it360/domain';
 import { makeNote, makeProject, makeUser, testUuid } from '@it360/domain/testing';
 import { NotesModule } from './NotesModule';
 import { useProjectStore } from '../state/project-store';
@@ -51,6 +51,25 @@ function Harness({
 
   return (
     <NotesModule store={store} onGoToScene={() => undefined} currentUserId={currentUserId} />
+  );
+}
+
+/** Variante del arnés que recoge los avisos de asignación (P07). */
+function HarnessWithNotify({
+  project,
+  onNotify,
+}: {
+  readonly project: Project;
+  readonly onNotify: (note: Note, user: User) => void;
+}): JSX.Element {
+  const store = useProjectStore(project);
+  return (
+    <NotesModule
+      store={store}
+      onGoToScene={() => undefined}
+      currentUserId="u-ana"
+      onNotifyAssignment={onNotify}
+    />
   );
 }
 
@@ -237,5 +256,60 @@ describe('filtro de tareas propias', () => {
 
     expect(screen.queryByLabelText('Asignadas a mí')).toBeNull();
     expect(screen.queryByText(/asignada\(s\) a usted/)).toBeNull();
+  });
+});
+
+describe('aviso al asignar (P07)', () => {
+  it('avisa con la nota ya asignada', async () => {
+    // TEST-NAE-009: se avisa al asignar y con el estado resultante. Avisar con
+    // la nota anterior mandaría un correo que describe un estado que todavía no
+    // existe; y hacerlo al guardar el proyecto mandaría también los avisos de
+    // un autor que cambia de idea dos veces seguidas.
+    const user = userEvent.setup();
+    const notified: { note: string; to: string }[] = [];
+
+    render(
+      <ToastProvider>
+        <HarnessWithNotify
+          project={baseProject()}
+          onNotify={(note, person) => notified.push({ note: note.assigneeId ?? '', to: person.id })}
+        />
+      </ToastProvider>,
+    );
+
+    await openNote(user, 'Fuga en la brida');
+    await user.selectOptions(screen.getByLabelText('Responsable'), 'u-luis');
+
+    expect(notified).toEqual([{ note: 'u-luis', to: 'u-luis' }]);
+  });
+
+  it('quitar el responsable no manda aviso a nadie', async () => {
+    // TEST-NAE-010: no hay destinatario. Un aviso de «ya no es suya» suena
+    // razonable y no lo es: llegaría a quien acaba de dejar de ser responsable
+    // sin decirle quién lo es ahora, que es lo único que necesitaría saber.
+    const user = userEvent.setup();
+    const notified: string[] = [];
+
+    render(
+      <ToastProvider>
+        <HarnessWithNotify
+          project={baseProject({
+            notes: [
+              makeNote(95, PROJECT_ID, {
+                title: 'Revisar rótulo',
+                assigneeId: 'u-ana',
+                assigneeName: 'Ana Restrepo',
+              }),
+            ],
+          })}
+          onNotify={(_note, person) => notified.push(person.id)}
+        />
+      </ToastProvider>,
+    );
+
+    await openNote(user, 'Revisar rótulo');
+    await user.selectOptions(screen.getByLabelText('Responsable'), '');
+
+    expect(notified).toEqual([]);
   });
 });
