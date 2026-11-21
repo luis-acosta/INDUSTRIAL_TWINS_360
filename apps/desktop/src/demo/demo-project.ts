@@ -513,6 +513,7 @@ export async function buildDemoProject(): Promise<DemoAssets> {
     id: sceneIds[index] as Uuid,
     projectId: base.id,
     kind: 'panorama',
+    livePanoramaMediaId: null,
     title,
     description: '',
     mediaId: mediaRecords[index]?.id ?? null,

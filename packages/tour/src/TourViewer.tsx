@@ -990,6 +990,18 @@ export function TourViewer({
         const path = previewFor(manifest.previews, scene.mediaId);
         return path === null ? null : mediaUrl(tour.baseUrl, path);
       })(),
+      /* Panorámica en vivo, si la escena la trae y el paquete la lleva (B06).
+         La decisión de reproducirla —movimiento reducido, ahorro de datos,
+         códec— la toma el visor, que es quien conoce el dispositivo. */
+      liveUrl:
+        scene.livePanoramaMediaId === null
+          ? null
+          : (mediaUrls.get(scene.livePanoramaMediaId) ?? null),
+      liveMime:
+        scene.livePanoramaMediaId === null
+          ? null
+          : (manifest.media.find((entry) => entry.id === scene.livePanoramaMediaId)?.mime ??
+            null),
       coverage: media?.panorama?.coverage ?? {
         horizontalDeg: 360,
         verticalDeg: 180,

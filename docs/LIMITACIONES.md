@@ -145,7 +145,11 @@ aceptable, requiere revisión, rechazado. Lo rechazado no se entrega.
 resultado, cobertura incompleta, y el caso en que OpenCV declara éxito con una
 imagen degenerada.
 
-**Lo que no está:** Live Panorama y Adaptive HDR (B06). Los puntos de control a
+**Lo que no está:** Adaptive HDR (B06). La panorámica en vivo —la otra mitad de
+B06— sí está: una escena puede traer un bucle de vídeo que sustituye a la
+fotografía, con la imagen fija siempre obligatoria como reserva. Adaptive HDR
+necesita el mapa de ganancia aplicado en el sombreador y el manejo de pantallas
+HDR; el visor dibuja en sRGB y eso es otra tubería de color, no un ajuste. Los puntos de control a
 mano (B07) están implementados y marcados **experimentales**: estiman la
 homografía de cada par, rechazan la que no es plausible y señalan el punto peor
 marcado volviendo a estimar sin él, pero con cinco puntos justos el margen es

@@ -1174,6 +1174,7 @@ function ScenesModule({
       id: newUuid(),
       projectId: store.project.id,
       kind: 'panorama',
+      livePanoramaMediaId: null,
       title: `Escena ${store.project.scenes.length + 1}`,
       description: '',
       mediaId: firstMedia?.id ?? null,

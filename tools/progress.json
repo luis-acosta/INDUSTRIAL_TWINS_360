@@ -1,7 +1,7 @@
 {
   "comment": "Estado de avance por requisito. Fuente unica del dashboard y del informe de trazabilidad. Estados: done = implementado, integrado en la interfaz y con prueba automatizada en verde; partial = logica implementada y probada, falta interfaz o integracion; modeled = contrato de datos y validacion definidos, sin logica todavia; experimental = implementado y marcado experimental por decision del plan; pending = no iniciado.",
-  "version": "0.62.0",
-  "updatedAt": "2026-11-21T12:40:00Z",
+  "version": "0.63.0",
+  "updatedAt": "2026-11-21T13:05:00Z",
   "milestones": [
     {
       "at": "2026-11-12T19:20:00Z",
@@ -333,13 +333,13 @@
     "B03": "experimental",
     "B04": "done",
     "B05": "experimental",
-    "B06": "pending",
+    "B06": "partial",
     "B07": "experimental",
     "B08": "experimental"
   },
   "notes": {
     "promocionesEstaIteracion": {
-      "L07": "Puntos de interés pegados a la superficie. Lo que faltaba: el marcador seguía a su pieza, giraba con ella y se escondía detrás de la geometría, pero se dibujaba de pie frente a la cámara, así que en una válvula vista de lado flotaba al aire y el visitante no sabía a qué pieza se refería. Ahora se dibuja además, dentro de la escena, un disco tumbado sobre la superficie en el punto del anclaje y con su orientación: mirar la pieza de lado muestra la calcomanía de canto, como una pegatina. El marcador del DOM **no** se sustituye, y ésa es la decisión que gobierna el módulo: el texto, el acceso por teclado y la lectura por un lector de pantalla viven en el DOM, y dibujar el texto dentro de la escena lo volvería una textura que no se puede seleccionar, nadie lee y no se alcanza con el tabulador. La calcomanía da el anclaje visual; el marcador, la información. Detalles que deciden si se ve bien: separación de la superficie proporcional al tamaño del modelo —los modelos de planta llegan en metros, en milímetros y en pulgadas, y sin separación la tarjeta gráfica no puede decidir qué está delante y aparece el parpadeo de franjas—; sin escribir en el búfer de profundidad, porque una calcomanía translúcida que escribiera taparía lo que está detrás y se vería un agujero en la pieza; a dos caras, porque una calcomanía en la cara interior de una carcasa abierta desaparecería al rodearla; y el giro fijado a mano para una normal opuesta, donde entre dos vectores opuestos hay infinitos ejes válidos y una elección implícita deja la calcomanía de canto —invisible— o girada distinto entre versiones de la biblioteca. El color sale del mismo token que el marcador, resuelto desde la variable CSS, porque con dos colores el visitante ve dos cosas en lugar de una."
+      "B06": "Panorámica en vivo: una escena puede traer un bucle de vídeo que sustituye a la fotografía. En una planta eso no es decoración —el vapor moviéndose, la llama parpadeando, las aspas girando dicen que la unidad está en marcha, y una fotografía fija de una unidad en operación puede parecer una unidad parada—. Queda PARCIAL porque Adaptive HDR, la otra mitad del requisito, no está: necesita el mapa de ganancia aplicado en el sombreador y el manejo de pantallas HDR, y el visor dibuja en sRGB —es otra tubería de color, no un ajuste—. Declarado en LIMITACIONES. De lo que sí está, lo que importa son las condiciones para NO reproducir, comprobadas antes de pedir el archivo porque pedir veinte megabytes para descubrir que no se puede decodificar es gastar la red de la planta para nada: movimiento reducido del sistema —y ésa no se negocia, porque el movimiento ocupa los 360 grados y quien tiene la preferencia activada por mareo no puede esquivarlo mirando a otro lado—, ahorro de datos del visitante, y un códec que el dispositivo no admite. El orden de las comprobaciones también está fijado: las del visitante primero, porque al revés un dispositivo sin el códec informaría de un problema de códec a alguien que de todas formas había pedido no ver movimiento. Y la regla que lo sostiene: la imagen fija es obligatoria y el vídeo es un añadido, así que un autoplay rechazado, un códec que el navegador declara y no reproduce o una red que se corta dejan la escena en la fotografía y no en negro."
     },
     "publicacion": {
       "S01": "Sitio web estático con índice, manifiesto y medios (TEST-PUB-009..016)",
@@ -413,7 +413,8 @@
       "N02": "Experimental por el mismo motivo que N01: la escena de modelo se dibuja en la sesión con el mismo contexto gráfico, pero el coste por fotograma de un modelo pesado en un visor autónomo no se ha medido en hardware.",
       "B07": "Experimental, no terminado: la geometría guiada por puntos funciona y está probada contra desplazamientos conocidos, pero con tres o más imágenes se encadenan homografías por pares en lugar de resolver un ajuste de haces global, de modo que el error se acumula a lo largo de la cadena; el informe lo dice en cada trabajo. Además la mezcla es un promedio en la zona común y la costura puede verse: sirve para recuperar un cosido que el automático no logra, no para sustituirlo cuando funciona. Falta también la interfaz de marcado: hoy los puntos entran por la API del servicio.",
       "P07": "El correo de asignación funciona de punta a punta —composición sin contenido de nota, cola con motivo, entrega por SMTP, aviso al autor cuando no sale—. Faltan los avisos de vencimiento próximo, que están compuestos y probados y necesitan un proceso periódico que los dispare, y la persistencia de la cola.",
-      "S04": "El paquete es autónomo y, con el manifiesto incrustado, llega más lejos abierto desde un USB; la aplicación de escritorio recorre el proyecto sin conexión. Falta el empaquetado en un binario por proyecto, que exige una cadena de compilación en el equipo de quien publica."
+      "S04": "El paquete es autónomo y, con el manifiesto incrustado, llega más lejos abierto desde un USB; la aplicación de escritorio recorre el proyecto sin conexión. Falta el empaquetado en un binario por proyecto, que exige una cadena de compilación en el equipo de quien publica.",
+      "B06": "La panorámica en vivo funciona de punta a punta, con la imagen fija como reserva obligatoria y las condiciones del visitante y del sistema por delante de la capacidad técnica. Adaptive HDR no está: necesita el mapa de ganancia en el sombreador y el manejo de pantallas HDR, y el visor dibuja en sRGB."
     },
     "refactor": "El recorrido publicado se ha movido de «apps/viewer-web» al paquete «@it360/tour». La razón: la previsualización del editor tiene que montar el mismo componente que ejecuta el visitante. Una previsualización escrita aparte sería una segunda implementación del visor, y lo que el autor aprobara mirándola no sería lo que se publica."
   }

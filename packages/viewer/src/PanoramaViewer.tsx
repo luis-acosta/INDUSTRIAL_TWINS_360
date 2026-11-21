@@ -42,6 +42,12 @@ import type { AmbientState } from './ambient-effects';
 import { CameraController } from './camera-controller';
 import { detectCapabilities, PanoramaRenderer, type RendererCapabilities } from './panorama-renderer';
 import {
+  createLivePanorama,
+  decideLive,
+  readLiveContext,
+  startLive,
+} from './live-panorama';
+import {
   loadPanoramaTexture,
   loadProgressive,
   TextureCache,
@@ -77,6 +83,16 @@ export interface ViewerScene {
    * La imagen completa la sustituye en cuanto llega.
    */
   readonly previewUrl?: string | null;
+  /**
+   * Vídeo panorámico en bucle y su tipo, si la escena lo trae (B06).
+   *
+   * La imagen fija sigue siendo obligatoria: el bucle es un añadido que puede
+   * no reproducirse —movimiento reducido, ahorro de datos, un códec que el
+   * dispositivo no trae, un autoplay rechazado— y entonces la escena es la
+   * fotografía.
+   */
+  readonly liveUrl?: string | null;
+  readonly liveMime?: string | null;
   readonly coverage: PanoramaCoverage;
   readonly camera: CameraControl;
   readonly hotspots: readonly Hotspot[];
@@ -206,6 +222,9 @@ export function PanoramaViewer({
 
   const [capabilities, setCapabilities] = useState<RendererCapabilities | null>(null);
   const [status, setStatus] = useState<ViewerStatus>({ phase: 'idle' });
+  /* Motivo por el que la panorámica en vivo no se reproduce, cuando hay uno que
+     merezca contarse (B06). */
+  const [liveNote, setLiveNote] = useState<string | null>(null);
   const [view, setView] = useState<CameraView>(scene.camera.initialView);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -399,6 +418,57 @@ export function PanoramaViewer({
     return () => abort.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.textureUrl, scene.previewUrl, scene.coverage, capabilities]);
+
+  /**
+   * Panorámica en vivo (B06).
+   *
+   * Va en un efecto aparte del de la imagen y **después**: así la fotografía se
+   * carga y se muestra primero, y el bucle la sustituye cuando puede. Si se
+   * hiciera en el mismo efecto, una escena con vídeo esperaría al vídeo para
+   * mostrar algo, y el visitante vería la pantalla de carga más tiempo que
+   * antes de tener esta función.
+   */
+  useEffect(() => {
+    if (capabilities === null || !capabilities.webgl) return undefined;
+    const renderer = rendererRef.current;
+    if (renderer === null) return undefined;
+
+    const decision = decideLive(scene.liveMime ?? null, readLiveContext());
+    if (!decision.play || scene.liveUrl == null) {
+      setLiveNote(decision.play ? null : decision.reason === 'noVideo' ? null : decision.message);
+      return undefined;
+    }
+
+    setLiveNote(null);
+    const handle = createLivePanorama(scene.liveUrl);
+    let cancelled = false;
+
+    void startLive(handle.video).then((playing) => {
+      if (cancelled) {
+        handle.dispose();
+        return;
+      }
+      if (!playing) {
+        /* Reproducción automática rechazada: política del navegador,
+           frecuente y legítima. Se vuelve a la imagen fija sin decir nada,
+           que es lo que el visitante esperaba ver de todas formas. */
+        handle.dispose();
+        return;
+      }
+      renderer.setTexture(handle.texture, scene.coverage);
+      requestDraw();
+    });
+
+    return () => {
+      cancelled = true;
+      handle.dispose();
+      /* Al salir se vuelve a pedir la imagen: si no, la esfera se quedaría con
+         una textura de vídeo ya liberada y la escena saldría en negro al
+         volver a entrar. */
+      const cached = scene.textureUrl === null ? undefined : sharedCache.get(scene.textureUrl);
+      if (cached !== undefined) renderer.setTexture(cached.texture, scene.coverage);
+    };
+  }, [scene.liveUrl, scene.liveMime, scene.textureUrl, scene.coverage, capabilities]);
 
   /* ---------------------------------------------------------------- *
    * Bucle de dibujo bajo demanda
@@ -761,6 +831,12 @@ export function PanoramaViewer({
           panorama se publicó mal y lo vaya a buscar en el editor, donde está
           bien. Y si la imagen completa falló, el texto lo dice en lugar de
           dejar una escena borrosa sin explicación para siempre. */}
+      {liveNote !== null && (
+        <p className="it-viewer__notice" role="status">
+          {liveNote}
+        </p>
+      )}
+
       {status.preview === true && (
         <p className="it-viewer__notice" role="status">
           {status.message ?? 'Vista previa: la imagen completa se está cargando.'}

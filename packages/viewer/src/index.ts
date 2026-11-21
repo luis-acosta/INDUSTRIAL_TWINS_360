@@ -21,6 +21,7 @@ export * from './webxr';
 export * from './xr-session';
 export * from './xr-input';
 export * from './hotspot-decals';
+export * from './live-panorama';
 export * from './script-sandbox';
 export * from './video-capture';
 export * from './xr-media';

@@ -235,6 +235,21 @@ export const sceneSchema = z.object({
   description: z.string().max(4000).default(''),
   /** Medio principal: panorámica, imagen o modelo GLB. */
   mediaId: uuidSchema.nullable().default(null),
+  /**
+   * Vídeo panorámico en bucle que sustituye a la imagen fija (B06).
+   *
+   * «Live Panorama»: la misma vista, pero con el vapor moviéndose, la llama
+   * parpadeando y las aspas girando. En una planta eso no es decoración —dice
+   * si algo está en marcha—, y una fotografía fija de una unidad en operación
+   * puede parecer una unidad parada.
+   *
+   * Es opcional y la imagen fija **sigue siendo obligatoria**: el vídeo puede no
+   * poder reproducirse —ahorro de datos, un códec que el dispositivo no trae,
+   * la preferencia de movimiento reducido del sistema— y entonces la escena
+   * tiene que seguir mostrándose. Una escena cuyo único medio fuera un vídeo
+   * quedaría en negro en esos casos.
+   */
+  livePanoramaMediaId: uuidSchema.nullable().default(null),
   camera: cameraControlSchema.default(DEFAULT_CAMERA_CONTROL),
   /** Presente sólo en escenas de tipo `model`. */
   model: modelSettingsSchema.nullable().default(null),
