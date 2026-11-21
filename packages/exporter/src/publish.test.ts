@@ -698,3 +698,73 @@ describe('vistas previas en el paquete (S08)', () => {
     expect(buildSite(projectFixture(), SITE_OPTIONS).manifest.previews).toEqual({});
   });
 });
+
+describe('manifiesto incrustado en la página (S04/S08)', () => {
+  it('va dentro del HTML además de quedar como archivo', () => {
+    // TEST-PUB-INL-001: la petición del manifiesto bloquea todas las demás
+    // —hasta que llega no se sabe ni qué imagen pedir—, así que ahorrarla
+    // adelanta la escena entera. Y el archivo suelto se sigue escribiendo
+    // porque es lo que leen las integraciones.
+    const site = buildSite(projectFixture(), SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+
+    expect(html).toContain('id="it360-manifiesto"');
+    expect(site.files.some((file) => file.path === 'manifiesto.json')).toBe(true);
+  });
+
+  it('el tipo declarado no es ejecutable', () => {
+    // TEST-PUB-INL-002: con «application/json» el navegador tampoco lo
+    // ejecuta, pero un tipo propio deja claro al leer el HTML que es un bloque
+    // de datos del producto y no una respuesta de API pegada ahí.
+    const site = buildSite(projectFixture(), SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+
+    expect(html).toContain('type="application/vnd.it360.manifest+json"');
+    expect(html).not.toContain('<script id="it360-manifiesto">');
+  });
+
+  it('un texto del proyecto no puede cerrar la etiqueta antes de tiempo', () => {
+    // TEST-PUB-INL-003: es la vulnerabilidad clásica de incrustar JSON en una
+    // página. Un título de escena con «</script>» dentro cerraría el bloque y
+    // lo que siguiera se interpretaría como HTML —o como guion—.
+    const base = projectFixture();
+    const project: Project = {
+      ...base,
+      description: 'Planta </script><img src=x onerror=alert(1)> norte',
+    };
+
+    const site = buildSite(project, SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+    /* Se extrae el contenido del bloque, no el bloque: su propia etiqueta de
+       cierre es un «</script>» legítimo, y buscarlo con ella dentro confundiría
+       la etiqueta real con una inyectada. */
+    const start = html.indexOf('>', html.indexOf('id="it360-manifiesto"')) + 1;
+    const inner = html.slice(start, html.indexOf('</script>', start));
+
+    expect(inner).not.toContain('</script>');
+    expect(inner).not.toContain('<img');
+    expect(inner).toContain('\\u003c');
+  });
+
+  it('el manifiesto incrustado va compacto', () => {
+    // TEST-PUB-INL-004: viaja en cada carga de la página. La sangría de un
+    // proyecto grande son decenas de kilobytes que nadie lee; el archivo
+    // suelto sí va indentado, porque ése se abre a mano.
+    const site = buildSite(projectFixture(), SITE_OPTIONS);
+    const html = decoder.decode(
+      site.files.find((file) => file.path === 'index.html')?.bytes ?? new Uint8Array(),
+    );
+    const standalone = decoder.decode(
+      site.files.find((file) => file.path === 'manifiesto.json')?.bytes ?? new Uint8Array(),
+    );
+
+    expect(html).not.toContain('"schemaVersion": ');
+    expect(standalone).toContain('"schemaVersion": ');
+  });
+});

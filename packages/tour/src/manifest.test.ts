@@ -7,10 +7,16 @@
  * manifiesto ausente, JSON roto, campos que no validan, y versión del formato
  * más nueva que el visor.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CURRENT_SCHEMA_VERSION, toManifest, type Manifest } from '@it360/domain';
 import { makeFullProject } from '@it360/domain/testing';
-import { loadTour, mediaUrl, mediaUrlIndex, MANIFEST_PATH } from './manifest';
+import {
+  INLINE_MANIFEST_ID,
+  loadTour,
+  mediaUrl,
+  mediaUrlIndex,
+  MANIFEST_PATH,
+} from './manifest';
 
 const LOCATION = { href: 'https://intranet.cliente/recorridos/u200/index.html' };
 const BASE = 'https://intranet.cliente/recorridos/u200/';
@@ -150,5 +156,79 @@ describe('mediaUrl', () => {
     expect(first).toBeDefined();
     expect(index.get(first?.id ?? '')).toContain(BASE);
     expect(index.size).toBe(result.value.manifest.media.length);
+  });
+});
+
+describe('manifiesto incrustado en la página (S04/S08)', () => {
+  const PATH = 'https://ejemplo.invalid/recorrido/';
+
+  afterEach(() => {
+    document.getElementById(INLINE_MANIFEST_ID)?.remove();
+  });
+
+  function embed(content: string): void {
+    const element = document.createElement('script');
+    element.id = INLINE_MANIFEST_ID;
+    element.textContent = content;
+    document.body.append(element);
+  }
+
+  it('se usa sin pedir el archivo', async () => {
+    // TEST-MAN-INL-001: es el motivo de incrustarlo. La petición del
+    // manifiesto bloquea todas las demás, y un paquete abierto desde un USB
+    // puede no poder leer archivos vecinos aunque sí lea su propia página.
+    const fetchImpl = vi.fn();
+    embed(JSON.stringify(validManifest()));
+
+    const result = await loadTour(fetchImpl as unknown as typeof fetch, { href: PATH });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('un manifiesto incrustado ilegible no impide abrir el recorrido', async () => {
+    // TEST-MAN-INL-002: se sigue por el archivo suelto, que puede estar bien.
+    // Tragarse el fallo dejaría inservible un paquete reescrito a mano.
+    embed('{ esto no es json');
+    const fetchImpl = fetchStub(validManifest());
+
+    const result = await loadTour(fetchImpl, { href: PATH });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  it('un manifiesto incrustado que no cumple el contrato tampoco', async () => {
+    // TEST-MAN-INL-003: la validación es la misma para los dos caminos. Un
+    // paquete de una versión futura, con un campo que este visor no entiende,
+    // cae al archivo suelto en lugar de abrirse a medias.
+    embed(JSON.stringify({ schemaVersion: 1 }));
+    const fetchImpl = fetchStub(validManifest());
+
+    const result = await loadTour(fetchImpl, { href: PATH });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  it('sin bloque incrustado funciona como siempre', async () => {
+    // TEST-MAN-INL-004: los paquetes publicados antes de esto no lo llevan.
+    const fetchImpl = fetchStub(validManifest());
+
+    const result = await loadTour(fetchImpl, { href: PATH });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('un bloque vacío no se confunde con un manifiesto', async () => {
+    // TEST-MAN-INL-005: un exportador que escriba el bloque sin contenido
+    // dejaría el recorrido sin abrir si esto no distinguiera vacío de válido.
+    embed('   ');
+    const fetchImpl = fetchStub(validManifest());
+
+    const result = await loadTour(fetchImpl, { href: PATH });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalled();
   });
 });

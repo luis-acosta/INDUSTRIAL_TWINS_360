@@ -46,6 +46,25 @@ export async function loadTour(
 ): Promise<Result<LoadedTour>> {
   const baseUrl = location.href.replace(/[^/]*$/, '');
 
+  /* Manifiesto incrustado en la página (S04/S08).
+     El exportador lo escribe dentro del HTML además de dejar el archivo
+     suelto. Dos motivos: una petición menos en cada carga —la del manifiesto
+     bloquea todo lo demás, porque hasta que no llega no se sabe ni qué imagen
+     pedir—, y que un paquete abierto directamente desde el disco o desde un
+     USB llegue más lejos, porque muchos navegadores bloquean la lectura de
+     archivos vecinos pero no el contenido de la propia página.
+
+     El archivo suelto se sigue escribiendo: es lo que leen las integraciones y
+     lo que permite revisar un paquete sin abrirlo en un navegador. */
+  const inline = readInlineManifest();
+  if (inline !== null) {
+    const parsed = manifestSchema.safeParse(inline);
+    if (parsed.success) return ok({ manifest: parsed.data, baseUrl });
+    /* Un manifiesto incrustado ilegible no se traga: se sigue por el archivo
+       suelto, que puede estar bien, y así un paquete reescrito a mano sigue
+       abriéndose. */
+  }
+
   let response: Response;
   try {
     response = await fetchImpl(`${baseUrl}${MANIFEST_PATH}`, { cache: 'no-cache' });
@@ -137,4 +156,27 @@ export function mediaUrlIndex(tour: LoadedTour): ReadonlyMap<string, string> {
   return new Map(
     tour.manifest.media.map((media) => [media.id, mediaUrl(tour.baseUrl, media.relativePath)]),
   );
+}
+
+/** Identificador del elemento que lleva el manifiesto incrustado. */
+export const INLINE_MANIFEST_ID = 'it360-manifiesto';
+
+/**
+ * Lee el manifiesto incrustado en la página, si lo hay.
+ *
+ * Devuelve `null` cuando no está, cuando no es JSON válido o cuando no hay
+ * documento —el visor también se usa desde pruebas y desde el editor, donde no
+ * hay página publicada—. Cualquiera de esos casos sigue por el archivo suelto,
+ * que es la vía que siempre ha funcionado.
+ */
+export function readInlineManifest(doc: Document | undefined = globalThis.document): unknown | null {
+  try {
+    const element = doc?.getElementById(INLINE_MANIFEST_ID);
+    if (element === null || element === undefined) return null;
+    const text = element.textContent;
+    if (text === null || text.trim().length === 0) return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }

@@ -189,6 +189,28 @@ que alguien lo abre en el dispositivo equivocado.
 
 ---
 
+### Ejecutable para consulta local (S04): no se genera
+
+La especificación pide **generar un ejecutable** por proyecto para consultarlo
+sin instalar nada. No está, y no se va a disimular: compilar un binario exige
+una cadena de compilación —Rust y las herramientas del sistema— en el equipo de
+quien publica, y el producto no la lleva ni puede instalarla por su cuenta.
+
+Lo que sí hay, y cubre la mayor parte del caso:
+
+- El paquete publicado es autónomo: HTML, guiones, estilos y medios, sin
+  servidor de aplicaciones. Se sirve desde cualquier carpeta compartida o
+  servidor web interno.
+- El manifiesto va **incrustado en la página** además de como archivo suelto,
+  de modo que un paquete abierto desde un USB llega más lejos: muchos
+  navegadores bloquean la lectura de archivos vecinos pero no el contenido de la
+  propia página.
+- La aplicación de escritorio abre el proyecto y lo recorre sin conexión, que es
+  la consulta local con la que trabaja quien ya tiene la aplicación.
+
+Lo que falta para el requisito tal como está escrito es el empaquetado en un
+binario por proyecto. Queda pendiente y declarado.
+
 ### Teselado: planificado y no escrito (S08)
 
 El contrato lleva un campo de teselas por medio y el plan de publicación las

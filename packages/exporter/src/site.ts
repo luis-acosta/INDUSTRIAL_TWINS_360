@@ -152,6 +152,8 @@ function indexHtml(options: {
   readonly accentColor: string | null;
   readonly faviconPath: string | null;
   readonly language: string;
+  /** Manifiesto que se incrusta en la página (S04/S08). */
+  readonly manifestJson: string;
 }): string {
   const {
     title,
@@ -162,6 +164,7 @@ function indexHtml(options: {
     accentColor,
     faviconPath,
     language,
+    manifestJson,
   } = options;
 
   return `<!doctype html>
@@ -196,6 +199,21 @@ ${
   </head>
   <body>
     <div id="recorrido"></div>
+    <!-- Manifiesto incrustado (S04/S08). Ahorra la petición que bloquea todas
+         las demás —hasta que llega no se sabe ni qué imagen pedir— y permite
+         que un paquete abierto desde un USB llegue más lejos, porque muchos
+         navegadores bloquean la lectura de archivos vecinos pero no el
+         contenido de la propia página. El archivo manifiesto.json se sigue
+         escribiendo: es lo que leen las integraciones.
+
+         El tipo no es «application/json» sino un tipo que el navegador no
+         ejecuta: así el contenido no se interpreta como guion ni como dato
+         activo, y «</script>» dentro de un texto del proyecto no puede cerrar
+         la etiqueta antes de tiempo porque va escapado. -->
+    <script id="it360-manifiesto" type="application/vnd.it360.manifest+json">${manifestJson
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026')}</script>
     <noscript>
       Este recorrido necesita JavaScript para dibujar las panorámicas en tres dimensiones.
       El contenido documental del proyecto está disponible en el archivo manifiesto.json.
@@ -330,6 +348,11 @@ export function buildSite(project: Project, options: SiteOptions): SiteResult {
         accentColor: branding.accentColor,
         faviconPath: faviconPath === null ? null : `./${faviconPath}`,
         language: project.settings.language,
+        // Compacto y no indentado: el manifiesto va dentro de cada carga de la
+        // página, y la sangría de un proyecto grande son decenas de kilobytes
+        // que nadie lee. El archivo suelto sí va indentado, porque ése se abre
+        // a mano.
+        manifestJson: JSON.stringify(publishedManifest),
       }),
     ),
   });
