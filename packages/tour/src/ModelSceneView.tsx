@@ -132,6 +132,10 @@ export function ModelSceneView({
       id: hotspot.id,
       label: hotspot.style.labelTemplate !== '' ? hotspot.style.labelTemplate : hotspot.name,
       anchor: hotspot.anchor,
+      /* Mismo color que el marcador: con dos colores, el visitante ve dos
+         cosas en lugar de una (L07). El token se resuelve en la capa, que es
+         donde se sabe si hay documento del que leer las variables. */
+      color: hotspot.style.colorOverride ?? `var(--it-color-status-${hotspot.style.colorToken})`,
     })),
     root: prepared?.root ?? null,
     onActivate: (id) => {

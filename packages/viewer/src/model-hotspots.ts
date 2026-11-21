@@ -14,7 +14,16 @@
  * mirando la válvula cuando está mirando el depósito. En una inspección eso es
  * una confusión con consecuencias.
  */
-import { Matrix4, Object3D, PerspectiveCamera, Raycaster, Scene, Vector2, Vector3 } from 'three';
+import {
+  Matrix4,
+  Object3D,
+  PerspectiveCamera,
+  Quaternion,
+  Raycaster,
+  Scene,
+  Vector2,
+  Vector3,
+} from 'three';
 import {
   isFacingCamera,
   stickerScale,
@@ -180,4 +189,89 @@ export function normalizedPointer(
 ): Vector2 {
   if (size.width <= 0 || size.height <= 0) return new Vector2(0, 0);
   return new Vector2((pointer.x / size.width) * 2 - 1, -(pointer.y / size.height) * 2 + 1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Calcomanías sobre la superficie (L07)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Separación de la calcomanía respecto a la superficie, como fracción del
+ * tamaño del modelo.
+ *
+ * Sin separación, la calcomanía y la superficie comparten plano y la tarjeta
+ * gráfica no puede decidir cuál está delante: aparece el parpadeo de franjas
+ * que se ve al girar, y en una pieza grande se ve a rachas según la distancia.
+ * Con demasiada, la calcomanía flota por encima y deja de parecer pegada, que
+ * es justo lo que esta función existe para conseguir.
+ *
+ * Se expresa en fracción del modelo y no en milímetros porque los modelos de
+ * planta llegan en metros, en milímetros y en pulgadas: una separación fija en
+ * unidades del mundo quedaría invisible en uno y a un palmo en otro.
+ */
+export const DECAL_OFFSET_FRACTION = 0.0015;
+
+/** Diámetro de la calcomanía, también como fracción del tamaño del modelo. */
+export const DECAL_SIZE_FRACTION = 0.035;
+
+export interface DecalTransform {
+  readonly position: Vector3;
+  readonly quaternion: Quaternion;
+  /** Lado del plano en unidades del mundo. */
+  readonly size: number;
+}
+
+/**
+ * Coloca una calcomanía tumbada sobre la superficie.
+ *
+ * Es la parte que faltaba de L07: el marcador seguía a su pieza y se escondía
+ * detrás de la geometría, pero se dibujaba de pie frente a la cámara, así que
+ * no parecía pegado a nada. Esto devuelve la posición y el giro de un plano que
+ * sí lo está.
+ *
+ * El marcador del DOM **no** se sustituye: sigue encima, con su texto legible y
+ * su acceso por teclado. Dibujar el texto dentro de la escena lo volvería una
+ * textura —no se puede seleccionar, no la lee un lector de pantalla y no se
+ * llega con el tabulador—, y perder eso para ganar una sombra no es un cambio
+ * que merezca la pena. La calcomanía da el anclaje visual; el marcador, la
+ * información.
+ */
+export function decalTransform(
+  point: Vector3,
+  normal: Vector3,
+  modelSize: number,
+): DecalTransform {
+  const unit = normal.clone();
+  if (unit.lengthSq() < 1e-12) {
+    /* Una normal degenerada —una cara de área cero en un modelo exportado a
+       mala hora— dejaría la calcomanía con un giro indefinido, y el plano
+       aparecería de canto, es decir invisible. Se mira a cámara: no está
+       pegada, pero se ve, y eso es mejor que un marcador que no está. */
+    unit.set(0, 0, 1);
+  } else {
+    unit.normalize();
+  }
+
+  const quaternion = new Quaternion();
+  const forward = new Vector3(0, 0, 1);
+  const dot = forward.dot(unit);
+
+  if (dot < -0.999999) {
+    /* Normal exactamente opuesta al plano sin girar. `setFromUnitVectors`
+       tiene que elegir un eje de giro y para vectores opuestos hay infinitos:
+       la implementación elige uno, pero conviene fijarlo aquí para que dos
+       calcomanías en caras opuestas de la misma chapa no salgan giradas de
+       formas distintas entre versiones de la biblioteca. */
+    quaternion.setFromAxisAngle(new Vector3(1, 0, 0), Math.PI);
+  } else {
+    quaternion.setFromUnitVectors(forward, unit);
+  }
+
+  const offset = Math.max(modelSize, 1e-6) * DECAL_OFFSET_FRACTION;
+
+  return {
+    position: point.clone().add(unit.multiplyScalar(offset)),
+    quaternion,
+    size: Math.max(modelSize, 1e-6) * DECAL_SIZE_FRACTION,
+  };
 }
